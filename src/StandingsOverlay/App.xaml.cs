@@ -17,6 +17,22 @@ public partial class App : Application
     {
         base.OnStartup(e);
 
+        // An overlay must never die mid-race because one frame failed to render:
+        // log UI-thread exceptions and keep going. Everything else gets logged on the way down.
+        DispatcherUnhandledException += (_, args) =>
+        {
+            Log.Error("dispatcher", args.Exception);
+            args.Handled = true;
+        };
+        AppDomain.CurrentDomain.UnhandledException += (_, args) =>
+            Log.Error("appdomain", args.ExceptionObject as Exception ?? new Exception(args.ExceptionObject.ToString()));
+        TaskScheduler.UnobservedTaskException += (_, args) =>
+        {
+            Log.Error("task", args.Exception);
+            args.SetObserved();
+        };
+        Log.Write($"started (v{typeof(App).Assembly.GetName().Version}) args: {string.Join(' ', e.Args)}");
+
         var configPath = Path.Combine(AppContext.BaseDirectory, "config.json");
         _configService = new ConfigService(configPath);
 

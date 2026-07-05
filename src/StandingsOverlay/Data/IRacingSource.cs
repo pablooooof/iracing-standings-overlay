@@ -61,11 +61,19 @@ public sealed class IRacingSource : ITelemetrySource
             _stints.Update(t);
             SnapshotReady?.Invoke(SnapshotBuilder.Build(t, _roster, _history, _stints, cfg));
         }
-        catch (Exception)
+        catch (Exception ex)
         {
             // A torn read or YAML quirk on one tick is harmless; the next tick recovers.
+            // Log it (throttled) so silent failures are diagnosable from overlay.log.
+            if ((DateTime.UtcNow - _lastErrorLog).TotalSeconds > 10)
+            {
+                _lastErrorLog = DateTime.UtcNow;
+                Log.Error("telemetry-tick", ex);
+            }
         }
     }
+
+    private DateTime _lastErrorLog = DateTime.MinValue;
 
     private void RefreshRosterIfStale()
     {
@@ -76,7 +84,11 @@ public sealed class IRacingSource : ITelemetrySource
         if (yaml is null) return;
 
         var model = IRacingSessionModel.Serialize(yaml);
-        if (model?.DriverInfo?.Drivers is null) return;
+        if (model?.DriverInfo?.Drivers is null)
+        {
+            Log.Write($"session YAML parse failed (update {header.SessionInfoUpdate}, {yaml.Length} chars)");
+            return;
+        }
 
         _lastSessionInfoUpdate = header.SessionInfoUpdate;
         _currentSessionType = FindSessionType(model);
@@ -112,7 +124,17 @@ public sealed class IRacingSource : ITelemetrySource
             _roster.TrackName = model.WeekendInfo?.TrackDisplayShortName ?? "";
             _roster.ComputeSof();
         }
+        // The YAML updates constantly during a race (results churn); only log real changes.
+        var summary = $"roster: {_roster.Drivers.Count} drivers, session '{_currentSessionType}', " +
+                      $"unnamed: {_roster.Drivers.Values.Count(d => string.IsNullOrEmpty(d.Name))}";
+        if (summary != _lastRosterSummary)
+        {
+            _lastRosterSummary = summary;
+            Log.Write(summary);
+        }
     }
+
+    private string _lastRosterSummary = "";
 
     private string _currentSessionType = "Race";
 

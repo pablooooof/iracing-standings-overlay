@@ -100,9 +100,14 @@ public static class SnapshotBuilder
     private static List<DriverEntry> OrderClass(List<DriverEntry> cars, RawTick t, bool isRace)
     {
         if (isRace)
-            return cars.Where(d => t.Position[d.CarIdx] > 0)
-                       .OrderBy(d => t.Position[d.CarIdx])
-                       .ToList();
+        {
+            var byPosition = cars.Where(d => t.Position[d.CarIdx] > 0)
+                                 .OrderBy(d => t.Position[d.CarIdx])
+                                 .ToList();
+            // Pre-grid (and during pace laps in some configs) every CarIdxPosition is 0;
+            // fall through to the practice ordering so the field is still listed.
+            if (byPosition.Count > 0) return byPosition;
+        }
 
         // Practice/qual: iRacing often leaves CarIdxPosition at 0, so order by best lap.
         return cars.Where(d => t.BestLap[d.CarIdx] > 0)
@@ -140,6 +145,7 @@ public static class SnapshotBuilder
         }
 
         var deltaCells = new DeltaCell[cellCount];
+        Array.Fill(deltaCells, new DeltaCell("", 0));   // default structs have a null Text
         if (kind == SessionKind.Race && idx != t.PlayerCarIdx)
         {
             var perLap = history.PerLapDeltas(idx, cellCount);

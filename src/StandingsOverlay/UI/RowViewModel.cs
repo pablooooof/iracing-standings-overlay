@@ -71,13 +71,13 @@ public sealed class RowViewModel
             BestLap = r.BestLapText,
             LastLap = r.LastLapText,
             DeltaCells = r.DeltaCells.Select(c => new DeltaCellViewModel(
-                c.Text,
+                c.Text ?? "",
                 c.Sign switch
                 {
                     2 => PurpleBrush,        // class-best quali lap
                     < 0 => GainBrush,
                     > 0 => LossBrush,
-                    _ => c.Text.Length > 4 ? Brushes.White : DimBrush, // quali laps white, neutral deltas dim
+                    _ => (c.Text?.Length ?? 0) > 4 ? Brushes.White : DimBrush, // quali laps white, neutral deltas dim
                 })).ToList(),
             Status = r.StatusText,
             Strat = r.StratText,
