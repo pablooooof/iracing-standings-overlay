@@ -19,9 +19,33 @@ iRacing publishes live telemetry to a memory-mapped file (`Local\IRSDKMemMapFile
 
 iRacing must run in **windowed borderless** mode (standard requirement for every overlay app).
 
+## Headline feature: multi-lap delta
+
+Beyond the usual columns (position, car number, iRating, license, gap, interval, last lap), the standings show **Δ over the last N laps** for every car — how much you gained (▼ green) or lost (▲ red) on them over a configurable window, not just the last lap. Gap history is sampled once per lap crossing, so the column costs nothing.
+
+## Tech stack
+
+- **.NET 10 / C# / WPF** — native transparent, click-through, always-on-top window. No Electron, no browser engine competing with the sim for GPU.
+- **[irsdkSharp](https://github.com/SlevinthHeaven/irsdkSharp)** (MIT) — reads the shared-memory telemetry; waits on iRacing's data-valid event instead of polling.
+- Snapshots are built at a configurable rate (default 4 Hz — standings don't change at 60 Hz) and the UI only repaints on change.
+
+## Build & run
+
+```powershell
+dotnet build src/StandingsOverlay -c Release
+# demo mode — fake 20-car race, no iRacing needed:
+src/StandingsOverlay/bin/Release/net10.0-windows/StandingsOverlay.exe --demo
+# real mode — just run it, it waits for iRacing:
+src/StandingsOverlay/bin/Release/net10.0-windows/StandingsOverlay.exe
+```
+
+A `config.json` is created next to the exe on first run and **hot-reloads** on save: position, colors, opacity, font size, `DeltaLaps` (the Δ window), `DriversAtTop` / `DriversAheadBehind` (compact layout), `UpdateHz`, and per-column toggles.
+
+Use the tray icon → **Edit mode** to drag the overlay into place (position is saved), and → **Exit** to quit.
+
 ## Status
 
-🔬 Research phase. See [`docs/RESEARCH.md`](docs/RESEARCH.md) for the survey of existing overlay apps (iOverlay, RaceLab, irDashies, iRon, …), the tech-stack options considered, and the architecture direction.
+✅ Working v0.1: live + demo telemetry sources, compact standings (top N + window around you), multi-lap delta, config hot-reload, tray control. See [`docs/RESEARCH.md`](docs/RESEARCH.md) for the survey of existing overlay apps and [`docs/REQUIREMENTS.md`](docs/REQUIREMENTS.md) for the feature rationale. Not yet validated in a live iRacing session — that's the next step.
 
 ## License
 

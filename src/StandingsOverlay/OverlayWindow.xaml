@@ -1,0 +1,93 @@
+<Window x:Class="StandingsOverlay.OverlayWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Standings Overlay"
+        WindowStyle="None" AllowsTransparency="True" Background="Transparent"
+        Topmost="True" ShowInTaskbar="False" ShowActivated="False"
+        ResizeMode="NoResize" SizeToContent="WidthAndHeight">
+
+    <Border x:Name="RootBorder" CornerRadius="6" Padding="8,6">
+        <StackPanel>
+            <!-- Session header: RACE · SoF 2.4k · 12 laps -->
+            <Grid Margin="2,0,2,4">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock x:Name="HeaderLeft" Grid.Column="0" FontWeight="Bold"/>
+                <TextBlock x:Name="HeaderMid" Grid.Column="1" Margin="12,0" Opacity="0.75"/>
+                <TextBlock x:Name="HeaderRight" Grid.Column="2" Opacity="0.75"/>
+            </Grid>
+
+            <!-- Column header -->
+            <Grid x:Name="ColumnHeader" Margin="2,0,2,2" Opacity="0.55">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition SharedSizeGroup="c0" Width="Auto"/>
+                    <ColumnDefinition SharedSizeGroup="c1" Width="Auto"/>
+                    <ColumnDefinition SharedSizeGroup="c2" Width="Auto"/>
+                    <ColumnDefinition SharedSizeGroup="c3" Width="Auto"/>
+                    <ColumnDefinition SharedSizeGroup="c4" Width="Auto"/>
+                    <ColumnDefinition SharedSizeGroup="c5" Width="Auto"/>
+                    <ColumnDefinition SharedSizeGroup="c6" Width="Auto"/>
+                    <ColumnDefinition SharedSizeGroup="c7" Width="Auto"/>
+                    <ColumnDefinition SharedSizeGroup="c8" Width="Auto"/>
+                    <ColumnDefinition SharedSizeGroup="c9" Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" Text="P"    Margin="0,0,8,0"/>
+                <TextBlock Grid.Column="1" Text="#"    Margin="0,0,8,0"/>
+                <TextBlock Grid.Column="2" Text="DRIVER" Margin="0,0,12,0"/>
+                <TextBlock Grid.Column="3" Text="IR"   Margin="0,0,8,0"/>
+                <TextBlock Grid.Column="4" Text="LIC"  Margin="0,0,10,0"/>
+                <TextBlock Grid.Column="5" Text="GAP"  Margin="0,0,8,0" TextAlignment="Right"/>
+                <TextBlock Grid.Column="6" Text="INT"  Margin="0,0,8,0" TextAlignment="Right"/>
+                <TextBlock Grid.Column="7" Text="LAST" Margin="0,0,8,0" TextAlignment="Right"/>
+                <TextBlock Grid.Column="8" x:Name="DeltaHeader" Text="Δ3L" TextAlignment="Right"/>
+                <TextBlock Grid.Column="9" Text=""/>
+            </Grid>
+
+            <!-- Rows -->
+            <ItemsControl x:Name="RowsControl" Grid.IsSharedSizeScope="True">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Border Background="{Binding RowBackground}" CornerRadius="3" Padding="2,1">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition SharedSizeGroup="c0" Width="Auto"/>
+                                    <ColumnDefinition SharedSizeGroup="c1" Width="Auto"/>
+                                    <ColumnDefinition SharedSizeGroup="c2" Width="Auto"/>
+                                    <ColumnDefinition SharedSizeGroup="c3" Width="Auto"/>
+                                    <ColumnDefinition SharedSizeGroup="c4" Width="Auto"/>
+                                    <ColumnDefinition SharedSizeGroup="c5" Width="Auto"/>
+                                    <ColumnDefinition SharedSizeGroup="c6" Width="Auto"/>
+                                    <ColumnDefinition SharedSizeGroup="c7" Width="Auto"/>
+                                    <ColumnDefinition SharedSizeGroup="c8" Width="Auto"/>
+                                    <ColumnDefinition SharedSizeGroup="c9" Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="{Binding PosText}" Margin="0,0,8,0" Opacity="0.9"/>
+                                <TextBlock Grid.Column="1" Text="{Binding CarNumber}" Margin="0,0,8,0"
+                                           Foreground="{Binding CarNumberBrush}" FontWeight="SemiBold"/>
+                                <TextBlock Grid.Column="2" Text="{Binding Name}" Margin="0,0,12,0"
+                                           Foreground="{Binding NameBrush}"/>
+                                <TextBlock Grid.Column="3" Text="{Binding IRating}" Margin="0,0,8,0" Opacity="0.85"/>
+                                <TextBlock Grid.Column="4" Text="{Binding License}" Margin="0,0,10,0"
+                                           Foreground="{Binding LicenseBrush}" FontSize="11" VerticalAlignment="Center"/>
+                                <TextBlock Grid.Column="5" Text="{Binding Gap}" Margin="0,0,8,0" TextAlignment="Right" Opacity="0.9"/>
+                                <TextBlock Grid.Column="6" Text="{Binding Interval}" Margin="0,0,8,0" TextAlignment="Right" Opacity="0.9"/>
+                                <TextBlock Grid.Column="7" Text="{Binding LastLap}" Margin="0,0,8,0" TextAlignment="Right" Opacity="0.9"/>
+                                <TextBlock Grid.Column="8" Text="{Binding Delta}" TextAlignment="Right"
+                                           Foreground="{Binding DeltaBrush}" FontWeight="SemiBold"/>
+                                <TextBlock Grid.Column="9" Text="{Binding PitText}" Margin="6,0,0,0"
+                                           Foreground="#FFB84D" FontSize="10" VerticalAlignment="Center" FontWeight="Bold"/>
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <!-- Edit-mode hint -->
+            <TextBlock x:Name="EditHint" Text="EDIT MODE — drag to move, use tray icon to finish"
+                       Visibility="Collapsed" Margin="2,6,2,0" FontSize="11" FontWeight="Bold"/>
+        </StackPanel>
+    </Border>
+</Window>

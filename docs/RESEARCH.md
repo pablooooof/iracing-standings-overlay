@@ -75,6 +75,8 @@ Key efficiency lessons regardless of path:
 
 ### Recommendation
 
+> **Update (2026-07-04):** implemented with **irsdkSharp** instead of IRSDKSharper — IRSDKSharper turned out to be GPL-3.0, which conflicts with this repo's MIT license. irsdkSharp is MIT and its performance is more than sufficient at our snapshot rate.
+
 **C# (.NET 8) + IRSDKSharper + a transparent WPF window**, borrowing behavioral patterns from iRon (config hot-reload, edit-mode for dragging position) and feature ideas from irdashies' standings widget (multiclass colors, iRating, gaps, pit status). Single ~few-MB exe, no runtime bloat, and C# is close enough to "programming and data" skills to stay fun.
 
 Fallback/alternative if we want web-style iteration later: keep the data layer separate (a small standings-model library) so the renderer can be swapped.
