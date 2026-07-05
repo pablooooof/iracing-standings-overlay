@@ -49,6 +49,9 @@ public sealed class OverlayConfig
     public int LapTimePrecision { get; set; } = 3;
     public int DeltaPrecision { get; set; } = 1;
 
+    // Traffic alerter (multiclass "faster class approaching" / blue-flag warnings).
+    public TrafficConfig Traffic { get; set; } = new();
+
     public SessionColumns ColumnsFor(Data.SessionKind kind) => kind switch
     {
         Data.SessionKind.Race => Race,
@@ -82,6 +85,37 @@ public sealed class OverlayConfig
     {
         File.WriteAllText(path, JsonSerializer.Serialize(this, JsonOpts));
     }
+}
+
+/// <summary>Traffic alerter settings. Races only; detection details in docs/TRAFFIC-ALERTER.md.</summary>
+public sealed class TrafficConfig
+{
+    public bool Enabled { get; set; } = true;
+    public string Style { get; set; } = "Row";                  // Row | Beacon
+    public string Mode { get; set; } = "FasterClassAndLapping"; // FasterClassOnly | FasterClassAndLapping | AllClosing
+    public double AlertLeadTimeSec { get; set; } = 12;  // WATCH threshold (time to arrival) for traffic
+    public double BlueLeadTimeSec { get; set; } = 20;   // WATCH threshold when being lapped (planning, not reflexes)
+    public double ImminentSec { get; set; } = 4;
+    public int MaxRows { get; set; } = 3;
+    public bool ShowIRating { get; set; } = true;
+    public bool AlongsideBanner { get; set; } = true;   // CarLeftRight banner; fires for alerted traffic only
+    public TrafficAudioConfig Audio { get; set; } = new();
+
+    // Widget position (DIPs), independent of the standings table; draggable in edit mode.
+    public double X { get; set; } = 810;
+    public double Y { get; set; } = 6;
+
+    [JsonIgnore]
+    public bool BeaconStyle => Style.Equals("Beacon", StringComparison.OrdinalIgnoreCase);
+}
+
+public sealed class TrafficAudioConfig
+{
+    public bool Enabled { get; set; } = true;
+    public int Volume { get; set; } = 70;         // 0-100, baked into the generated WAVs
+    public bool WatchCue { get; set; } = true;    // rising chirp when traffic enters the window
+    public bool ImminentCue { get; set; } = true; // urgent triple beep
+    public bool BlueCue { get; set; } = true;     // calm two-tone when being lapped; never escalates
 }
 
 /// <summary>Column toggles for one session type. Not every column is meaningful everywhere —

@@ -14,6 +14,8 @@ public sealed class RawTick
     public bool[] OnPitRoad = [];
     public int[] SessionFlags = [];      // CarIdxSessionFlags bitfield
     public int[] TireCompound = [];      // CarIdxTireCompound: 0 = dry, >=1 = wet (rain-enabled)
+    public int[] TrackSurface = [];      // CarIdxTrackSurface (irsdk_TrkLoc): -1 = not in world
+    public int CarLeftRight;             // irsdk_CarLeftRight: 0 off · 1 clear · 2 left · 3 right · 4 both · 5 two left · 6 two right
     public double SessionTimeRemain = -1;
     public double SessionTime = -1;      // elapsed
     public double SessionTimeTotal = -1;

@@ -15,6 +15,7 @@ public sealed class IRacingSource : ITelemetrySource
     private readonly Func<OverlayConfig> _cfg;
     private readonly GapHistory _history = new();
     private readonly StintTracker _stints = new();
+    private readonly TrafficDetector _traffic = new();
     private readonly Roster _roster = new();
 
     private int _frameCount;
@@ -23,6 +24,7 @@ public sealed class IRacingSource : ITelemetrySource
     private bool _running;
 
     public event Action<StandingsSnapshot>? SnapshotReady;
+    public event Action<TrafficSnapshot>? TrafficReady;
 
     public IRacingSource(Func<OverlayConfig> cfg) => _cfg = cfg;
 
@@ -36,8 +38,10 @@ public sealed class IRacingSource : ITelemetrySource
             _lastSessionNum = -1;
             _history.Reset();
             _stints.Reset();
+            _traffic.Reset();
             lock (_roster) _roster.Drivers.Clear();
             SnapshotReady?.Invoke(StandingsSnapshot.Disconnected);
+            TrafficReady?.Invoke(TrafficSnapshot.Empty);
         };
         SnapshotReady?.Invoke(StandingsSnapshot.Disconnected);
     }
@@ -60,6 +64,7 @@ public sealed class IRacingSource : ITelemetrySource
             _history.Update(t, _roster);
             _stints.Update(t);
             SnapshotReady?.Invoke(SnapshotBuilder.Build(t, _roster, _history, _stints, cfg));
+            TrafficReady?.Invoke(_traffic.Update(t, _roster, cfg));
         }
         catch (Exception ex)
         {
@@ -100,6 +105,7 @@ public sealed class IRacingSource : ITelemetrySource
             _lastSessionNum = sessionNum;
             _history.Reset();
             _stints.Reset();
+            _traffic.Reset();
         }
 
         lock (_roster)
@@ -164,8 +170,10 @@ public sealed class IRacingSource : ITelemetrySource
             OnPitRoad = _sdk.GetData("CarIdxOnPitRoad") as bool[] ?? [],
             SessionFlags = _sdk.GetData("CarIdxSessionFlags") as int[] ?? [],
             TireCompound = _sdk.GetData("CarIdxTireCompound") as int[] ?? [],
+            TrackSurface = _sdk.GetData("CarIdxTrackSurface") as int[] ?? [],
             SessionType = _currentSessionType,
         };
+        if (_sdk.GetData("CarLeftRight") is int clr) t.CarLeftRight = clr;
 
         if (t.Lap.Length == 0 || t.LapDistPct.Length == 0) return null;
 

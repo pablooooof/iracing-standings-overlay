@@ -3,16 +3,21 @@ using StandingsOverlay.Config;
 namespace StandingsOverlay.Data;
 
 /// <summary>
-/// Fake two-class field (12 GT3 + 8 GT4) so the overlay can be developed without iRacing.
-/// Laps take ~25 s and cars pit every ~8 laps (~35 s stops), so multiclass grouping, the
-/// per-lap delta columns AND the strategy predictions all come alive within a few minutes.
+/// Fake three-class field (3 GTP + 11 GT3 + 6 GT4) so the overlay can be developed without
+/// iRacing. Laps take ~25 s and cars pit every ~8 laps (~35 s stops), so multiclass grouping,
+/// the per-lap delta columns AND the strategy predictions all come alive within a few minutes.
+/// The GTPs lap the GT3 player every ~2 minutes and one rabbit GT3 laps them every ~4, so the
+/// traffic alerter's faster-class and blue-flag paths both fire regularly.
 /// Feeds the exact same SnapshotBuilder/GapHistory/StintTracker pipeline as the live source.
 /// </summary>
 public sealed class DemoSource : ITelemetrySource
 {
     private const int Cars = 20;
-    private const int Gt3Cars = 12;          // idx 0-11 = GT3, 12-19 = GT4
+    private const int GtpCars = 3;           // idx 0-2 = GTP
+    private const int Gt3End = 14;           // idx 3-13 = GT3, 14-19 = GT4
     private const int PlayerIdx = 7;
+    private const int RabbitIdx = 3;         // GT3 rabbit that laps the player (blue flags)
+    private const float GtpLapSeconds = 20.5f;
     private const float Gt3LapSeconds = 25f;
     private const float Gt4LapSeconds = 29f;
     private const float PitDuration = 35f;   // seconds stationary per stop
@@ -20,6 +25,7 @@ public sealed class DemoSource : ITelemetrySource
     private readonly Func<OverlayConfig> _cfg;
     private readonly GapHistory _history = new();
     private readonly StintTracker _stints = new();
+    private readonly TrafficDetector _traffic = new();
     private readonly Roster _roster = new();
     private readonly RawTick _tick = new();
     private readonly double[] _totalDist = new double[Cars];
@@ -34,6 +40,7 @@ public sealed class DemoSource : ITelemetrySource
     private readonly bool _isRace;
 
     public event Action<StandingsSnapshot>? SnapshotReady;
+    public event Action<TrafficSnapshot>? TrafficReady;
 
     public DemoSource(Func<OverlayConfig> cfg, string sessionType = "Race")
     {
@@ -53,8 +60,11 @@ public sealed class DemoSource : ITelemetrySource
 
         for (int i = 0; i < Cars; i++)
         {
-            bool gt3 = i < Gt3Cars;
-            float classLap = gt3 ? Gt3LapSeconds : Gt4LapSeconds;
+            // Class layout: GTP (fast prototypes) / GT3 (player's class) / GT4.
+            var (classId, className, classColor, classLap) =
+                i < GtpCars ? (1, "GTP", "#E33241", GtpLapSeconds)
+                : i < Gt3End ? (2, "GT3", "#FFDA59", Gt3LapSeconds)
+                : (3, "GT4", "#57C1FF", Gt4LapSeconds);
 
             _roster.Drivers[i] = new DriverEntry(
                 CarIdx: i,
@@ -63,16 +73,21 @@ public sealed class DemoSource : ITelemetrySource
                 IRating: 1200 + _rng.Next(4500),
                 LicString: lics[i % lics.Length],
                 LicColor: licColors[i % licColors.Length],
-                CarClassId: gt3 ? 1 : 2,
-                ClassName: gt3 ? "GT3" : "GT4",
-                ClassColor: gt3 ? "#FFDA59" : "#57C1FF",
+                CarClassId: classId,
+                ClassName: className,
+                ClassColor: classColor,
                 ClassEstLap: classLap,
                 IsPaceCar: false,
                 IsSpectator: false);
 
-            int classSlot = gt3 ? i : i - Gt3Cars;
-            _totalDist[i] = 1.0 - classSlot * 0.02 - (gt3 ? 0 : 0.5);
-            _pace[i] = classLap + (classSlot - 5f) * 0.12f + (float)_rng.NextDouble() * 0.1f;
+            int classSlot = i < GtpCars ? i : i < Gt3End ? i - GtpCars : i - Gt3End;
+            // Staggered rolling start: GTP half a lap up the road, GT4 half a lap back.
+            _totalDist[i] = 1.0 - classSlot * 0.02 + (classId == 1 ? 0.5 : classId == 3 ? -0.5 : 0);
+            // GTP paces spread wider so they sometimes arrive as a train, sometimes solo.
+            _pace[i] = classId == 1
+                ? classLap + classSlot * 0.35f
+                : classLap + (classSlot - 5f) * 0.12f + (float)_rng.NextDouble() * 0.1f;
+            if (i == RabbitIdx) _pace[i] = 23.0f;   // gains ~2.3 s/lap on the player
             _stintLaps[i] = 7 + _rng.Next(3);   // pit every 7-9 laps
         }
         _roster.ComputeSof();
@@ -88,6 +103,7 @@ public sealed class DemoSource : ITelemetrySource
         _tick.OnPitRoad = new bool[Cars];
         _tick.SessionFlags = new int[Cars];
         _tick.TireCompound = new int[Cars];
+        _tick.TrackSurface = new int[Cars];
         _tick.TrackTemp = 31.2f;
         _tick.PlayerIncidents = 3;
         _tick.SessionType = sessionType;
@@ -165,10 +181,22 @@ public sealed class DemoSource : ITelemetrySource
         _tick.SessionTimeRemain = _tick.SessionLapsRemain * Gt3LapSeconds;
         _tick.SessionTime = _elapsed;
 
+        // Traffic-alerter inputs: everyone is on track (pit stall while stopped), and the
+        // spotter squawks "car left" whenever another car overlaps the player's position.
+        _tick.CarLeftRight = 1; // clear
+        for (int i = 0; i < Cars; i++)
+        {
+            _tick.TrackSurface[i] = _tick.OnPitRoad[i] ? 1 : 3;
+            if (i == PlayerIdx || _tick.OnPitRoad[i]) continue;
+            double d = Math.Abs(_totalDist[i] - _totalDist[PlayerIdx]) % 1.0;
+            if (Math.Min(d, 1.0 - d) < 0.006) _tick.CarLeftRight = 2; // car left
+        }
+
         var cfg = _cfg();
         _history.Update(_tick, _roster);
         _stints.Update(_tick);
         SnapshotReady?.Invoke(SnapshotBuilder.Build(_tick, _roster, _history, _stints, cfg));
+        TrafficReady?.Invoke(_traffic.Update(_tick, _roster, cfg));
     }
 
     public void Dispose() => _timer?.Dispose();
