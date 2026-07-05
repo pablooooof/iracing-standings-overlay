@@ -1,0 +1,29 @@
+# Build outputs
+bin/
+obj/
+build/
+dist/
+out/
+*.user
+
+# IDE
+.vs/
+.vscode/
+.idea/
+*.suo
+
+# Node (if a web renderer ever appears)
+node_modules/
+
+# Python (if tooling/scripts use it)
+__pycache__/
+*.pyc
+.venv/
+
+# OS
+Thumbs.db
+desktop.ini
+
+# Local-only
+*.log
+.claude/settings.local.json
