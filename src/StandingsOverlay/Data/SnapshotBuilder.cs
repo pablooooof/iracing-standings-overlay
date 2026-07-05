@@ -97,18 +97,21 @@ public static class SnapshotBuilder
                 interval = "+" + FmtGap(best - t.BestLap[ordered[i - 1].CarIdx]);
         }
 
-        string deltaText = "";
-        int deltaSign = 0;
+        var deltaCells = new DeltaCell[cfg.DeltaLaps];
         if (idx != t.PlayerCarIdx)
         {
-            var delta = history.DeltaOver(idx, cfg.DeltaLaps);
-            if (delta is not null)
+            var perLap = history.PerLapDeltas(idx, cfg.DeltaLaps);
+            for (int k = 0; k < perLap.Length; k++)
             {
-                // Negative = player gained on this car over the window = green.
-                deltaSign = Math.Abs(delta.Value) < 0.05f ? 0 : Math.Sign(delta.Value);
-                deltaText = (delta.Value <= -0.05f ? "▼" : delta.Value >= 0.05f ? "▲" : "") +
-                            Math.Abs(delta.Value).ToString("0.0");
+                if (perLap[k] is not float dl) { deltaCells[k] = new DeltaCell("", 0); continue; }
+                // Negative = player gained on this car during that lap = green.
+                int sign = Math.Abs(dl) < 0.05f ? 0 : Math.Sign(dl);
+                deltaCells[k] = new DeltaCell(dl.ToString("+0.0;-0.0;0.0"), sign);
             }
+        }
+        else
+        {
+            Array.Fill(deltaCells, new DeltaCell("", 0));
         }
 
         float last = t.LastLap[idx];
@@ -124,8 +127,7 @@ public static class SnapshotBuilder
             GapText: gap,
             IntervalText: interval,
             LastLapText: last > 0 ? FmtLap(last) : "",
-            DeltaText: deltaText,
-            DeltaSign: deltaSign,
+            DeltaCells: deltaCells,
             IsPlayer: idx == t.PlayerCarIdx,
             InPit: t.OnPitRoad[idx],
             IsSeparator: false);

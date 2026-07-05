@@ -3,6 +3,8 @@ using StandingsOverlay.Data;
 
 namespace StandingsOverlay.UI;
 
+public sealed record DeltaCellViewModel(string Text, Brush Brush);
+
 /// <summary>Display-ready row: strings plus frozen brushes for the template to bind to.</summary>
 public sealed class RowViewModel
 {
@@ -14,13 +16,12 @@ public sealed class RowViewModel
     public string Gap { get; init; } = "";
     public string Interval { get; init; } = "";
     public string LastLap { get; init; } = "";
-    public string Delta { get; init; } = "";
+    public IReadOnlyList<DeltaCellViewModel> DeltaCells { get; init; } = [];
     public string PitText { get; init; } = "";
     public bool IsSeparator { get; init; }
 
     public Brush CarNumberBrush { get; init; } = Brushes.White;
     public Brush LicenseBrush { get; init; } = Brushes.Gray;
-    public Brush DeltaBrush { get; init; } = Brushes.White;
     public Brush RowBackground { get; init; } = Brushes.Transparent;
     public Brush NameBrush { get; init; } = Brushes.White;
 
@@ -43,11 +44,12 @@ public sealed class RowViewModel
             Gap = r.GapText,
             Interval = r.IntervalText,
             LastLap = r.LastLapText,
-            Delta = r.DeltaText,
+            DeltaCells = r.DeltaCells.Select(c => new DeltaCellViewModel(
+                c.Text,
+                c.Sign < 0 ? GainBrush : c.Sign > 0 ? LossBrush : DimBrush)).ToList(),
             PitText = r.InPit ? "PIT" : "",
             CarNumberBrush = TryBrush(r.ClassColor) ?? accent,
             LicenseBrush = TryBrush(r.LicColor) ?? DimBrush,
-            DeltaBrush = r.DeltaSign < 0 ? GainBrush : r.DeltaSign > 0 ? LossBrush : DimBrush,
             RowBackground = r.IsPlayer ? highlight : Brushes.Transparent,
             NameBrush = r.InPit ? DimBrush : Brushes.White,
         };

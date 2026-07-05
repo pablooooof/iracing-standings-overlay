@@ -50,6 +50,9 @@ public sealed class Roster
     }
 }
 
+/// <summary>One per-lap delta cell. Sign: -1 the player gained that lap (green), +1 lost (red).</summary>
+public readonly record struct DeltaCell(string Text, int Sign);
+
 public sealed record StandingsRow(
     int Position,
     string CarNumber,
@@ -61,14 +64,13 @@ public sealed record StandingsRow(
     string GapText,
     string IntervalText,
     string LastLapText,
-    string DeltaText,
-    int DeltaSign,          // -1 you gained (green), +1 you lost (red), 0 neutral
+    IReadOnlyList<DeltaCell> DeltaCells,   // oldest lap first
     bool IsPlayer,
     bool InPit,
     bool IsSeparator)
 {
     public static readonly StandingsRow Separator =
-        new(0, "", "···", "", "", "", "", "", "", "", "", 0, false, false, true);
+        new(0, "", "···", "", "", "", "", "", "", "", [], false, false, true);
 }
 
 public sealed record StandingsSnapshot(

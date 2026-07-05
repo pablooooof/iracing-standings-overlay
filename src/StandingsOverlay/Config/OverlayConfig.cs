@@ -22,8 +22,8 @@ public sealed class OverlayConfig
     public int DriversAheadBehind { get; set; } = 3;
     public bool ShowColumnHeader { get; set; } = true;
 
-    // ⭐ Gap delta over the last N laps (the reason this project exists).
-    public int DeltaLaps { get; set; } = 3;
+    // ⭐ Per-lap gap delta columns for the last N laps, oldest left (the reason this project exists).
+    public int DeltaLaps { get; set; } = 5;
 
     // Data refresh rate (snapshots per second, 1-10). Rendering only happens on change.
     public int UpdateHz { get; set; } = 4;

@@ -68,6 +68,34 @@ public sealed class GapHistory
         return null;
     }
 
+    /// <summary>
+    /// Gap change during each of the last <paramref name="laps"/> laps, oldest first.
+    /// Element k covers lap (currentLap - laps + 1 + k); null where history is missing.
+    /// Negative = the player gained on the car during that lap.
+    /// </summary>
+    public float?[] PerLapDeltas(int carIdx, int laps)
+    {
+        var result = new float?[laps];
+        if (laps < 1 || !_byCar.TryGetValue(carIdx, out var list) || list.Count < 2) return result;
+
+        int nowLap = list[^1].Lap;
+        float? RelAt(int lap)
+        {
+            for (int i = list.Count - 1; i >= 0; i--)
+                if (list[i].Lap == lap) return list[i].Rel;
+            return null;
+        }
+
+        for (int k = 0; k < laps; k++)
+        {
+            int lap = nowLap - laps + 1 + k;
+            var end = RelAt(lap);
+            var start = RelAt(lap - 1);
+            if (end is not null && start is not null) result[k] = end - start;
+        }
+        return result;
+    }
+
     /// <summary>Estimated laps until the player catches this car (positive, capped), or null.</summary>
     public float? LapsToCatch(int carIdx, int laps)
     {

@@ -51,7 +51,10 @@ public partial class OverlayWindow : Window
         EditHint.Foreground = accent;
 
         ColumnHeader.Visibility = cfg.ShowColumnHeader ? Visibility.Visible : Visibility.Collapsed;
-        DeltaHeader.Text = $"Δ{cfg.DeltaLaps}L";
+
+        // One Δ header cell per lap, oldest on the left: Δ-5 … Δ-1.
+        DeltaHeaderCells.ItemsSource =
+            Enumerable.Range(0, cfg.DeltaLaps).Select(k => $"Δ-{cfg.DeltaLaps - k}").ToList();
     }
 
     /// <summary>Called from the telemetry thread; skips the dispatch entirely when nothing changed.</summary>
