@@ -13,9 +13,15 @@ public sealed class RawTick
     public float[] F2Time = [];
     public bool[] OnPitRoad = [];
     public int[] SessionFlags = [];      // CarIdxSessionFlags bitfield
+    public int[] TireCompound = [];      // CarIdxTireCompound: 0 = dry, >=1 = wet (rain-enabled)
     public double SessionTimeRemain = -1;
+    public double SessionTime = -1;      // elapsed
+    public double SessionTimeTotal = -1;
     public int SessionLapsRemain = -1;
     public float TrackTemp = float.NaN;  // °C
+    public float Precipitation = float.NaN; // 0..1
+    public bool DeclaredWet;
+    public int TrackWetness = -1;        // irsdk_TrackWetness: 1 dry … 7 extremely wet
     public int PlayerIncidents = -1;
     public string SessionType = "Race";
 
@@ -81,9 +87,11 @@ public sealed record StandingsRow(
     string LicText,
     string LicColor,
     string ClassColor,
+    int Tyre,                // -1 unknown/hidden, 0 dry, >=1 wet
     string GapText,
     string IntervalText,
     string BestLapText,
+    int BestLapSign,         // 2 = class-best lap (purple)
     string LastLapText,
     IReadOnlyList<DeltaCell> DeltaCells,   // oldest lap first
     string StatusText,       // "" | "PIT" | "WRN" | "BLK" | "DMG" | "DQ"
@@ -98,7 +106,7 @@ public sealed record StandingsRow(
         Empty(RowKind.ClassHeader) with { Name = className, ClassColor = classColor };
 
     public static StandingsRow Empty(RowKind kind) =>
-        new(kind, "", "", "", 0, "", "", "", "", "", "", "", "", "", "", [], "", "", "", 0, false);
+        new(kind, "", "", "", 0, "", "", "", "", "", "", -1, "", "", "", 0, "", [], "", "", "", 0, false);
 }
 
 public enum SessionKind { Practice, Qualify, Race }

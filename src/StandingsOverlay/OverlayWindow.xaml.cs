@@ -11,7 +11,7 @@ namespace StandingsOverlay;
 /// <summary>Per-column Visibility flags for the active session type; the Window's DataContext,
 /// rebuilt on config change or session-type change.</summary>
 public sealed record ColumnVisibility(
-    Visibility PosGained, Visibility IRating, Visibility License, Visibility LapsCount,
+    Visibility Tyre, Visibility PosGained, Visibility IRating, Visibility License, Visibility LapsCount,
     Visibility Gap, Visibility Interval, Visibility BestLap, Visibility LastLap,
     Visibility Delta, Visibility Strategy, Visibility Pace, Visibility Status,
     double CellWidth)
@@ -21,6 +21,7 @@ public sealed record ColumnVisibility(
         static Visibility V(bool b) => b ? Visibility.Visible : Visibility.Collapsed;
         bool race = kind == SessionKind.Race;
         return new(
+            V(c.ShowTyre),
             V(c.ShowPositionsGained && race), V(c.ShowIRating), V(c.ShowLicense), V(c.ShowLapsCount),
             V(c.ShowGap), V(c.ShowInterval), V(c.ShowBestLap), V(c.ShowLastLap),
             V(c.ShowCells && kind != SessionKind.Practice),

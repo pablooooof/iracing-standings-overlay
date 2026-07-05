@@ -94,7 +94,7 @@ public static class SnapshotBuilder
         }
 
         return new StandingsSnapshot(true, kind, isRace ? "RACE" : t.SessionType.ToUpperInvariant(),
-            HeaderMid(t, roster, cfg), HeaderRight(t, isRace, cfg), cellHeaders, rows);
+            HeaderMid(t, roster, cfg), HeaderRight(t, roster, cfg), cellHeaders, rows);
     }
 
     private static List<DriverEntry> OrderClass(List<DriverEntry> cars, RawTick t, bool isRace)
@@ -202,9 +202,12 @@ public static class SnapshotBuilder
             LicText: d.LicString,
             LicColor: d.LicColor,
             ClassColor: d.ClassColor,
+            // NOTE: some dry series use compound 1 for an alternate dry tyre; we render >=1 as wet.
+            Tyre: idx < t.TireCompound.Length ? t.TireCompound[idx] : -1,
             GapText: gap,
             IntervalText: interval,
             BestLapText: bestLap > 0 ? FmtLap(bestLap, cfg.LapTimePrecision) : "",
+            BestLapSign: bestLap > 0 && classBest > 0 && Math.Abs(bestLap - classBest) < 0.0005f ? 2 : 0,
             LastLapText: last > 0 ? FmtLap(last, cfg.LapTimePrecision) : "",
             DeltaCells: deltaCells,
             StatusText: Status(t, idx),
@@ -255,27 +258,68 @@ public static class SnapshotBuilder
 
     private static string HeaderMid(RawTick t, Roster roster, OverlayConfig cfg)
     {
-        var parts = new List<string>(2);
+        var parts = new List<string>(4);
         if (cfg.ShowSof && roster.StrengthOfField > 25)
             parts.Add($"SoF {FmtIr((int)roster.StrengthOfField)}");
         if (cfg.ShowTrackTemp && !float.IsNaN(t.TrackTemp))
             parts.Add($"{t.TrackTemp:0}°C");
+        if (cfg.ShowWeather)
+        {
+            var wet = t.DeclaredWet ? "WET declared" : WetnessText(t.TrackWetness);
+            if (!string.IsNullOrEmpty(wet)) parts.Add(wet);
+            if (!float.IsNaN(t.Precipitation)) parts.Add($"☂ {t.Precipitation * 100:0}%");
+        }
         return string.Join("  ·  ", parts);
     }
 
-    private static string HeaderRight(RawTick t, bool isRace, OverlayConfig cfg)
+    private static string WetnessText(int w) => w switch
     {
-        var parts = new List<string>(2);
-        if (isRace && t.SessionLapsRemain >= 0)
-            parts.Add($"{t.SessionLapsRemain} laps");
-        else if (t.SessionTimeRemain >= 0 && t.SessionTimeRemain < 172800)
+        1 => "Dry",
+        2 => "M.Dry",
+        3 or 4 => "Damp",
+        5 => "Wet",
+        6 or 7 => "V.Wet",
+        _ => "",
+    };
+
+    private static string HeaderRight(RawTick t, Roster roster, OverlayConfig cfg)
+    {
+        var parts = new List<string>(3);
+
+        // Lap counter like iOverlay's "L 3/42.9": player lap over the known or estimated total.
+        if (t.PlayerCarIdx >= 0 && t.PlayerCarIdx < t.Lap.Length)
         {
-            var ts = TimeSpan.FromSeconds(t.SessionTimeRemain);
-            parts.Add(ts.TotalHours >= 1 ? ts.ToString(@"h\:mm\:ss") : ts.ToString(@"m\:ss"));
+            int cur = Math.Max(0, t.Lap[t.PlayerCarIdx]);
+            double remain = EstimateLapsRemain(t, roster);
+            if (remain >= 0)
+                parts.Add(t.SessionLapsRemain >= 0
+                    ? $"L {cur}/{cur + t.SessionLapsRemain}"
+                    : $"L {cur}/{cur + remain:0.#}");
         }
+
+        if (t.SessionTime >= 0 && t.SessionTimeTotal > 0 && t.SessionTimeTotal < 172800)
+            parts.Add($"{FmtClock(t.SessionTime)}/{FmtTotal(t.SessionTimeTotal)}");
+        else if (t.SessionTimeRemain >= 0 && t.SessionTimeRemain < 172800)
+            parts.Add(FmtClock(t.SessionTimeRemain));
+
         if (cfg.ShowIncidents && t.PlayerIncidents >= 0)
             parts.Add($"{t.PlayerIncidents}x");
         return string.Join("  ·  ", parts);
+    }
+
+    private static string FmtClock(double s)
+    {
+        var ts = TimeSpan.FromSeconds(s);
+        return ts.TotalHours >= 1 ? ts.ToString(@"h\:mm\:ss") : ts.ToString(@"m\:ss");
+    }
+
+    /// <summary>Compact session length: "2h", "1:30", "45m".</summary>
+    private static string FmtTotal(double s)
+    {
+        var ts = TimeSpan.FromSeconds(s);
+        if (ts.TotalHours >= 1)
+            return ts.Minutes == 0 && ts.Seconds == 0 ? $"{(int)ts.TotalHours}h" : ts.ToString(@"h\:mm");
+        return ts.Seconds == 0 ? $"{ts.Minutes}m" : ts.ToString(@"m\:ss");
     }
 
     internal static string FmtIr(int ir) =>

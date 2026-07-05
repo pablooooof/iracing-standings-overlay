@@ -163,16 +163,22 @@ public sealed class IRacingSource : ITelemetrySource
             F2Time = _sdk.GetData("CarIdxF2Time") as float[] ?? [],
             OnPitRoad = _sdk.GetData("CarIdxOnPitRoad") as bool[] ?? [],
             SessionFlags = _sdk.GetData("CarIdxSessionFlags") as int[] ?? [],
+            TireCompound = _sdk.GetData("CarIdxTireCompound") as int[] ?? [],
             SessionType = _currentSessionType,
         };
 
         if (t.Lap.Length == 0 || t.LapDistPct.Length == 0) return null;
 
         if (_sdk.GetData("SessionTimeRemain") is double timeRemain) t.SessionTimeRemain = timeRemain;
+        if (_sdk.GetData("SessionTime") is double sessionTime) t.SessionTime = sessionTime;
+        if (_sdk.GetData("SessionTimeTotal") is double timeTotal) t.SessionTimeTotal = timeTotal;
         if (_sdk.GetData("SessionLapsRemainEx") is int lapsRemain && lapsRemain >= 0 && lapsRemain < 32000)
             t.SessionLapsRemain = lapsRemain;
         if (_sdk.GetData("TrackTempCrew") is float trackTemp) t.TrackTemp = trackTemp;
         if (_sdk.GetData("PlayerCarMyIncidentCount") is int incs) t.PlayerIncidents = incs;
+        if (_sdk.GetData("Precipitation") is float precip) t.Precipitation = precip;
+        if (_sdk.GetData("WeatherDeclaredWet") is bool wet) t.DeclaredWet = wet;
+        if (_sdk.GetData("TrackWetness") is int wetness) t.TrackWetness = wetness;
 
         return t;
     }

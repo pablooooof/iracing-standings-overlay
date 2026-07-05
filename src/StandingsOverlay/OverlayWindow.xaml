@@ -20,7 +20,7 @@
             </Style>
         </Border.Resources>
         <StackPanel>
-            <!-- Session header: RACE · SoF 2.4k · 31°C · 12 laps · 3x -->
+            <!-- Session header: RACE · SoF 2.4k · 31°C · Dry · ☂ 0% · L 3/40 · 1:35:22/2h · 3x -->
             <Grid Margin="2,0,2,5">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto"/>
@@ -36,6 +36,7 @@
             <Grid x:Name="ColumnHeader" Margin="2,0,2,3" Opacity="0.55">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition SharedSizeGroup="cPos"   Width="Auto"/>
+                    <ColumnDefinition SharedSizeGroup="cTyre"  Width="Auto"/>
                     <ColumnDefinition SharedSizeGroup="cPg"    Width="Auto"/>
                     <ColumnDefinition SharedSizeGroup="cNum"   Width="Auto"/>
                     <ColumnDefinition SharedSizeGroup="cName"  Width="Auto"/>
@@ -52,25 +53,27 @@
                     <ColumnDefinition SharedSizeGroup="cStat"  Width="Auto"/>
                 </Grid.ColumnDefinitions>
                 <TextBlock Grid.Column="0"  Text="P"      Margin="0,0,10,0" MinWidth="18"/>
-                <TextBlock Grid.Column="1"  Text="±"      Style="{StaticResource Num}" MinWidth="24"
+                <TextBlock Grid.Column="1"  Text=""       Margin="0,0,8,0" MinWidth="12"
+                           Visibility="{Binding Tyre}"/>
+                <TextBlock Grid.Column="2"  Text="±"      Style="{StaticResource Num}" MinWidth="24"
                            Visibility="{Binding PosGained}"/>
-                <TextBlock Grid.Column="2"  Text="#"      Margin="0,0,10,0" MinWidth="30"/>
-                <TextBlock Grid.Column="3"  Text="DRIVER" Margin="0,0,16,0" MinWidth="130"/>
-                <TextBlock Grid.Column="4"  Text="IR"     Style="{StaticResource Num}" MinWidth="34"
+                <TextBlock Grid.Column="3"  Text="#"      Margin="0,0,10,0" MinWidth="30"/>
+                <TextBlock Grid.Column="4"  Text="DRIVER" Margin="0,0,16,0" MinWidth="130"/>
+                <TextBlock Grid.Column="5"  Text="IR"     Style="{StaticResource Num}" MinWidth="34"
                            Visibility="{Binding IRating}"/>
-                <TextBlock Grid.Column="5"  Text="LIC"    Margin="0,0,14,0" MinWidth="42"
+                <TextBlock Grid.Column="6"  Text="LIC"    Margin="0,0,14,0" MinWidth="42"
                            Visibility="{Binding License}"/>
-                <TextBlock Grid.Column="6"  Text="LAPS"   Style="{StaticResource Num}" MinWidth="36"
+                <TextBlock Grid.Column="7"  Text="LAPS"   Style="{StaticResource Num}" MinWidth="36"
                            Visibility="{Binding LapsCount}"/>
-                <TextBlock Grid.Column="7"  Text="GAP"    Style="{StaticResource Num}" MinWidth="48"
+                <TextBlock Grid.Column="8"  Text="GAP"    Style="{StaticResource Num}" MinWidth="48"
                            Visibility="{Binding Gap}"/>
-                <TextBlock Grid.Column="8"  Text="INT"    Style="{StaticResource Num}" MinWidth="44"
+                <TextBlock Grid.Column="9"  Text="INT"    Style="{StaticResource Num}" MinWidth="44"
                            Visibility="{Binding Interval}"/>
-                <TextBlock Grid.Column="9"  Text="BEST"   Style="{StaticResource Num}" MinWidth="58"
+                <TextBlock Grid.Column="10" Text="BEST"   Style="{StaticResource Num}" MinWidth="58"
                            Visibility="{Binding BestLap}"/>
-                <TextBlock Grid.Column="10" Text="LAST"   Style="{StaticResource Num}" MinWidth="58"
+                <TextBlock Grid.Column="11" Text="LAST"   Style="{StaticResource Num}" MinWidth="58"
                            Visibility="{Binding LastLap}"/>
-                <ItemsControl Grid.Column="11" x:Name="DeltaHeaderCells" Margin="0,0,10,0"
+                <ItemsControl Grid.Column="12" x:Name="DeltaHeaderCells" Margin="0,0,10,0"
                               Visibility="{Binding Delta}">
                     <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate>
@@ -82,11 +85,11 @@
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
-                <TextBlock Grid.Column="12" Text="PIT"   Style="{StaticResource Num}" MinWidth="40"
+                <TextBlock Grid.Column="13" Text="PIT"   Style="{StaticResource Num}" MinWidth="40"
                            Visibility="{Binding Strategy}"/>
-                <TextBlock Grid.Column="13" Text="PACE"  Margin="0,0,10,0" MinWidth="34"
+                <TextBlock Grid.Column="14" Text="PACE"  Margin="0,0,10,0" MinWidth="34"
                            Visibility="{Binding Pace}"/>
-                <TextBlock Grid.Column="14" Text=""      MinWidth="30"
+                <TextBlock Grid.Column="15" Text=""      MinWidth="30"
                            Visibility="{Binding Status}"/>
             </Grid>
 
@@ -98,6 +101,7 @@
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition SharedSizeGroup="cPos"   Width="Auto"/>
+                                    <ColumnDefinition SharedSizeGroup="cTyre"  Width="Auto"/>
                                     <ColumnDefinition SharedSizeGroup="cPg"    Width="Auto"/>
                                     <ColumnDefinition SharedSizeGroup="cNum"   Width="Auto"/>
                                     <ColumnDefinition SharedSizeGroup="cName"  Width="Auto"/>
@@ -114,29 +118,52 @@
                                     <ColumnDefinition SharedSizeGroup="cStat"  Width="Auto"/>
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="{Binding PosText}" Margin="0,0,10,0" Opacity="0.9"/>
-                                <TextBlock Grid.Column="1" Text="{Binding PosGained}" Style="{StaticResource Num}"
+                                <!-- Tyre compound ring: gray = dry, blue = wet -->
+                                <Grid Grid.Column="1" Margin="0,0,8,0"
+                                      Visibility="{Binding DataContext.Tyre, RelativeSource={RelativeSource AncestorType=Window}}">
+                                    <Ellipse Width="11" Height="11" StrokeThickness="3" VerticalAlignment="Center"
+                                             Stroke="{Binding TyreBrush}" Fill="#1A1A1E"
+                                             Visibility="{Binding TyreVisibility}"/>
+                                </Grid>
+                                <TextBlock Grid.Column="2" Text="{Binding PosGained}" Style="{StaticResource Num}"
                                            Foreground="{Binding PosGainedBrush}" FontSize="11" VerticalAlignment="Center"
                                            Visibility="{Binding DataContext.PosGained, RelativeSource={RelativeSource AncestorType=Window}}"/>
-                                <TextBlock Grid.Column="2" Text="{Binding CarNumber}" Margin="0,0,10,0"
+                                <TextBlock Grid.Column="3" Text="{Binding CarNumber}" Margin="0,0,10,0"
                                            Foreground="{Binding CarNumberBrush}" FontWeight="SemiBold"/>
-                                <TextBlock Grid.Column="3" Text="{Binding Name}" Margin="0,0,16,0"
+                                <TextBlock Grid.Column="4" Text="{Binding Name}" Margin="0,0,16,0"
                                            Foreground="{Binding NameBrush}" FontWeight="{Binding NameWeight}"/>
-                                <TextBlock Grid.Column="4" Text="{Binding IRating}" Style="{StaticResource Num}" Opacity="0.85"
-                                           Visibility="{Binding DataContext.IRating, RelativeSource={RelativeSource AncestorType=Window}}"/>
-                                <TextBlock Grid.Column="5" Text="{Binding License}" Margin="0,0,14,0"
-                                           Foreground="{Binding LicenseBrush}" FontSize="11" VerticalAlignment="Center"
-                                           Visibility="{Binding DataContext.License, RelativeSource={RelativeSource AncestorType=Window}}"/>
-                                <TextBlock Grid.Column="6" Text="{Binding Laps}" Style="{StaticResource Num}" Opacity="0.85"
+                                <!-- iRating chip (iOverlay style: light pill, dark text) -->
+                                <Grid Grid.Column="5"
+                                      Visibility="{Binding DataContext.IRating, RelativeSource={RelativeSource AncestorType=Window}}">
+                                    <Border Background="#E9E9EC" CornerRadius="4" Padding="5,0" Margin="0,1,14,1"
+                                            HorizontalAlignment="Right" VerticalAlignment="Center"
+                                            Visibility="{Binding IrChipVisibility}">
+                                        <TextBlock Text="{Binding IRating}" Foreground="Black"
+                                                   FontSize="10.5" FontWeight="Bold"/>
+                                    </Border>
+                                </Grid>
+                                <!-- License chip: license color as background, contrasting text -->
+                                <Grid Grid.Column="6"
+                                      Visibility="{Binding DataContext.License, RelativeSource={RelativeSource AncestorType=Window}}">
+                                    <Border Background="{Binding LicenseBrush}" CornerRadius="4" Padding="5,0" Margin="0,1,14,1"
+                                            HorizontalAlignment="Left" VerticalAlignment="Center"
+                                            Visibility="{Binding LicChipVisibility}">
+                                        <TextBlock Text="{Binding License}" Foreground="{Binding LicenseTextBrush}"
+                                                   FontSize="10.5" FontWeight="Bold"/>
+                                    </Border>
+                                </Grid>
+                                <TextBlock Grid.Column="7" Text="{Binding Laps}" Style="{StaticResource Num}" Opacity="0.85"
                                            Visibility="{Binding DataContext.LapsCount, RelativeSource={RelativeSource AncestorType=Window}}"/>
-                                <TextBlock Grid.Column="7" Text="{Binding Gap}" Style="{StaticResource Num}" Opacity="0.9"
+                                <TextBlock Grid.Column="8" Text="{Binding Gap}" Style="{StaticResource Num}" Opacity="0.9"
                                            Visibility="{Binding DataContext.Gap, RelativeSource={RelativeSource AncestorType=Window}}"/>
-                                <TextBlock Grid.Column="8" Text="{Binding Interval}" Style="{StaticResource Num}" Opacity="0.9"
+                                <TextBlock Grid.Column="9" Text="{Binding Interval}" Style="{StaticResource Num}" Opacity="0.9"
                                            Visibility="{Binding DataContext.Interval, RelativeSource={RelativeSource AncestorType=Window}}"/>
-                                <TextBlock Grid.Column="9" Text="{Binding BestLap}" Style="{StaticResource Num}" Opacity="0.9"
+                                <TextBlock Grid.Column="10" Text="{Binding BestLap}" Style="{StaticResource Num}"
+                                           Foreground="{Binding BestLapBrush}" Opacity="0.95"
                                            Visibility="{Binding DataContext.BestLap, RelativeSource={RelativeSource AncestorType=Window}}"/>
-                                <TextBlock Grid.Column="10" Text="{Binding LastLap}" Style="{StaticResource Num}" Opacity="0.9"
+                                <TextBlock Grid.Column="11" Text="{Binding LastLap}" Style="{StaticResource Num}" Opacity="0.9"
                                            Visibility="{Binding DataContext.LastLap, RelativeSource={RelativeSource AncestorType=Window}}"/>
-                                <ItemsControl Grid.Column="11" ItemsSource="{Binding DeltaCells}" Margin="0,0,10,0"
+                                <ItemsControl Grid.Column="12" ItemsSource="{Binding DeltaCells}" Margin="0,0,10,0"
                                               Visibility="{Binding DataContext.Delta, RelativeSource={RelativeSource AncestorType=Window}}">
                                     <ItemsControl.ItemsPanel>
                                         <ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate>
@@ -149,15 +176,29 @@
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>
-                                <TextBlock Grid.Column="12" Text="{Binding Strat}" Style="{StaticResource Num}"
+                                <TextBlock Grid.Column="13" Text="{Binding Strat}" Style="{StaticResource Num}"
                                            Opacity="0.9" FontSize="11" VerticalAlignment="Center"
                                            Visibility="{Binding DataContext.Strategy, RelativeSource={RelativeSource AncestorType=Window}}"/>
-                                <TextBlock Grid.Column="13" Text="{Binding Pace}" Margin="0,0,10,0"
+                                <TextBlock Grid.Column="14" Text="{Binding Pace}" Margin="0,0,10,0"
                                            Foreground="{Binding PaceBrush}" FontWeight="SemiBold"
                                            Visibility="{Binding DataContext.Pace, RelativeSource={RelativeSource AncestorType=Window}}"/>
-                                <TextBlock Grid.Column="14" Text="{Binding Status}"
-                                           Foreground="{Binding StatusBrush}" FontSize="10" VerticalAlignment="Center" FontWeight="Bold"
-                                           Visibility="{Binding DataContext.Status, RelativeSource={RelativeSource AncestorType=Window}}"/>
+                                <!-- Status: penalty flags drawn as actual little flags; PIT stays text -->
+                                <StackPanel Grid.Column="15" Orientation="Horizontal"
+                                            Visibility="{Binding DataContext.Status, RelativeSource={RelativeSource AncestorType=Window}}">
+                                    <Grid Width="13" Height="14" VerticalAlignment="Center"
+                                          Visibility="{Binding FlagVisibility}">
+                                        <Rectangle Width="1.6" Height="13" HorizontalAlignment="Left" VerticalAlignment="Top"
+                                                   Fill="#A8A8B0"/>
+                                        <Rectangle Width="9" Height="6" Margin="1.6,0.5,0,0" RadiusX="1" RadiusY="1"
+                                                   HorizontalAlignment="Left" VerticalAlignment="Top" StrokeThickness="1"
+                                                   Fill="{Binding FlagBodyBrush}" Stroke="{Binding FlagStrokeBrush}"/>
+                                        <Ellipse Width="3.4" Height="3.4" Margin="4.4,1.8,0,0"
+                                                 HorizontalAlignment="Left" VerticalAlignment="Top"
+                                                 Fill="{Binding FlagDotBrush}" Visibility="{Binding FlagDotVisibility}"/>
+                                    </Grid>
+                                    <TextBlock Text="{Binding Status}" Foreground="{Binding StatusBrush}"
+                                               FontSize="10" VerticalAlignment="Center" FontWeight="Bold"/>
+                                </StackPanel>
                             </Grid>
                         </Border>
                     </DataTemplate>

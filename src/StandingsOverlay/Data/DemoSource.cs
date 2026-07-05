@@ -87,13 +87,23 @@ public sealed class DemoSource : ITelemetrySource
         _tick.F2Time = new float[Cars];
         _tick.OnPitRoad = new bool[Cars];
         _tick.SessionFlags = new int[Cars];
+        _tick.TireCompound = new int[Cars];
         _tick.TrackTemp = 31.2f;
         _tick.PlayerIncidents = 3;
         _tick.SessionType = sessionType;
+        _tick.SessionTimeTotal = 40 * Gt3LapSeconds;
+        _tick.Precipitation = 0.0f;
+        _tick.TrackWetness = 1; // dry
 
-        // A little chaos for the status column: one car with a meatball, one black-flagged.
-        _tick.SessionFlags[10] = CarFlags.Repair;
+        // A little chaos for the status column: every penalty flag kind gets one car.
+        _tick.SessionFlags[10] = CarFlags.Repair;     // meatball
         _tick.SessionFlags[16] = CarFlags.Black;
+        _tick.SessionFlags[4] = CarFlags.Furled;      // warning
+        _tick.SessionFlags[11] = CarFlags.Disqualify;
+
+        // Two cars gambling on wets so the tyre column has variety.
+        _tick.TireCompound[5] = 1;
+        _tick.TireCompound[14] = 1;
     }
 
     public void Start()
@@ -153,6 +163,7 @@ public sealed class DemoSource : ITelemetrySource
 
         _tick.SessionLapsRemain = Math.Max(0, 40 - _tick.Lap[order[0]]);
         _tick.SessionTimeRemain = _tick.SessionLapsRemain * Gt3LapSeconds;
+        _tick.SessionTime = _elapsed;
 
         var cfg = _cfg();
         _history.Update(_tick, _roster);

@@ -41,6 +41,7 @@ public sealed class OverlayConfig
     public bool ShowSof { get; set; } = true;
     public bool ShowTrackTemp { get; set; } = true;
     public bool ShowIncidents { get; set; } = true;
+    public bool ShowWeather { get; set; } = true;   // track state (Dry/Damp/Wet) + precipitation %
 
     // Decimal places
     public int GapPrecision { get; set; } = 1;
@@ -88,6 +89,7 @@ public sealed class OverlayConfig
 public sealed class SessionColumns
 {
     public bool ShowPositionsGained { get; set; }
+    public bool ShowTyre { get; set; } = true;       // dry/wet compound ring next to position
     public bool ShowIRating { get; set; } = true;
     public bool ShowLicense { get; set; } = true;
     public bool ShowLapsCount { get; set; }
