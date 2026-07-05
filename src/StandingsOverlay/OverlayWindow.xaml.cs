@@ -8,18 +8,25 @@ using StandingsOverlay.UI;
 
 namespace StandingsOverlay;
 
-/// <summary>Per-column Visibility flags; the Window's DataContext, rebuilt on config change.</summary>
+/// <summary>Per-column Visibility flags for the active session type; the Window's DataContext,
+/// rebuilt on config change or session-type change.</summary>
 public sealed record ColumnVisibility(
-    Visibility PosGained, Visibility IRating, Visibility License,
+    Visibility PosGained, Visibility IRating, Visibility License, Visibility LapsCount,
     Visibility Gap, Visibility Interval, Visibility BestLap, Visibility LastLap,
-    Visibility Delta, Visibility Strategy, Visibility Pace, Visibility Status)
+    Visibility Delta, Visibility Strategy, Visibility Pace, Visibility Status,
+    double CellWidth)
 {
-    public static ColumnVisibility From(OverlayConfig c)
+    public static ColumnVisibility From(SessionColumns c, SessionKind kind)
     {
         static Visibility V(bool b) => b ? Visibility.Visible : Visibility.Collapsed;
-        return new(V(c.ShowPositionsGained), V(c.ShowIRating), V(c.ShowLicense),
-                   V(c.ShowGap), V(c.ShowInterval), V(c.ShowBestLap), V(c.ShowLastLap),
-                   V(c.ShowDelta), V(c.ShowStrategy), V(c.ShowPace), V(c.ShowStatus));
+        bool race = kind == SessionKind.Race;
+        return new(
+            V(c.ShowPositionsGained && race), V(c.ShowIRating), V(c.ShowLicense), V(c.ShowLapsCount),
+            V(c.ShowGap), V(c.ShowInterval), V(c.ShowBestLap), V(c.ShowLastLap),
+            V(c.ShowCells && kind != SessionKind.Practice),
+            V(c.ShowStrategy && race), V(c.ShowPace && race), V(c.ShowStatus),
+            // Race cells hold "0.4"; quali cells hold "1:43.210".
+            CellWidth: kind == SessionKind.Qualify ? 62 : 34);
     }
 }
 
@@ -27,6 +34,8 @@ public partial class OverlayWindow : Window
 {
     private readonly ConfigService _configService;
     private StandingsSnapshot? _lastSnapshot;
+    private SessionKind? _visibleKind;
+    private IReadOnlyList<string>? _visibleCellHeaders;
     private bool _editMode;
 
     public OverlayWindow(ConfigService configService)
@@ -55,7 +64,8 @@ public partial class OverlayWindow : Window
         FontSize = cfg.FontSize;
         FontFamily = new FontFamily("Segoe UI");
         Foreground = Brushes.White;
-        DataContext = ColumnVisibility.From(cfg);
+        DataContext = ColumnVisibility.From(cfg.ColumnsFor(_visibleKind ?? SessionKind.Race),
+                                            _visibleKind ?? SessionKind.Race);
 
         var bg = RowViewModel.TryBrush(cfg.BackgroundColor) is SolidColorBrush b ? b.Color : Color.FromRgb(0x21, 0x21, 0x29);
         var brush = new SolidColorBrush(bg) { Opacity = Math.Clamp(cfg.Opacity, 0.05, 1.0) };
@@ -67,10 +77,6 @@ public partial class OverlayWindow : Window
         EditHint.Foreground = accent;
 
         ColumnHeader.Visibility = cfg.ShowColumnHeader ? Visibility.Visible : Visibility.Collapsed;
-
-        // One Δ header cell per lap, oldest on the left: Δ-5 … Δ-1.
-        DeltaHeaderCells.ItemsSource =
-            Enumerable.Range(0, cfg.DeltaLaps).Select(k => $"Δ-{cfg.DeltaLaps - k}").ToList();
     }
 
     /// <summary>Called from the telemetry thread; skips the dispatch entirely when nothing changed.</summary>
@@ -85,9 +91,9 @@ public partial class OverlayWindow : Window
     private static bool SnapshotsEqual(StandingsSnapshot a, StandingsSnapshot? b)
     {
         if (b is null) return false;
-        if (a.Connected != b.Connected || a.HeaderLeft != b.HeaderLeft ||
+        if (a.Connected != b.Connected || a.Kind != b.Kind || a.HeaderLeft != b.HeaderLeft ||
             a.HeaderMid != b.HeaderMid || a.HeaderRight != b.HeaderRight ||
-            a.Rows.Count != b.Rows.Count) return false;
+            a.Rows.Count != b.Rows.Count || !a.CellHeaders.SequenceEqual(b.CellHeaders)) return false;
         for (int i = 0; i < a.Rows.Count; i++)
         {
             var (ra, rb) = (a.Rows[i], b.Rows[i]);
@@ -103,6 +109,19 @@ public partial class OverlayWindow : Window
     private void Render(StandingsSnapshot s)
     {
         var cfg = _configService.Current;
+
+        // Session type drives which columns exist and what the cell strip means.
+        if (s.Kind != _visibleKind)
+        {
+            _visibleKind = s.Kind;
+            DataContext = ColumnVisibility.From(cfg.ColumnsFor(s.Kind), s.Kind);
+        }
+        if (_visibleCellHeaders is null || !s.CellHeaders.SequenceEqual(_visibleCellHeaders))
+        {
+            _visibleCellHeaders = s.CellHeaders;
+            DeltaHeaderCells.ItemsSource = s.CellHeaders;
+        }
+
         HeaderLeft.Text = s.HeaderLeft;
         HeaderMid.Text = s.HeaderMid;
         HeaderRight.Text = s.HeaderRight;

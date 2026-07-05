@@ -17,7 +17,6 @@
             </Style>
             <Style x:Key="DeltaCell" TargetType="TextBlock">
                 <Setter Property="TextAlignment" Value="Right"/>
-                <Setter Property="Width" Value="34"/>
             </Style>
         </Border.Resources>
         <StackPanel>
@@ -42,6 +41,7 @@
                     <ColumnDefinition SharedSizeGroup="cName"  Width="Auto"/>
                     <ColumnDefinition SharedSizeGroup="cIr"    Width="Auto"/>
                     <ColumnDefinition SharedSizeGroup="cLic"   Width="Auto"/>
+                    <ColumnDefinition SharedSizeGroup="cLaps"  Width="Auto"/>
                     <ColumnDefinition SharedSizeGroup="cGap"   Width="Auto"/>
                     <ColumnDefinition SharedSizeGroup="cInt"   Width="Auto"/>
                     <ColumnDefinition SharedSizeGroup="cBest"  Width="Auto"/>
@@ -60,30 +60,33 @@
                            Visibility="{Binding IRating}"/>
                 <TextBlock Grid.Column="5"  Text="LIC"    Margin="0,0,14,0" MinWidth="42"
                            Visibility="{Binding License}"/>
-                <TextBlock Grid.Column="6"  Text="GAP"    Style="{StaticResource Num}" MinWidth="48"
+                <TextBlock Grid.Column="6"  Text="LAPS"   Style="{StaticResource Num}" MinWidth="36"
+                           Visibility="{Binding LapsCount}"/>
+                <TextBlock Grid.Column="7"  Text="GAP"    Style="{StaticResource Num}" MinWidth="48"
                            Visibility="{Binding Gap}"/>
-                <TextBlock Grid.Column="7"  Text="INT"    Style="{StaticResource Num}" MinWidth="44"
+                <TextBlock Grid.Column="8"  Text="INT"    Style="{StaticResource Num}" MinWidth="44"
                            Visibility="{Binding Interval}"/>
-                <TextBlock Grid.Column="8"  Text="BEST"   Style="{StaticResource Num}" MinWidth="58"
+                <TextBlock Grid.Column="9"  Text="BEST"   Style="{StaticResource Num}" MinWidth="58"
                            Visibility="{Binding BestLap}"/>
-                <TextBlock Grid.Column="9"  Text="LAST"   Style="{StaticResource Num}" MinWidth="58"
+                <TextBlock Grid.Column="10" Text="LAST"   Style="{StaticResource Num}" MinWidth="58"
                            Visibility="{Binding LastLap}"/>
-                <ItemsControl Grid.Column="10" x:Name="DeltaHeaderCells" Margin="0,0,10,0"
+                <ItemsControl Grid.Column="11" x:Name="DeltaHeaderCells" Margin="0,0,10,0"
                               Visibility="{Binding Delta}">
                     <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate>
                     </ItemsControl.ItemsPanel>
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
-                            <TextBlock Text="{Binding}" Style="{StaticResource DeltaCell}"/>
+                            <TextBlock Text="{Binding}" Style="{StaticResource DeltaCell}"
+                                       Width="{Binding DataContext.CellWidth, RelativeSource={RelativeSource AncestorType=Window}}"/>
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
-                <TextBlock Grid.Column="11" Text="PIT"   Style="{StaticResource Num}" MinWidth="40"
+                <TextBlock Grid.Column="12" Text="PIT"   Style="{StaticResource Num}" MinWidth="40"
                            Visibility="{Binding Strategy}"/>
-                <TextBlock Grid.Column="12" Text="PACE"  Margin="0,0,10,0" MinWidth="34"
+                <TextBlock Grid.Column="13" Text="PACE"  Margin="0,0,10,0" MinWidth="34"
                            Visibility="{Binding Pace}"/>
-                <TextBlock Grid.Column="13" Text=""      MinWidth="30"
+                <TextBlock Grid.Column="14" Text=""      MinWidth="30"
                            Visibility="{Binding Status}"/>
             </Grid>
 
@@ -100,6 +103,7 @@
                                     <ColumnDefinition SharedSizeGroup="cName"  Width="Auto"/>
                                     <ColumnDefinition SharedSizeGroup="cIr"    Width="Auto"/>
                                     <ColumnDefinition SharedSizeGroup="cLic"   Width="Auto"/>
+                                    <ColumnDefinition SharedSizeGroup="cLaps"  Width="Auto"/>
                                     <ColumnDefinition SharedSizeGroup="cGap"   Width="Auto"/>
                                     <ColumnDefinition SharedSizeGroup="cInt"   Width="Auto"/>
                                     <ColumnDefinition SharedSizeGroup="cBest"  Width="Auto"/>
@@ -122,15 +126,17 @@
                                 <TextBlock Grid.Column="5" Text="{Binding License}" Margin="0,0,14,0"
                                            Foreground="{Binding LicenseBrush}" FontSize="11" VerticalAlignment="Center"
                                            Visibility="{Binding DataContext.License, RelativeSource={RelativeSource AncestorType=Window}}"/>
-                                <TextBlock Grid.Column="6" Text="{Binding Gap}" Style="{StaticResource Num}" Opacity="0.9"
+                                <TextBlock Grid.Column="6" Text="{Binding Laps}" Style="{StaticResource Num}" Opacity="0.85"
+                                           Visibility="{Binding DataContext.LapsCount, RelativeSource={RelativeSource AncestorType=Window}}"/>
+                                <TextBlock Grid.Column="7" Text="{Binding Gap}" Style="{StaticResource Num}" Opacity="0.9"
                                            Visibility="{Binding DataContext.Gap, RelativeSource={RelativeSource AncestorType=Window}}"/>
-                                <TextBlock Grid.Column="7" Text="{Binding Interval}" Style="{StaticResource Num}" Opacity="0.9"
+                                <TextBlock Grid.Column="8" Text="{Binding Interval}" Style="{StaticResource Num}" Opacity="0.9"
                                            Visibility="{Binding DataContext.Interval, RelativeSource={RelativeSource AncestorType=Window}}"/>
-                                <TextBlock Grid.Column="8" Text="{Binding BestLap}" Style="{StaticResource Num}" Opacity="0.9"
+                                <TextBlock Grid.Column="9" Text="{Binding BestLap}" Style="{StaticResource Num}" Opacity="0.9"
                                            Visibility="{Binding DataContext.BestLap, RelativeSource={RelativeSource AncestorType=Window}}"/>
-                                <TextBlock Grid.Column="9" Text="{Binding LastLap}" Style="{StaticResource Num}" Opacity="0.9"
+                                <TextBlock Grid.Column="10" Text="{Binding LastLap}" Style="{StaticResource Num}" Opacity="0.9"
                                            Visibility="{Binding DataContext.LastLap, RelativeSource={RelativeSource AncestorType=Window}}"/>
-                                <ItemsControl Grid.Column="10" ItemsSource="{Binding DeltaCells}" Margin="0,0,10,0"
+                                <ItemsControl Grid.Column="11" ItemsSource="{Binding DeltaCells}" Margin="0,0,10,0"
                                               Visibility="{Binding DataContext.Delta, RelativeSource={RelativeSource AncestorType=Window}}">
                                     <ItemsControl.ItemsPanel>
                                         <ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate>
@@ -138,17 +144,18 @@
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate>
                                             <TextBlock Text="{Binding Text}" Foreground="{Binding Brush}"
-                                                       Style="{StaticResource DeltaCell}" FontWeight="SemiBold"/>
+                                                       Style="{StaticResource DeltaCell}" FontWeight="SemiBold"
+                                                       Width="{Binding DataContext.CellWidth, RelativeSource={RelativeSource AncestorType=Window}}"/>
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>
-                                <TextBlock Grid.Column="11" Text="{Binding Strat}" Style="{StaticResource Num}"
+                                <TextBlock Grid.Column="12" Text="{Binding Strat}" Style="{StaticResource Num}"
                                            Opacity="0.9" FontSize="11" VerticalAlignment="Center"
                                            Visibility="{Binding DataContext.Strategy, RelativeSource={RelativeSource AncestorType=Window}}"/>
-                                <TextBlock Grid.Column="12" Text="{Binding Pace}" Margin="0,0,10,0"
+                                <TextBlock Grid.Column="13" Text="{Binding Pace}" Margin="0,0,10,0"
                                            Foreground="{Binding PaceBrush}" FontWeight="SemiBold"
                                            Visibility="{Binding DataContext.Pace, RelativeSource={RelativeSource AncestorType=Window}}"/>
-                                <TextBlock Grid.Column="13" Text="{Binding Status}"
+                                <TextBlock Grid.Column="14" Text="{Binding Status}"
                                            Foreground="{Binding StatusBrush}" FontSize="10" VerticalAlignment="Center" FontWeight="Bold"
                                            Visibility="{Binding DataContext.Status, RelativeSource={RelativeSource AncestorType=Window}}"/>
                             </Grid>

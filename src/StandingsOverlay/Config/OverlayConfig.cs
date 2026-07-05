@@ -31,18 +31,11 @@ public sealed class OverlayConfig
     // Multiclass: how many drivers of each other class to show at the top of their group.
     public int OtherClassesDriversAtTop { get; set; } = 0;
 
-    // Columns (all wired to the UI)
-    public bool ShowPositionsGained { get; set; } = true;
-    public bool ShowIRating { get; set; } = true;
-    public bool ShowLicense { get; set; } = true;
-    public bool ShowGap { get; set; } = true;
-    public bool ShowInterval { get; set; } = true;
-    public bool ShowBestLap { get; set; } = true;
-    public bool ShowLastLap { get; set; } = true;
-    public bool ShowDelta { get; set; } = true;
-    public bool ShowStatus { get; set; } = true;     // PIT / black flag / meatball / DQ badge
-    public bool ShowStrategy { get; set; } = true;   // expected pit lap, stops to end (race only)
-    public bool ShowPace { get; set; } = true;       // fast/slow vs class + fuel-save tag (race only)
+    // Per-session-type column sets. The Cells column is per-lap deltas in a race
+    // and one column per completed lap in qualifying.
+    public SessionColumns Race { get; set; } = SessionColumns.RaceDefaults();
+    public SessionColumns Qualify { get; set; } = SessionColumns.QualifyDefaults();
+    public SessionColumns Practice { get; set; } = SessionColumns.PracticeDefaults();
 
     // Header extras
     public bool ShowSof { get; set; } = true;
@@ -54,6 +47,13 @@ public sealed class OverlayConfig
     public int IntervalPrecision { get; set; } = 1;
     public int LapTimePrecision { get; set; } = 3;
     public int DeltaPrecision { get; set; } = 1;
+
+    public SessionColumns ColumnsFor(Data.SessionKind kind) => kind switch
+    {
+        Data.SessionKind.Race => Race,
+        Data.SessionKind.Qualify => Qualify,
+        _ => Practice,
+    };
 
     private static readonly JsonSerializerOptions JsonOpts = new()
     {
@@ -81,6 +81,45 @@ public sealed class OverlayConfig
     {
         File.WriteAllText(path, JsonSerializer.Serialize(this, JsonOpts));
     }
+}
+
+/// <summary>Column toggles for one session type. Not every column is meaningful everywhere —
+/// strategy/pace/positions-gained only ever render in races regardless of the flag.</summary>
+public sealed class SessionColumns
+{
+    public bool ShowPositionsGained { get; set; }
+    public bool ShowIRating { get; set; } = true;
+    public bool ShowLicense { get; set; } = true;
+    public bool ShowLapsCount { get; set; }
+    public bool ShowGap { get; set; } = true;
+    public bool ShowInterval { get; set; } = true;
+    public bool ShowBestLap { get; set; } = true;
+    public bool ShowLastLap { get; set; } = true;
+    public bool ShowCells { get; set; } = true;      // race: per-lap deltas · quali: per-lap times
+    public bool ShowStatus { get; set; } = true;
+    public bool ShowStrategy { get; set; }
+    public bool ShowPace { get; set; }
+
+    public static SessionColumns RaceDefaults() => new()
+    {
+        ShowPositionsGained = true,
+        ShowBestLap = false,      // LAST + deltas matter in a race; BEST is qual/practice info
+        ShowStrategy = true,
+        ShowPace = true,
+    };
+
+    public static SessionColumns QualifyDefaults() => new()
+    {
+        ShowInterval = true,
+        ShowLastLap = false,      // the per-lap cells already show every lap
+    };
+
+    public static SessionColumns PracticeDefaults() => new()
+    {
+        ShowLapsCount = true,
+        ShowCells = false,
+        ShowInterval = false,
+    };
 }
 
 /// <summary>

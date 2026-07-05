@@ -106,6 +106,13 @@ public sealed class StintTracker
             : $"{stops}stp{(splash ? "*" : "")}";
     }
 
+    /// <summary>All recorded lap times for the car, oldest first (session order; capped at 30).</summary>
+    public IReadOnlyList<float> LapTimesFor(int idx) =>
+        _cars.TryGetValue(idx, out var s) ? s.LapTimes : [];
+
+    /// <summary>Completed timed laps for the car.</summary>
+    public int LapCount(int idx) => _cars.TryGetValue(idx, out var s) ? s.LapTimes.Count : 0;
+
     /// <summary>Average of the car's last <paramref name="n"/> lap times, or null.</summary>
     public float? RecentPace(int idx, int n = 5)
     {

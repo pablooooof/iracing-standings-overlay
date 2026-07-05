@@ -33,15 +33,27 @@ Beyond the usual columns (position, car number, iRating, license, gap, interval,
 
 ```powershell
 dotnet build src/StandingsOverlay -c Release
-# demo mode — fake 20-car race, no iRacing needed:
-src/StandingsOverlay/bin/Release/net10.0-windows/StandingsOverlay.exe --demo
+# demo mode — fake two-class 20-car field, no iRacing needed:
+src/StandingsOverlay/bin/Release/net10.0-windows/StandingsOverlay.exe --demo          # race
+src/StandingsOverlay/bin/Release/net10.0-windows/StandingsOverlay.exe --demo qual     # qualifying
+src/StandingsOverlay/bin/Release/net10.0-windows/StandingsOverlay.exe --demo practice
 # real mode — just run it, it waits for iRacing:
 src/StandingsOverlay/bin/Release/net10.0-windows/StandingsOverlay.exe
 ```
 
-A `config.json` is created next to the exe on first run and **hot-reloads** on save: position, colors, opacity, font size, `DeltaLaps` (the Δ window), `DriversAtTop` / `DriversAheadBehind` (compact layout), `UpdateHz`, and per-column toggles.
+## Session modes
 
-Use the tray icon → **Edit mode** to drag the overlay into place (position is saved), and → **Exit** to quit.
+Each session type has its own column set (configurable per type in `config.json`):
+
+- **Race** — position, ± vs grid, gap/interval, last lap, **Δ per-lap gap columns** (oldest left, green = you gained that lap, `P` = pit-affected), **PIT** strategy (`~34` expected pit lap · `34!` overdue · `0stp` no stop needed · `2stp*` splash-and-dash at the end), **PACE** (▲/▼ vs class, `S` = fuel-saving), status badges (`PIT`/`DMG`/`BLK`/`WRN`/`DQ`).
+- **Qualifying** — best lap, gap/interval to class pole, and **one column per quali lap** (L1–L4, grows with the session): purple = class best, green = personal best.
+- **Practice** — laps count, best, last, gap to session best.
+
+Multiclass fields group by class with colored headers; `OtherClassesDriversAtTop` controls how many cars of other classes appear.
+
+A `config.json` is created next to the exe on first run and **hot-reloads** on save: position, colors, opacity, font size, precisions, `DeltaLaps`, compact-layout counts, `UpdateHz`, and per-session column toggles.
+
+The tray icon is the control surface: **Edit mode** (drag the overlay into place, position saved), **Start with Windows**, **Exit**. Its tooltip shows whether the app is connected to iRacing or waiting.
 
 ## Status
 

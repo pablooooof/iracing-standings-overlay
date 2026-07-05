@@ -9,6 +9,7 @@ public sealed record DeltaCellViewModel(string Text, Brush Brush);
 public sealed class RowViewModel
 {
     public string PosText { get; init; } = "";
+    public string Laps { get; init; } = "";
     public string PosGained { get; init; } = "";
     public string CarNumber { get; init; } = "";
     public string Name { get; init; } = "";
@@ -32,6 +33,7 @@ public sealed class RowViewModel
     public Brush NameBrush { get; init; } = Brushes.White;
     public System.Windows.FontWeight NameWeight { get; init; } = System.Windows.FontWeights.Normal;
 
+    private static readonly Brush PurpleBrush = Frozen("#C77DFF");
     private static readonly Brush GainBrush = Frozen("#4CFF6A");
     private static readonly Brush LossBrush = Frozen("#FF5C5C");
     private static readonly Brush DimBrush = Frozen("#9DA0AA");
@@ -58,6 +60,7 @@ public sealed class RowViewModel
         return new RowViewModel
         {
             PosText = r.PosText,
+            Laps = r.LapsText,
             PosGained = r.PosGainedText,
             CarNumber = r.CarNumber,
             Name = r.Name,
@@ -69,7 +72,13 @@ public sealed class RowViewModel
             LastLap = r.LastLapText,
             DeltaCells = r.DeltaCells.Select(c => new DeltaCellViewModel(
                 c.Text,
-                c.Sign < 0 ? GainBrush : c.Sign > 0 ? LossBrush : DimBrush)).ToList(),
+                c.Sign switch
+                {
+                    2 => PurpleBrush,        // class-best quali lap
+                    < 0 => GainBrush,
+                    > 0 => LossBrush,
+                    _ => c.Text.Length > 4 ? Brushes.White : DimBrush, // quali laps white, neutral deltas dim
+                })).ToList(),
             Status = r.StatusText,
             Strat = r.StratText,
             Pace = r.PaceText,

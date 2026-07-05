@@ -1,14 +1,19 @@
 using System.Drawing;
 using System.Windows.Forms;
+using Microsoft.Win32;
 
 namespace StandingsOverlay.UI;
 
 /// <summary>
 /// System-tray icon — the only UI chrome the app has. The overlay window itself is
-/// click-through, so this is how the user moves it (edit mode) and exits.
+/// click-through, so this is how the user moves it (edit mode), sees whether the app is
+/// alive/connected (tooltip), makes it start with Windows, and exits.
 /// </summary>
 public sealed class TrayIcon : IDisposable
 {
+    private const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
+    private const string RunValue = "StandingsOverlay";
+
     private readonly NotifyIcon _icon;
     private readonly Icon _drawnIcon;
 
@@ -22,20 +27,55 @@ public sealed class TrayIcon : IDisposable
         var menu = new ContextMenuStrip();
         var edit = new ToolStripMenuItem("Edit mode (drag to move)") { CheckOnClick = true };
         edit.CheckedChanged += (_, _) => EditModeToggled?.Invoke(edit.Checked);
+
+        var autostart = new ToolStripMenuItem("Start with Windows")
+        {
+            CheckOnClick = true,
+            Checked = IsAutoStartEnabled(),
+        };
+        autostart.CheckedChanged += (_, _) => SetAutoStart(autostart.Checked);
+
         var exit = new ToolStripMenuItem("Exit");
         exit.Click += (_, _) => ExitRequested?.Invoke();
 
         menu.Items.Add(edit);
+        menu.Items.Add(autostart);
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(exit);
 
         _icon = new NotifyIcon
         {
             Icon = _drawnIcon,
-            Text = "Standings Overlay" + (demoMode ? " (demo)" : ""),
+            Text = "Standings Overlay" + (demoMode ? " (demo)" : " — waiting for iRacing"),
             Visible = true,
             ContextMenuStrip = menu,
         };
+    }
+
+    private string _lastStatus = "";
+
+    /// <summary>Tooltip status; call from the UI thread. Max 63 chars (NotifyIcon limit).</summary>
+    public void SetStatus(string status)
+    {
+        if (status == _lastStatus) return;
+        _lastStatus = status;
+        var text = "Standings Overlay — " + status;
+        _icon.Text = text.Length <= 63 ? text : text[..63];
+    }
+
+    private static bool IsAutoStartEnabled()
+    {
+        using var key = Registry.CurrentUser.OpenSubKey(RunKey);
+        return key?.GetValue(RunValue) is not null;
+    }
+
+    private static void SetAutoStart(bool enable)
+    {
+        using var key = Registry.CurrentUser.CreateSubKey(RunKey);
+        if (enable)
+            key.SetValue(RunValue, $"\"{Environment.ProcessPath}\"");
+        else
+            key.DeleteValue(RunValue, throwOnMissingValue: false);
     }
 
     /// <summary>Tiny leaderboard glyph drawn at runtime so we don't need an .ico asset.</summary>

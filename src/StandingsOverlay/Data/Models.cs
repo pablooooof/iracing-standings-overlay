@@ -71,6 +71,7 @@ public enum RowKind { Normal, Separator, ClassHeader }
 
 public sealed record StandingsRow(
     RowKind Kind,
+    string LapsText,
     string PosText,
     string PosGainedText,
     int PosGainedSign,       // -1 gained places (green), +1 lost (red)
@@ -97,16 +98,25 @@ public sealed record StandingsRow(
         Empty(RowKind.ClassHeader) with { Name = className, ClassColor = classColor };
 
     public static StandingsRow Empty(RowKind kind) =>
-        new(kind, "", "", 0, "", "", "", "", "", "", "", "", "", "", [], "", "", "", 0, false);
+        new(kind, "", "", "", 0, "", "", "", "", "", "", "", "", "", "", [], "", "", "", 0, false);
 }
+
+public enum SessionKind { Practice, Qualify, Race }
 
 public sealed record StandingsSnapshot(
     bool Connected,
+    SessionKind Kind,
     string HeaderLeft,      // e.g. "RACE"
     string HeaderMid,       // e.g. "SoF 2.4k · 31°C"
     string HeaderRight,     // e.g. "12 laps · 3x"
+    IReadOnlyList<string> CellHeaders,   // "Δ-5"…"Δ-1" in race, "L1"…"L4" in quali
     IReadOnlyList<StandingsRow> Rows)
 {
     public static readonly StandingsSnapshot Disconnected =
-        new(false, "STANDINGS", "", "waiting for iRacing…", []);
+        new(false, SessionKind.Practice, "STANDINGS", "", "waiting for iRacing…", [], []);
+
+    public static SessionKind KindOf(string sessionType) =>
+        sessionType.Contains("Race", StringComparison.OrdinalIgnoreCase) ? SessionKind.Race
+        : sessionType.Contains("Qual", StringComparison.OrdinalIgnoreCase) ? SessionKind.Qualify
+        : SessionKind.Practice;
 }

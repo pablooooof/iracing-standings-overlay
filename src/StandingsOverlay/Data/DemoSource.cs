@@ -31,11 +31,14 @@ public sealed class DemoSource : ITelemetrySource
     private Timer? _timer;
     private double _elapsed;
 
+    private readonly bool _isRace;
+
     public event Action<StandingsSnapshot>? SnapshotReady;
 
-    public DemoSource(Func<OverlayConfig> cfg)
+    public DemoSource(Func<OverlayConfig> cfg, string sessionType = "Race")
     {
         _cfg = cfg;
+        _isRace = sessionType.Contains("Race", StringComparison.OrdinalIgnoreCase);
 
         string[] names =
         [
@@ -86,7 +89,7 @@ public sealed class DemoSource : ITelemetrySource
         _tick.SessionFlags = new int[Cars];
         _tick.TrackTemp = 31.2f;
         _tick.PlayerIncidents = 3;
-        _tick.SessionType = "Race";
+        _tick.SessionType = sessionType;
 
         // A little chaos for the status column: one car with a meatball, one black-flagged.
         _tick.SessionFlags[10] = CarFlags.Repair;
@@ -110,8 +113,8 @@ public sealed class DemoSource : ITelemetrySource
             if (_elapsed < _pitUntil[i]) { _tick.OnPitRoad[i] = true; continue; }
             _tick.OnPitRoad[i] = false;
 
-            // Pit when the stint is up (crossing the line on the pit lap).
-            if (_tick.Lap[i] - _lastPitLap[i] >= _stintLaps[i] && _tick.LapDistPct[i] < 0.05f)
+            // Pit when the stint is up (crossing the line on the pit lap). Races only.
+            if (_isRace && _tick.Lap[i] - _lastPitLap[i] >= _stintLaps[i] && _tick.LapDistPct[i] < 0.05f)
             {
                 _lastPitLap[i] = _tick.Lap[i];
                 _pitUntil[i] = _elapsed + PitDuration + _rng.Next(6);
@@ -124,10 +127,14 @@ public sealed class DemoSource : ITelemetrySource
             double jitter = 1.0 + 0.02 * Math.Sin(_elapsed / 7.0 + i * 1.7);
             if (i is 14 or 17) jitter = 1.022; // fuel saving: consistent +2.2%
             _totalDist[i] += dt / (_pace[i] * jitter);
-            _tick.Lap[i] = (int)_totalDist[i];
-            _tick.LapDistPct[i] = (float)(_totalDist[i] - _tick.Lap[i]);
+            int newLap = (int)_totalDist[i];
+            bool crossed = newLap != _tick.Lap[i];
+            _tick.Lap[i] = newLap;
+            _tick.LapDistPct[i] = (float)(_totalDist[i] - newLap);
             _tick.LastLap[i] = _pace[i] * (float)jitter + (i is 14 or 17 ? 0f : (float)Math.Sin(_elapsed / 5.0 + i) * 0.15f);
-            _tick.BestLap[i] = _pace[i] - 0.2f;
+            // Best = fastest recorded lap, latched at the crossing like iRacing does.
+            if (crossed && (_tick.BestLap[i] <= 0 || _tick.LastLap[i] < _tick.BestLap[i]))
+                _tick.BestLap[i] = _tick.LastLap[i];
         }
 
         // Positions + gaps from total distance: overall and per class.

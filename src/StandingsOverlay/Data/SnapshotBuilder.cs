@@ -11,7 +11,23 @@ public static class SnapshotBuilder
     public static StandingsSnapshot Build(RawTick t, Roster roster, GapHistory history,
         StintTracker stints, OverlayConfig cfg)
     {
-        bool isRace = t.SessionType.Contains("Race", StringComparison.OrdinalIgnoreCase);
+        var kind = StandingsSnapshot.KindOf(t.SessionType);
+        bool isRace = kind == SessionKind.Race;
+
+        // Quali: one cell per completed lap, growing with the session (min 2, max 4 columns).
+        int cellCount = kind switch
+        {
+            SessionKind.Race => cfg.DeltaLaps,
+            SessionKind.Qualify => Math.Clamp(
+                roster.Drivers.Keys.Select(stints.LapCount).DefaultIfEmpty(0).Max(), 2, 4),
+            _ => 0,
+        };
+        var cellHeaders = kind switch
+        {
+            SessionKind.Race => Enumerable.Range(0, cellCount).Select(k => $"Δ-{cellCount - k}").ToList(),
+            SessionKind.Qualify => Enumerable.Range(1, cellCount).Select(k => $"L{k}").ToList(),
+            _ => new List<string>(),
+        };
 
         var cars = roster.Drivers.Values
             .Where(d => !d.IsPaceCar && !d.IsSpectator && t.Has(d.CarIdx))
@@ -72,12 +88,13 @@ public static class SnapshotBuilder
             {
                 if (prev >= 0 && i != prev + 1) rows.Add(StandingsRow.Separator);
                 prev = i;
-                rows.Add(BuildRow(i, ordered, t, history, stints, cfg, isRace, classBest, classMedianPace, lapsRemain));
+                rows.Add(BuildRow(i, ordered, t, history, stints, cfg, kind, cellCount,
+                                  classBest, classMedianPace, lapsRemain));
             }
         }
 
-        return new StandingsSnapshot(true, isRace ? "RACE" : t.SessionType.ToUpperInvariant(),
-            HeaderMid(t, roster, cfg), HeaderRight(t, isRace, cfg), rows);
+        return new StandingsSnapshot(true, kind, isRace ? "RACE" : t.SessionType.ToUpperInvariant(),
+            HeaderMid(t, roster, cfg), HeaderRight(t, isRace, cfg), cellHeaders, rows);
     }
 
     private static List<DriverEntry> OrderClass(List<DriverEntry> cars, RawTick t, bool isRace)
@@ -96,9 +113,10 @@ public static class SnapshotBuilder
     }
 
     private static StandingsRow BuildRow(int i, List<DriverEntry> ordered, RawTick t,
-        GapHistory history, StintTracker stints, OverlayConfig cfg, bool isRace,
+        GapHistory history, StintTracker stints, OverlayConfig cfg, SessionKind kind, int cellCount,
         float classBest, float? classMedianPace, double lapsRemain)
     {
+        bool isRace = kind == SessionKind.Race;
         var d = ordered[i];
         int idx = d.CarIdx;
         var leader = ordered[0];
@@ -121,10 +139,10 @@ public static class SnapshotBuilder
                 interval = "+" + FmtGap(best - t.BestLap[ordered[i - 1].CarIdx], cfg.IntervalPrecision);
         }
 
-        var deltaCells = new DeltaCell[cfg.DeltaLaps];
-        if (idx != t.PlayerCarIdx)
+        var deltaCells = new DeltaCell[cellCount];
+        if (kind == SessionKind.Race && idx != t.PlayerCarIdx)
         {
-            var perLap = history.PerLapDeltas(idx, cfg.DeltaLaps);
+            var perLap = history.PerLapDeltas(idx, cellCount);
             for (int k = 0; k < perLap.Length; k++)
             {
                 if (perLap[k] is not float dl) { deltaCells[k] = new DeltaCell("", 0); continue; }
@@ -136,9 +154,20 @@ public static class SnapshotBuilder
                 deltaCells[k] = new DeltaCell(Math.Abs(dl).ToString("F" + cfg.DeltaPrecision), sign);
             }
         }
-        else
+        else if (kind == SessionKind.Qualify)
         {
-            Array.Fill(deltaCells, new DeltaCell("", 0));
+            // One cell per quali lap: purple = class best, green = this car's best.
+            var lapTimes = stints.LapTimesFor(idx);
+            float carBest = t.BestLap[idx];
+            for (int k = 0; k < cellCount; k++)
+            {
+                if (k >= lapTimes.Count) { deltaCells[k] = new DeltaCell("", 0); continue; }
+                float lt = lapTimes[k];
+                int sign = classBest > 0 && Math.Abs(lt - classBest) < 0.0005f ? 2
+                         : carBest > 0 && Math.Abs(lt - carBest) < 0.0005f ? -1
+                         : 0;
+                deltaCells[k] = new DeltaCell(FmtLap(lt, cfg.LapTimePrecision), sign);
+            }
         }
 
         int gained = stints.PositionsGained(idx, t.Position.Length > idx ? t.Position[idx] : 0);
@@ -157,6 +186,7 @@ public static class SnapshotBuilder
 
         return new StandingsRow(
             Kind: RowKind.Normal,
+            LapsText: stints.LapCount(idx) is int lc and > 0 ? lc.ToString() : "",
             PosText: (i + 1).ToString(),
             PosGainedText: gained == 0 ? "" : gained > 0 ? $"+{gained}" : gained.ToString(),
             PosGainedSign: gained > 0 ? -1 : gained < 0 ? 1 : 0,
