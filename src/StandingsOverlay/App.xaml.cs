@@ -11,6 +11,8 @@ public partial class App : Application
     private ConfigService? _configService;
     private ITelemetrySource? _source;
     private OverlayWindow? _window;
+    private TrafficWindow? _trafficWindow;
+    private TrafficAudio? _trafficAudio;
     private TrayIcon? _tray;
 
     protected override void OnStartup(StartupEventArgs e)
@@ -53,6 +55,8 @@ public partial class App : Application
             : new IRacingSource(() => _configService.Current);
 
         _window = new OverlayWindow(_configService);
+        _trafficWindow = new TrafficWindow(_configService);
+        _trafficAudio = new TrafficAudio();
         _tray = new TrayIcon(demo);
 
         _source.SnapshotReady += snapshot =>
@@ -61,10 +65,20 @@ public partial class App : Application
             var status = snapshot.Connected ? "connected" : "waiting for iRacing";
             Dispatcher.BeginInvoke(() => _tray?.SetStatus(demo ? "demo" : status));
         };
+        _source.TrafficReady += traffic =>
+        {
+            _trafficWindow.OnTraffic(traffic);
+            _trafficAudio.Handle(traffic.Cues, _configService.Current.Traffic.Audio);
+        };
         _window.Show();
+        _trafficWindow.Show();
         _source.Start();
 
-        _tray.EditModeToggled += on => Dispatcher.BeginInvoke(() => _window.EditMode = on);
+        _tray.EditModeToggled += on => Dispatcher.BeginInvoke(() =>
+        {
+            _window.EditMode = on;
+            _trafficWindow.EditMode = on;
+        });
         _tray.ExitRequested += () => Dispatcher.BeginInvoke(() => Shutdown());
     }
 
@@ -72,6 +86,7 @@ public partial class App : Application
     {
         _source?.Dispose();
         _tray?.Dispose();
+        _trafficAudio?.Dispose();
         _configService?.Dispose();
         base.OnExit(e);
     }

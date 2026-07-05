@@ -10,7 +10,8 @@ A lightweight, standings-only overlay for iRacing (MIT, single WPF exe). Headlin
 
 ```powershell
 dotnet build src/StandingsOverlay -c Release
-# run without iRacing (fake 20-car race; ~25s laps, delta column populates after ~4 laps):
+# run without iRacing (fake 20-car, 3-class race; ~25s laps, delta column populates after
+# ~4 laps; GTP traffic alerts fire within the first minute, blue flags after ~4 minutes):
 src/StandingsOverlay/bin/Release/net10.0-windows/StandingsOverlay.exe --demo
 # run against live iRacing (waits for the sim; iRacing must be windowed borderless):
 src/StandingsOverlay/bin/Release/net10.0-windows/StandingsOverlay.exe
@@ -29,6 +30,7 @@ Data flows one way: **source → snapshot → render**.
 - `Data/GapHistory` samples each car's gap to the player **once per player lap crossing** (distance-based: `(carTotalDist − playerTotalDist) × refLapTime`). Delta-over-N-laps and laps-to-catch are lookups into that ring buffer. Sign convention: negative rel-change = player gained (shown green ▼).
 - `IRacingSource` down-samples irsdkSharp's 60 Hz `OnDataChanged` to `UpdateHz` (default 4) and re-parses session YAML **only** when `Header.SessionInfoUpdate` changes. Keep it that way — reparsing the YAML per tick is the classic overlay CPU sink.
 - `OverlayWindow` is transparent/click-through/topmost via Win32 extended styles (`Interop/Win32.ApplyOverlayStyle`); "edit mode" (tray menu) drops `WS_EX_TRANSPARENT` so the window can be dragged, then persists position.
+- The traffic alerter is a parallel branch of the same tick: `Data/TrafficDetector.Update(RawTick, Roster, OverlayConfig)` → `TrafficReady` → `UI/TrafficWindow` (own window/position, two styles: `Row`/`Beacon`) + `UI/TrafficAudio` (synthesized WAV cues, arbitration already done in the detector). Races only; suppressed while the player is on pit road. Spec: `docs/TRAFFIC-ALERTER.md`.
 - `Config/ConfigService` owns `config.json` (created next to the exe), hot-reloads on external edits via `FileSystemWatcher`, and debounces its own saves.
 
 ## Constraints & gotchas
