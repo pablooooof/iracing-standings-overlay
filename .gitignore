@@ -27,3 +27,5 @@ desktop.ini
 # Local-only
 *.log
 .claude/settings.local.json
+
+.claude/
