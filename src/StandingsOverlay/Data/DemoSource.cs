@@ -3,22 +3,30 @@ using StandingsOverlay.Config;
 namespace StandingsOverlay.Data;
 
 /// <summary>
-/// Fake 20-car race so the overlay can be developed and styled without iRacing running.
-/// Laps take ~25 s so the multi-lap delta column comes alive within a minute or two.
-/// Feeds the exact same SnapshotBuilder/GapHistory pipeline as the live source.
+/// Fake two-class field (12 GT3 + 8 GT4) so the overlay can be developed without iRacing.
+/// Laps take ~25 s and cars pit every ~8 laps (~35 s stops), so multiclass grouping, the
+/// per-lap delta columns AND the strategy predictions all come alive within a few minutes.
+/// Feeds the exact same SnapshotBuilder/GapHistory/StintTracker pipeline as the live source.
 /// </summary>
 public sealed class DemoSource : ITelemetrySource
 {
     private const int Cars = 20;
+    private const int Gt3Cars = 12;          // idx 0-11 = GT3, 12-19 = GT4
     private const int PlayerIdx = 7;
-    private const float DemoLapSeconds = 25f;
+    private const float Gt3LapSeconds = 25f;
+    private const float Gt4LapSeconds = 29f;
+    private const float PitDuration = 35f;   // seconds stationary per stop
 
     private readonly Func<OverlayConfig> _cfg;
     private readonly GapHistory _history = new();
+    private readonly StintTracker _stints = new();
     private readonly Roster _roster = new();
     private readonly RawTick _tick = new();
     private readonly double[] _totalDist = new double[Cars];
-    private readonly float[] _pace = new float[Cars];      // seconds per lap
+    private readonly float[] _pace = new float[Cars];       // seconds per lap
+    private readonly int[] _stintLaps = new int[Cars];      // laps between stops
+    private readonly int[] _lastPitLap = new int[Cars];
+    private readonly double[] _pitUntil = new double[Cars]; // elapsed time when the stop ends
     private readonly Random _rng = new(42);
     private Timer? _timer;
     private double _elapsed;
@@ -42,6 +50,9 @@ public sealed class DemoSource : ITelemetrySource
 
         for (int i = 0; i < Cars; i++)
         {
+            bool gt3 = i < Gt3Cars;
+            float classLap = gt3 ? Gt3LapSeconds : Gt4LapSeconds;
+
             _roster.Drivers[i] = new DriverEntry(
                 CarIdx: i,
                 Name: names[i],
@@ -49,27 +60,37 @@ public sealed class DemoSource : ITelemetrySource
                 IRating: 1200 + _rng.Next(4500),
                 LicString: lics[i % lics.Length],
                 LicColor: licColors[i % licColors.Length],
-                CarClassId: 1,
-                ClassColor: "#FFDA59",
-                ClassEstLap: DemoLapSeconds,
+                CarClassId: gt3 ? 1 : 2,
+                ClassName: gt3 ? "GT3" : "GT4",
+                ClassColor: gt3 ? "#FFDA59" : "#57C1FF",
+                ClassEstLap: classLap,
                 IsPaceCar: false,
                 IsSpectator: false);
 
-            // Grid spread: leader starts furthest; pace differences make the deltas move.
-            _totalDist[i] = 1.0 - i * 0.02;
-            _pace[i] = DemoLapSeconds + (i - Cars / 2f) * 0.12f + (float)_rng.NextDouble() * 0.1f;
+            int classSlot = gt3 ? i : i - Gt3Cars;
+            _totalDist[i] = 1.0 - classSlot * 0.02 - (gt3 ? 0 : 0.5);
+            _pace[i] = classLap + (classSlot - 5f) * 0.12f + (float)_rng.NextDouble() * 0.1f;
+            _stintLaps[i] = 7 + _rng.Next(3);   // pit every 7-9 laps
         }
         _roster.ComputeSof();
 
         _tick.PlayerCarIdx = PlayerIdx;
         _tick.Position = new int[Cars];
+        _tick.ClassPosition = new int[Cars];
         _tick.Lap = new int[Cars];
         _tick.LapDistPct = new float[Cars];
         _tick.LastLap = new float[Cars];
         _tick.BestLap = new float[Cars];
         _tick.F2Time = new float[Cars];
         _tick.OnPitRoad = new bool[Cars];
+        _tick.SessionFlags = new int[Cars];
+        _tick.TrackTemp = 31.2f;
+        _tick.PlayerIncidents = 3;
         _tick.SessionType = "Race";
+
+        // A little chaos for the status column: one car with a meatball, one black-flagged.
+        _tick.SessionFlags[10] = CarFlags.Repair;
+        _tick.SessionFlags[16] = CarFlags.Black;
     }
 
     public void Start()
@@ -85,32 +106,51 @@ public sealed class DemoSource : ITelemetrySource
 
         for (int i = 0; i < Cars; i++)
         {
-            // Small per-tick pace jitter, plus a slow "battle" oscillation.
+            // In the pits: stationary at the start/finish area until the stop ends.
+            if (_elapsed < _pitUntil[i]) { _tick.OnPitRoad[i] = true; continue; }
+            _tick.OnPitRoad[i] = false;
+
+            // Pit when the stint is up (crossing the line on the pit lap).
+            if (_tick.Lap[i] - _lastPitLap[i] >= _stintLaps[i] && _tick.LapDistPct[i] < 0.05f)
+            {
+                _lastPitLap[i] = _tick.Lap[i];
+                _pitUntil[i] = _elapsed + PitDuration + _rng.Next(6);
+                _tick.OnPitRoad[i] = true;
+                continue;
+            }
+
+            // Small per-tick pace jitter, plus a slow "battle" oscillation. Two GT4 cars
+            // fuel-save (steady but slow) so the pace tags have something to find.
             double jitter = 1.0 + 0.02 * Math.Sin(_elapsed / 7.0 + i * 1.7);
+            if (i is 14 or 17) jitter = 1.022; // fuel saving: consistent +2.2%
             _totalDist[i] += dt / (_pace[i] * jitter);
             _tick.Lap[i] = (int)_totalDist[i];
             _tick.LapDistPct[i] = (float)(_totalDist[i] - _tick.Lap[i]);
-            _tick.LastLap[i] = _pace[i] + (float)Math.Sin(_elapsed / 5.0 + i) * 0.15f;
+            _tick.LastLap[i] = _pace[i] * (float)jitter + (i is 14 or 17 ? 0f : (float)Math.Sin(_elapsed / 5.0 + i) * 0.15f);
             _tick.BestLap[i] = _pace[i] - 0.2f;
-            _tick.OnPitRoad[i] = false;
         }
 
-        // Positions + gaps from total distance, leader first.
+        // Positions + gaps from total distance: overall and per class.
         var order = Enumerable.Range(0, Cars).OrderByDescending(i => _totalDist[i]).ToArray();
         double leaderDist = _totalDist[order[0]];
+        var classCounters = new Dictionary<int, int>();
         for (int p = 0; p < order.Length; p++)
         {
             int i = order[p];
             _tick.Position[i] = p + 1;
-            _tick.F2Time[i] = (float)((leaderDist - _totalDist[i]) * DemoLapSeconds);
+            _tick.F2Time[i] = (float)((leaderDist - _totalDist[i]) * Gt3LapSeconds);
+            int clsId = _roster.Drivers[i].CarClassId;
+            classCounters[clsId] = classCounters.GetValueOrDefault(clsId) + 1;
+            _tick.ClassPosition[i] = classCounters[clsId];
         }
 
-        _tick.SessionLapsRemain = Math.Max(0, 30 - _tick.Lap[order[0]]);
-        _tick.SessionTimeRemain = _tick.SessionLapsRemain * DemoLapSeconds;
+        _tick.SessionLapsRemain = Math.Max(0, 40 - _tick.Lap[order[0]]);
+        _tick.SessionTimeRemain = _tick.SessionLapsRemain * Gt3LapSeconds;
 
         var cfg = _cfg();
         _history.Update(_tick, _roster);
-        SnapshotReady?.Invoke(SnapshotBuilder.Build(_tick, _roster, _history, cfg));
+        _stints.Update(_tick);
+        SnapshotReady?.Invoke(SnapshotBuilder.Build(_tick, _roster, _history, _stints, cfg));
     }
 
     public void Dispose() => _timer?.Dispose();

@@ -8,6 +8,21 @@ using StandingsOverlay.UI;
 
 namespace StandingsOverlay;
 
+/// <summary>Per-column Visibility flags; the Window's DataContext, rebuilt on config change.</summary>
+public sealed record ColumnVisibility(
+    Visibility PosGained, Visibility IRating, Visibility License,
+    Visibility Gap, Visibility Interval, Visibility BestLap, Visibility LastLap,
+    Visibility Delta, Visibility Strategy, Visibility Pace, Visibility Status)
+{
+    public static ColumnVisibility From(OverlayConfig c)
+    {
+        static Visibility V(bool b) => b ? Visibility.Visible : Visibility.Collapsed;
+        return new(V(c.ShowPositionsGained), V(c.ShowIRating), V(c.ShowLicense),
+                   V(c.ShowGap), V(c.ShowInterval), V(c.ShowBestLap), V(c.ShowLastLap),
+                   V(c.ShowDelta), V(c.ShowStrategy), V(c.ShowPace), V(c.ShowStatus));
+    }
+}
+
 public partial class OverlayWindow : Window
 {
     private readonly ConfigService _configService;
@@ -40,6 +55,7 @@ public partial class OverlayWindow : Window
         FontSize = cfg.FontSize;
         FontFamily = new FontFamily("Segoe UI");
         Foreground = Brushes.White;
+        DataContext = ColumnVisibility.From(cfg);
 
         var bg = RowViewModel.TryBrush(cfg.BackgroundColor) is SolidColorBrush b ? b.Color : Color.FromRgb(0x21, 0x21, 0x29);
         var brush = new SolidColorBrush(bg) { Opacity = Math.Clamp(cfg.Opacity, 0.05, 1.0) };
@@ -60,9 +76,28 @@ public partial class OverlayWindow : Window
     /// <summary>Called from the telemetry thread; skips the dispatch entirely when nothing changed.</summary>
     public void OnSnapshot(StandingsSnapshot snapshot)
     {
-        if (snapshot.Equals(_lastSnapshot)) return;
+        if (SnapshotsEqual(snapshot, _lastSnapshot)) return;
         _lastSnapshot = snapshot;
         Dispatcher.BeginInvoke(() => Render(snapshot));
+    }
+
+    /// <summary>Value comparison including rows (record Equals alone compares the list by reference).</summary>
+    private static bool SnapshotsEqual(StandingsSnapshot a, StandingsSnapshot? b)
+    {
+        if (b is null) return false;
+        if (a.Connected != b.Connected || a.HeaderLeft != b.HeaderLeft ||
+            a.HeaderMid != b.HeaderMid || a.HeaderRight != b.HeaderRight ||
+            a.Rows.Count != b.Rows.Count) return false;
+        for (int i = 0; i < a.Rows.Count; i++)
+        {
+            var (ra, rb) = (a.Rows[i], b.Rows[i]);
+            // Substitute the list so the record compares scalars only, then compare cells by value.
+            if (!(ra with { DeltaCells = rb.DeltaCells }).Equals(rb)) return false;
+            if (ra.DeltaCells.Count != rb.DeltaCells.Count) return false;
+            for (int k = 0; k < ra.DeltaCells.Count; k++)
+                if (ra.DeltaCells[k] != rb.DeltaCells[k]) return false;
+        }
+        return true;
     }
 
     private void Render(StandingsSnapshot s)

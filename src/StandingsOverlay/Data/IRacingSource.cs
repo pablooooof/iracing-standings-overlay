@@ -14,10 +14,12 @@ public sealed class IRacingSource : ITelemetrySource
     private readonly IRacingSDK _sdk = new();
     private readonly Func<OverlayConfig> _cfg;
     private readonly GapHistory _history = new();
+    private readonly StintTracker _stints = new();
     private readonly Roster _roster = new();
 
     private int _frameCount;
     private int _lastSessionInfoUpdate = -1;
+    private int _lastSessionNum = -1;
     private bool _running;
 
     public event Action<StandingsSnapshot>? SnapshotReady;
@@ -31,7 +33,9 @@ public sealed class IRacingSource : ITelemetrySource
         _sdk.OnDisconnected += () =>
         {
             _lastSessionInfoUpdate = -1;
+            _lastSessionNum = -1;
             _history.Reset();
+            _stints.Reset();
             lock (_roster) _roster.Drivers.Clear();
             SnapshotReady?.Invoke(StandingsSnapshot.Disconnected);
         };
@@ -54,7 +58,8 @@ public sealed class IRacingSource : ITelemetrySource
             if (t is null) return;
 
             _history.Update(t, _roster);
-            SnapshotReady?.Invoke(SnapshotBuilder.Build(t, _roster, _history, cfg));
+            _stints.Update(t);
+            SnapshotReady?.Invoke(SnapshotBuilder.Build(t, _roster, _history, _stints, cfg));
         }
         catch (Exception)
         {
@@ -76,6 +81,15 @@ public sealed class IRacingSource : ITelemetrySource
         _lastSessionInfoUpdate = header.SessionInfoUpdate;
         _currentSessionType = FindSessionType(model);
 
+        // New session (practice → race, race restart, …): lap/gap/stint history is stale.
+        int sessionNum = _sdk.GetData("SessionNum") is int sn ? sn : -1;
+        if (sessionNum != _lastSessionNum)
+        {
+            _lastSessionNum = sessionNum;
+            _history.Reset();
+            _stints.Reset();
+        }
+
         lock (_roster)
         {
             _roster.Drivers.Clear();
@@ -89,6 +103,7 @@ public sealed class IRacingSource : ITelemetrySource
                     LicString: d.LicString ?? "",
                     LicColor: HexColor(d.LicColor),
                     CarClassId: d.CarClassID,
+                    ClassName: d.CarClassShortName ?? "",
                     ClassColor: HexColor(d.CarClassColor),
                     ClassEstLap: d.CarClassEstLapTime,
                     IsPaceCar: d.CarIsPaceCar == "1",
@@ -118,12 +133,14 @@ public sealed class IRacingSource : ITelemetrySource
         {
             PlayerCarIdx = playerIdx,
             Position = pos,
+            ClassPosition = _sdk.GetData("CarIdxClassPosition") as int[] ?? [],
             Lap = _sdk.GetData("CarIdxLap") as int[] ?? [],
             LapDistPct = _sdk.GetData("CarIdxLapDistPct") as float[] ?? [],
             LastLap = _sdk.GetData("CarIdxLastLapTime") as float[] ?? [],
             BestLap = _sdk.GetData("CarIdxBestLapTime") as float[] ?? [],
             F2Time = _sdk.GetData("CarIdxF2Time") as float[] ?? [],
             OnPitRoad = _sdk.GetData("CarIdxOnPitRoad") as bool[] ?? [],
+            SessionFlags = _sdk.GetData("CarIdxSessionFlags") as int[] ?? [],
             SessionType = _currentSessionType,
         };
 
@@ -132,6 +149,8 @@ public sealed class IRacingSource : ITelemetrySource
         if (_sdk.GetData("SessionTimeRemain") is double timeRemain) t.SessionTimeRemain = timeRemain;
         if (_sdk.GetData("SessionLapsRemainEx") is int lapsRemain && lapsRemain >= 0 && lapsRemain < 32000)
             t.SessionLapsRemain = lapsRemain;
+        if (_sdk.GetData("TrackTempCrew") is float trackTemp) t.TrackTemp = trackTemp;
+        if (_sdk.GetData("PlayerCarMyIncidentCount") is int incs) t.PlayerIncidents = incs;
 
         return t;
     }

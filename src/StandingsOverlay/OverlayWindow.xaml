@@ -6,21 +6,22 @@
         Topmost="True" ShowInTaskbar="False" ShowActivated="False"
         ResizeMode="NoResize" SizeToContent="WidthAndHeight">
 
-    <!-- IsSharedSizeScope on the root so the column header and every row share column widths. -->
+    <!-- IsSharedSizeScope on the root so the column header and every row share column widths.
+         Window.DataContext is a ColumnVisibility instance (set from config) that all the
+         per-column Visibility bindings below resolve against via AncestorType=Window. -->
     <Border x:Name="RootBorder" CornerRadius="6" Padding="10,7" Grid.IsSharedSizeScope="True">
         <Border.Resources>
-            <!-- Numeric cells: fixed-ish width, right aligned, so digits line up. -->
             <Style x:Key="Num" TargetType="TextBlock">
                 <Setter Property="TextAlignment" Value="Right"/>
                 <Setter Property="Margin" Value="0,0,14,0"/>
             </Style>
             <Style x:Key="DeltaCell" TargetType="TextBlock">
                 <Setter Property="TextAlignment" Value="Right"/>
-                <Setter Property="Width" Value="38"/>
+                <Setter Property="Width" Value="34"/>
             </Style>
         </Border.Resources>
         <StackPanel>
-            <!-- Session header: RACE · SoF 2.4k · 12 laps -->
+            <!-- Session header: RACE · SoF 2.4k · 31°C · 12 laps · 3x -->
             <Grid Margin="2,0,2,5">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto"/>
@@ -35,26 +36,40 @@
             <!-- Column header -->
             <Grid x:Name="ColumnHeader" Margin="2,0,2,3" Opacity="0.55">
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition SharedSizeGroup="cPos"  Width="Auto"/>
-                    <ColumnDefinition SharedSizeGroup="cNum"  Width="Auto"/>
-                    <ColumnDefinition SharedSizeGroup="cName" Width="Auto"/>
-                    <ColumnDefinition SharedSizeGroup="cIr"   Width="Auto"/>
-                    <ColumnDefinition SharedSizeGroup="cLic"  Width="Auto"/>
-                    <ColumnDefinition SharedSizeGroup="cGap"  Width="Auto"/>
-                    <ColumnDefinition SharedSizeGroup="cInt"  Width="Auto"/>
-                    <ColumnDefinition SharedSizeGroup="cLast" Width="Auto"/>
+                    <ColumnDefinition SharedSizeGroup="cPos"   Width="Auto"/>
+                    <ColumnDefinition SharedSizeGroup="cPg"    Width="Auto"/>
+                    <ColumnDefinition SharedSizeGroup="cNum"   Width="Auto"/>
+                    <ColumnDefinition SharedSizeGroup="cName"  Width="Auto"/>
+                    <ColumnDefinition SharedSizeGroup="cIr"    Width="Auto"/>
+                    <ColumnDefinition SharedSizeGroup="cLic"   Width="Auto"/>
+                    <ColumnDefinition SharedSizeGroup="cGap"   Width="Auto"/>
+                    <ColumnDefinition SharedSizeGroup="cInt"   Width="Auto"/>
+                    <ColumnDefinition SharedSizeGroup="cBest"  Width="Auto"/>
+                    <ColumnDefinition SharedSizeGroup="cLast"  Width="Auto"/>
                     <ColumnDefinition SharedSizeGroup="cDelta" Width="Auto"/>
-                    <ColumnDefinition SharedSizeGroup="cPit"  Width="Auto"/>
+                    <ColumnDefinition SharedSizeGroup="cStrat" Width="Auto"/>
+                    <ColumnDefinition SharedSizeGroup="cPace"  Width="Auto"/>
+                    <ColumnDefinition SharedSizeGroup="cStat"  Width="Auto"/>
                 </Grid.ColumnDefinitions>
-                <TextBlock Grid.Column="0" Text="P"      Margin="0,0,10,0" MinWidth="18"/>
-                <TextBlock Grid.Column="1" Text="#"      Margin="0,0,10,0" MinWidth="30"/>
-                <TextBlock Grid.Column="2" Text="DRIVER" Margin="0,0,16,0" MinWidth="130"/>
-                <TextBlock Grid.Column="3" Text="IR"     Style="{StaticResource Num}" MinWidth="34"/>
-                <TextBlock Grid.Column="4" Text="LIC"    Margin="0,0,14,0" MinWidth="42"/>
-                <TextBlock Grid.Column="5" Text="GAP"    Style="{StaticResource Num}" MinWidth="48"/>
-                <TextBlock Grid.Column="6" Text="INT"    Style="{StaticResource Num}" MinWidth="44"/>
-                <TextBlock Grid.Column="7" Text="LAST"   Style="{StaticResource Num}" MinWidth="58"/>
-                <ItemsControl Grid.Column="8" x:Name="DeltaHeaderCells" Margin="0,0,4,0">
+                <TextBlock Grid.Column="0"  Text="P"      Margin="0,0,10,0" MinWidth="18"/>
+                <TextBlock Grid.Column="1"  Text="±"      Style="{StaticResource Num}" MinWidth="24"
+                           Visibility="{Binding PosGained}"/>
+                <TextBlock Grid.Column="2"  Text="#"      Margin="0,0,10,0" MinWidth="30"/>
+                <TextBlock Grid.Column="3"  Text="DRIVER" Margin="0,0,16,0" MinWidth="130"/>
+                <TextBlock Grid.Column="4"  Text="IR"     Style="{StaticResource Num}" MinWidth="34"
+                           Visibility="{Binding IRating}"/>
+                <TextBlock Grid.Column="5"  Text="LIC"    Margin="0,0,14,0" MinWidth="42"
+                           Visibility="{Binding License}"/>
+                <TextBlock Grid.Column="6"  Text="GAP"    Style="{StaticResource Num}" MinWidth="48"
+                           Visibility="{Binding Gap}"/>
+                <TextBlock Grid.Column="7"  Text="INT"    Style="{StaticResource Num}" MinWidth="44"
+                           Visibility="{Binding Interval}"/>
+                <TextBlock Grid.Column="8"  Text="BEST"   Style="{StaticResource Num}" MinWidth="58"
+                           Visibility="{Binding BestLap}"/>
+                <TextBlock Grid.Column="9"  Text="LAST"   Style="{StaticResource Num}" MinWidth="58"
+                           Visibility="{Binding LastLap}"/>
+                <ItemsControl Grid.Column="10" x:Name="DeltaHeaderCells" Margin="0,0,10,0"
+                              Visibility="{Binding Delta}">
                     <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate>
                     </ItemsControl.ItemsPanel>
@@ -64,7 +79,12 @@
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
-                <TextBlock Grid.Column="9" Text=""/>
+                <TextBlock Grid.Column="11" Text="PIT"   Style="{StaticResource Num}" MinWidth="40"
+                           Visibility="{Binding Strategy}"/>
+                <TextBlock Grid.Column="12" Text="PACE"  Margin="0,0,10,0" MinWidth="34"
+                           Visibility="{Binding Pace}"/>
+                <TextBlock Grid.Column="13" Text=""      MinWidth="30"
+                           Visibility="{Binding Status}"/>
             </Grid>
 
             <!-- Rows -->
@@ -74,29 +94,44 @@
                         <Border Background="{Binding RowBackground}" CornerRadius="3" Padding="2,1">
                             <Grid>
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition SharedSizeGroup="cPos"  Width="Auto"/>
-                                    <ColumnDefinition SharedSizeGroup="cNum"  Width="Auto"/>
-                                    <ColumnDefinition SharedSizeGroup="cName" Width="Auto"/>
-                                    <ColumnDefinition SharedSizeGroup="cIr"   Width="Auto"/>
-                                    <ColumnDefinition SharedSizeGroup="cLic"  Width="Auto"/>
-                                    <ColumnDefinition SharedSizeGroup="cGap"  Width="Auto"/>
-                                    <ColumnDefinition SharedSizeGroup="cInt"  Width="Auto"/>
-                                    <ColumnDefinition SharedSizeGroup="cLast" Width="Auto"/>
+                                    <ColumnDefinition SharedSizeGroup="cPos"   Width="Auto"/>
+                                    <ColumnDefinition SharedSizeGroup="cPg"    Width="Auto"/>
+                                    <ColumnDefinition SharedSizeGroup="cNum"   Width="Auto"/>
+                                    <ColumnDefinition SharedSizeGroup="cName"  Width="Auto"/>
+                                    <ColumnDefinition SharedSizeGroup="cIr"    Width="Auto"/>
+                                    <ColumnDefinition SharedSizeGroup="cLic"   Width="Auto"/>
+                                    <ColumnDefinition SharedSizeGroup="cGap"   Width="Auto"/>
+                                    <ColumnDefinition SharedSizeGroup="cInt"   Width="Auto"/>
+                                    <ColumnDefinition SharedSizeGroup="cBest"  Width="Auto"/>
+                                    <ColumnDefinition SharedSizeGroup="cLast"  Width="Auto"/>
                                     <ColumnDefinition SharedSizeGroup="cDelta" Width="Auto"/>
-                                    <ColumnDefinition SharedSizeGroup="cPit"  Width="Auto"/>
+                                    <ColumnDefinition SharedSizeGroup="cStrat" Width="Auto"/>
+                                    <ColumnDefinition SharedSizeGroup="cPace"  Width="Auto"/>
+                                    <ColumnDefinition SharedSizeGroup="cStat"  Width="Auto"/>
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="{Binding PosText}" Margin="0,0,10,0" Opacity="0.9"/>
-                                <TextBlock Grid.Column="1" Text="{Binding CarNumber}" Margin="0,0,10,0"
+                                <TextBlock Grid.Column="1" Text="{Binding PosGained}" Style="{StaticResource Num}"
+                                           Foreground="{Binding PosGainedBrush}" FontSize="11" VerticalAlignment="Center"
+                                           Visibility="{Binding DataContext.PosGained, RelativeSource={RelativeSource AncestorType=Window}}"/>
+                                <TextBlock Grid.Column="2" Text="{Binding CarNumber}" Margin="0,0,10,0"
                                            Foreground="{Binding CarNumberBrush}" FontWeight="SemiBold"/>
-                                <TextBlock Grid.Column="2" Text="{Binding Name}" Margin="0,0,16,0"
-                                           Foreground="{Binding NameBrush}"/>
-                                <TextBlock Grid.Column="3" Text="{Binding IRating}" Style="{StaticResource Num}" Opacity="0.85"/>
-                                <TextBlock Grid.Column="4" Text="{Binding License}" Margin="0,0,14,0"
-                                           Foreground="{Binding LicenseBrush}" FontSize="11" VerticalAlignment="Center"/>
-                                <TextBlock Grid.Column="5" Text="{Binding Gap}" Style="{StaticResource Num}" Opacity="0.9"/>
-                                <TextBlock Grid.Column="6" Text="{Binding Interval}" Style="{StaticResource Num}" Opacity="0.9"/>
-                                <TextBlock Grid.Column="7" Text="{Binding LastLap}" Style="{StaticResource Num}" Opacity="0.9"/>
-                                <ItemsControl Grid.Column="8" ItemsSource="{Binding DeltaCells}" Margin="0,0,4,0">
+                                <TextBlock Grid.Column="3" Text="{Binding Name}" Margin="0,0,16,0"
+                                           Foreground="{Binding NameBrush}" FontWeight="{Binding NameWeight}"/>
+                                <TextBlock Grid.Column="4" Text="{Binding IRating}" Style="{StaticResource Num}" Opacity="0.85"
+                                           Visibility="{Binding DataContext.IRating, RelativeSource={RelativeSource AncestorType=Window}}"/>
+                                <TextBlock Grid.Column="5" Text="{Binding License}" Margin="0,0,14,0"
+                                           Foreground="{Binding LicenseBrush}" FontSize="11" VerticalAlignment="Center"
+                                           Visibility="{Binding DataContext.License, RelativeSource={RelativeSource AncestorType=Window}}"/>
+                                <TextBlock Grid.Column="6" Text="{Binding Gap}" Style="{StaticResource Num}" Opacity="0.9"
+                                           Visibility="{Binding DataContext.Gap, RelativeSource={RelativeSource AncestorType=Window}}"/>
+                                <TextBlock Grid.Column="7" Text="{Binding Interval}" Style="{StaticResource Num}" Opacity="0.9"
+                                           Visibility="{Binding DataContext.Interval, RelativeSource={RelativeSource AncestorType=Window}}"/>
+                                <TextBlock Grid.Column="8" Text="{Binding BestLap}" Style="{StaticResource Num}" Opacity="0.9"
+                                           Visibility="{Binding DataContext.BestLap, RelativeSource={RelativeSource AncestorType=Window}}"/>
+                                <TextBlock Grid.Column="9" Text="{Binding LastLap}" Style="{StaticResource Num}" Opacity="0.9"
+                                           Visibility="{Binding DataContext.LastLap, RelativeSource={RelativeSource AncestorType=Window}}"/>
+                                <ItemsControl Grid.Column="10" ItemsSource="{Binding DeltaCells}" Margin="0,0,10,0"
+                                              Visibility="{Binding DataContext.Delta, RelativeSource={RelativeSource AncestorType=Window}}">
                                     <ItemsControl.ItemsPanel>
                                         <ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate>
                                     </ItemsControl.ItemsPanel>
@@ -107,8 +142,15 @@
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>
-                                <TextBlock Grid.Column="9" Text="{Binding PitText}" Margin="8,0,0,0"
-                                           Foreground="#FFB84D" FontSize="10" VerticalAlignment="Center" FontWeight="Bold"/>
+                                <TextBlock Grid.Column="11" Text="{Binding Strat}" Style="{StaticResource Num}"
+                                           Opacity="0.9" FontSize="11" VerticalAlignment="Center"
+                                           Visibility="{Binding DataContext.Strategy, RelativeSource={RelativeSource AncestorType=Window}}"/>
+                                <TextBlock Grid.Column="12" Text="{Binding Pace}" Margin="0,0,10,0"
+                                           Foreground="{Binding PaceBrush}" FontWeight="SemiBold"
+                                           Visibility="{Binding DataContext.Pace, RelativeSource={RelativeSource AncestorType=Window}}"/>
+                                <TextBlock Grid.Column="13" Text="{Binding Status}"
+                                           Foreground="{Binding StatusBrush}" FontSize="10" VerticalAlignment="Center" FontWeight="Bold"
+                                           Visibility="{Binding DataContext.Status, RelativeSource={RelativeSource AncestorType=Window}}"/>
                             </Grid>
                         </Border>
                     </DataTemplate>

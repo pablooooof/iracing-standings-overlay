@@ -28,13 +28,32 @@ public sealed class OverlayConfig
     // Data refresh rate (snapshots per second, 1-10). Rendering only happens on change.
     public int UpdateHz { get; set; } = 4;
 
-    // Columns
+    // Multiclass: how many drivers of each other class to show at the top of their group.
+    public int OtherClassesDriversAtTop { get; set; } = 0;
+
+    // Columns (all wired to the UI)
+    public bool ShowPositionsGained { get; set; } = true;
     public bool ShowIRating { get; set; } = true;
     public bool ShowLicense { get; set; } = true;
     public bool ShowGap { get; set; } = true;
     public bool ShowInterval { get; set; } = true;
+    public bool ShowBestLap { get; set; } = true;
     public bool ShowLastLap { get; set; } = true;
     public bool ShowDelta { get; set; } = true;
+    public bool ShowStatus { get; set; } = true;     // PIT / black flag / meatball / DQ badge
+    public bool ShowStrategy { get; set; } = true;   // expected pit lap, stops to end (race only)
+    public bool ShowPace { get; set; } = true;       // fast/slow vs class + fuel-save tag (race only)
+
+    // Header extras
+    public bool ShowSof { get; set; } = true;
+    public bool ShowTrackTemp { get; set; } = true;
+    public bool ShowIncidents { get; set; } = true;
+
+    // Decimal places
+    public int GapPrecision { get; set; } = 1;
+    public int IntervalPrecision { get; set; } = 1;
+    public int LapTimePrecision { get; set; } = 3;
+    public int DeltaPrecision { get; set; } = 1;
 
     private static readonly JsonSerializerOptions JsonOpts = new()
     {
