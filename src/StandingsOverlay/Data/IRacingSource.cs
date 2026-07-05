@@ -91,10 +91,14 @@ public sealed class IRacingSource : ITelemetrySource
         }
 
         _lastSessionInfoUpdate = header.SessionInfoUpdate;
-        _currentSessionType = FindSessionType(model);
+
+        int sessionNum = _sdk.GetData("SessionNum") is int sn ? sn : -1;
+        var session = model.SessionInfo?.Sessions?.FirstOrDefault(x => x.SessionNum == sessionNum)
+                      ?? model.SessionInfo?.Sessions?.LastOrDefault();
+        _currentSessionType = session?.SessionType ?? "Race";
+        _sessionLapsTotal = int.TryParse(session?.SessionLaps, out var sl) && sl > 0 ? sl : -1;
 
         // New session (practice → race, race restart, …): lap/gap/stint history is stale.
-        int sessionNum = _sdk.GetData("SessionNum") is int sn ? sn : -1;
         if (sessionNum != _lastSessionNum)
         {
             _lastSessionNum = sessionNum;
@@ -114,6 +118,7 @@ public sealed class IRacingSource : ITelemetrySource
                     IRating: d.IRating,
                     LicString: d.LicString ?? "",
                     LicColor: HexColor(d.LicColor),
+                    CarBrand: BrandOf(d.CarScreenNameShort),
                     CarClassId: d.CarClassID,
                     ClassName: d.CarClassShortName ?? "",
                     ClassColor: HexColor(d.CarClassColor),
@@ -121,6 +126,14 @@ public sealed class IRacingSource : ITelemetrySource
                     IsPaceCar: d.CarIsPaceCar == "1",
                     IsSpectator: d.IsSpectator == 1);
             }
+
+            // Session results: the only source of laps run before we joined (or by cars
+            // that have since left the world) — telemetry arrays are blank for those.
+            _roster.Results.Clear();
+            if (session?.ResultsPositions is not null)
+                foreach (var r in session.ResultsPositions)
+                    _roster.Results[r.CarIdx] = new SessionResult(r.FastestTime, r.LastTime, r.LapsComplete);
+
             _roster.TrackName = model.WeekendInfo?.TrackDisplayShortName ?? "";
             _roster.ComputeSof();
         }
@@ -137,13 +150,14 @@ public sealed class IRacingSource : ITelemetrySource
     private string _lastRosterSummary = "";
 
     private string _currentSessionType = "Race";
+    private int _sessionLapsTotal = -1;
 
-    private string FindSessionType(IRacingSessionModel model)
+    /// <summary>"Ferrari 296 GT3" → "Ferrari"; "Mercedes-AMG GT3 2020" → "Mercedes".</summary>
+    private static string BrandOf(string? screenNameShort)
     {
-        int sessionNum = _sdk.GetData("SessionNum") is int n ? n : -1;
-        var s = model.SessionInfo?.Sessions?.FirstOrDefault(x => x.SessionNum == sessionNum)
-                ?? model.SessionInfo?.Sessions?.LastOrDefault();
-        return s?.SessionType ?? "Race";
+        if (string.IsNullOrWhiteSpace(screenNameShort)) return "";
+        var tok = screenNameShort.Trim().Split(' ', '-')[0];
+        return tok.Length > 9 ? tok[..9] : tok;
     }
 
     private RawTick? ReadTick()
@@ -174,6 +188,7 @@ public sealed class IRacingSource : ITelemetrySource
         if (_sdk.GetData("SessionTimeTotal") is double timeTotal) t.SessionTimeTotal = timeTotal;
         if (_sdk.GetData("SessionLapsRemainEx") is int lapsRemain && lapsRemain >= 0 && lapsRemain < 32000)
             t.SessionLapsRemain = lapsRemain;
+        t.SessionLapsTotal = _sessionLapsTotal;
         if (_sdk.GetData("TrackTempCrew") is float trackTemp) t.TrackTemp = trackTemp;
         if (_sdk.GetData("PlayerCarMyIncidentCount") is int incs) t.PlayerIncidents = incs;
         if (_sdk.GetData("Precipitation") is float precip) t.Precipitation = precip;

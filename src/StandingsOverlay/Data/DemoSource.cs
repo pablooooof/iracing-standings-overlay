@@ -50,6 +50,7 @@ public sealed class DemoSource : ITelemetrySource
         ];
         string[] lics = ["A 4.99", "A 3.51", "B 3.20", "A 4.35", "B 2.87", "A 4.12"];
         string[] licColors = ["#0153DB", "#0153DB", "#00C702", "#0153DB", "#00C702", "#0153DB"];
+        string[] brands = ["Ferrari", "BMW", "Porsche", "Audi", "McLaren", "Mercedes", "Lambo", "Acura"];
 
         for (int i = 0; i < Cars; i++)
         {
@@ -63,6 +64,7 @@ public sealed class DemoSource : ITelemetrySource
                 IRating: 1200 + _rng.Next(4500),
                 LicString: lics[i % lics.Length],
                 LicColor: licColors[i % licColors.Length],
+                CarBrand: brands[i % brands.Length],
                 CarClassId: gt3 ? 1 : 2,
                 ClassName: gt3 ? "GT3" : "GT4",
                 ClassColor: gt3 ? "#FFDA59" : "#57C1FF",
@@ -92,6 +94,7 @@ public sealed class DemoSource : ITelemetrySource
         _tick.PlayerIncidents = 3;
         _tick.SessionType = sessionType;
         _tick.SessionTimeTotal = 40 * Gt3LapSeconds;
+        _tick.SessionLapsTotal = _isRace ? 40 : sessionType.Contains("Qual", StringComparison.OrdinalIgnoreCase) ? 4 : -1;
         _tick.Precipitation = 0.0f;
         _tick.TrackWetness = 1; // dry
 
@@ -122,6 +125,9 @@ public sealed class DemoSource : ITelemetrySource
             // In the pits: stationary at the start/finish area until the stop ends.
             if (_elapsed < _pitUntil[i]) { _tick.OnPitRoad[i] = true; continue; }
             _tick.OnPitRoad[i] = false;
+
+            // Car 9 spins and sits stationary for ~8 s every ~90 s so the SPUN badge shows up.
+            if (i == 9 && _tick.Lap[i] >= 1 && _elapsed % 90 < 8) continue;
 
             // Pit when the stint is up (crossing the line on the pit lap). Races only.
             if (_isRace && _tick.Lap[i] - _lastPitLap[i] >= _stintLaps[i] && _tick.LapDistPct[i] < 0.05f)

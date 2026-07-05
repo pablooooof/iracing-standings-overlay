@@ -22,6 +22,8 @@ public sealed class RowViewModel
     public string LastLap { get; init; } = "";
     public IReadOnlyList<DeltaCellViewModel> DeltaCells { get; init; } = [];
     public string Status { get; init; } = "";
+    public string CarBrand { get; init; } = "";
+    public string Rank { get; init; } = "";
     public string Strat { get; init; } = "";
     public string Pace { get; init; } = "";
 
@@ -32,6 +34,8 @@ public sealed class RowViewModel
     public Brush BestLapBrush { get; init; } = Brushes.White;
     public Brush StatusBrush { get; init; } = Brushes.Orange;
     public Brush PaceBrush { get; init; } = Brushes.White;
+    public Brush RankBrush { get; init; } = Brushes.White;
+    public Brush ClassBarBrush { get; init; } = Brushes.Transparent;
     public Brush RowBackground { get; init; } = Brushes.Transparent;
     public Brush NameBrush { get; init; } = Brushes.White;
     public System.Windows.FontWeight NameWeight { get; init; } = System.Windows.FontWeights.Normal;
@@ -55,13 +59,14 @@ public sealed class RowViewModel
     private static readonly Brush WarnBrush = Frozen("#FF8A3D");
     private static readonly Brush DangerBrush = Frozen("#FF4040");
     private static readonly Brush DryTyreBrush = Frozen("#C9C9CF");
-    private static readonly Brush WetTyreBrush = Frozen("#3D9BFF");
+    private static readonly Brush WetTyreBrush = Frozen("#1E6FFF");
     private static readonly Brush LicFallbackBrush = Frozen("#3A3A46");
     private static readonly Brush FlagBlackBody = Frozen("#0A0A0A");
     private static readonly Brush FlagWarnBody = Frozen("#26262C");
     private static readonly Brush FlagStrokeGray = Frozen("#B4B4BC");
     private static readonly Brush FlagYellowStroke = Frozen("#FFD34D");
     private static readonly Brush MeatballOrange = Frozen("#FF8A00");
+    private static readonly Brush SamePaceYellow = Frozen("#FFD34D");
 
     public static RowViewModel From(StandingsRow r, Brush highlight, Brush accent)
     {
@@ -112,16 +117,21 @@ public sealed class RowViewModel
                     > 0 => LossBrush,
                     _ => (c.Text?.Length ?? 0) > 4 ? Brushes.White : DimBrush, // quali laps white, neutral deltas dim
                 })).ToList(),
-            Status = r.StatusText == "PIT" ? "PIT" : "",
+            Status = r.StatusText is "PIT" or "SPUN" ? r.StatusText : "",
+            CarBrand = r.CarBrand,
+            Rank = r.RankText,
             Strat = r.StratText,
             Pace = r.PaceText,
             PosGainedBrush = r.PosGainedSign < 0 ? GainBrush : r.PosGainedSign > 0 ? LossBrush : DimBrush,
             CarNumberBrush = TryBrush(r.ClassColor) ?? accent,
+            ClassBarBrush = TryBrush(r.ClassColor) ?? accent,
             LicenseBrush = licChip,
             LicenseTextBrush = ContrastText(licChip),
             BestLapBrush = r.BestLapSign == 2 ? PurpleBrush : Brushes.White,
-            StatusBrush = PitBrush,
-            PaceBrush = r.PaceSign < 0 ? GainBrush : r.PaceSign > 0 ? LossBrush : DimBrush,
+            StatusBrush = r.StatusText == "SPUN" ? DangerBrush : PitBrush,
+            PaceBrush = r.PaceSign < 0 ? GainBrush : r.PaceSign > 0 ? LossBrush
+                        : r.PaceText.Length > 0 ? SamePaceYellow : DimBrush,
+            RankBrush = r.RankSign == 2 ? PurpleBrush : r.RankSign < 0 ? GainBrush : DimBrush,
             RowBackground = r.IsPlayer ? highlight : Brushes.Transparent,
             NameBrush = r.StatusText == "PIT" ? DimBrush : Brushes.White,
             IrChipVisibility = string.IsNullOrEmpty(r.IRatingText) ? Visibility.Collapsed : Visibility.Visible,

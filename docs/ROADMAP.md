@@ -27,6 +27,17 @@ Still open:
   detection for team events (roster changes mid-session).
 - **Driver consistency tag**: lap time variance percentile within class.
 
+## Sector mini-bar (idea, evaluated 2026-07)
+
+A small horizontal bar per row split by sector, colored improved/personal-best/class-best.
+What the SDK gives us: sector *boundaries* are in the session YAML (`SplitTimeInfo.Sectors`,
+`SectorStartPct`), but iRacing does **not** broadcast other cars' sector times. They can be
+measured ourselves from `CarIdxLapDistPct` crossing a boundary: at 60 Hz sampling that's ±17 ms
+accuracy (fine), at our 4 Hz snapshot rate ±125 ms (too coarse). Plan: watch boundary crossings
+inside the 60 Hz `OnDataChanged` handler (cheap compares only, no allocation), keep per-car
+sector history, render in the existing cells pipeline. Player sectors are exact. Do after the
+strategy phase.
+
 ## Nice-to-have UX
 
 - **Settings window** (tray → Settings): GUI editor over `config.json` — same file, so hot-reload keeps working and the JSON stays the source of truth.

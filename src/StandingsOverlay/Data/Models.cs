@@ -18,6 +18,7 @@ public sealed class RawTick
     public double SessionTime = -1;      // elapsed
     public double SessionTimeTotal = -1;
     public int SessionLapsRemain = -1;
+    public int SessionLapsTotal = -1;    // from YAML SessionLaps; -1 = unlimited/unknown
     public float TrackTemp = float.NaN;  // °C
     public float Precipitation = float.NaN; // 0..1
     public bool DeclaredWet;
@@ -44,6 +45,7 @@ public sealed record DriverEntry(
     int IRating,
     string LicString,
     string LicColor,
+    string CarBrand,
     int CarClassId,
     string ClassName,
     string ClassColor,
@@ -51,10 +53,15 @@ public sealed record DriverEntry(
     bool IsPaceCar,
     bool IsSpectator);
 
+/// <summary>Per-car line from the session YAML results — the only place laps completed before
+/// the player joined (or after a car left the world) are recorded.</summary>
+public readonly record struct SessionResult(float BestLap, float LastLap, int LapsComplete);
+
 /// <summary>Session-scoped info parsed from the session YAML (or fabricated by the demo source).</summary>
 public sealed class Roster
 {
     public Dictionary<int, DriverEntry> Drivers { get; } = new();
+    public Dictionary<int, SessionResult> Results { get; } = new();
     public string TrackName = "";
     public double StrengthOfField;
 
@@ -86,6 +93,7 @@ public sealed record StandingsRow(
     string IRatingText,
     string LicText,
     string LicColor,
+    string CarBrand,
     string ClassColor,
     int Tyre,                // -1 unknown/hidden, 0 dry, >=1 wet
     string GapText,
@@ -95,8 +103,10 @@ public sealed record StandingsRow(
     string LastLapText,
     IReadOnlyList<DeltaCell> DeltaCells,   // oldest lap first
     string StatusText,       // "" | "PIT" | "WRN" | "BLK" | "DMG" | "DQ"
+    string RankText,         // # fastest on track in class over the last 5 clean laps
+    int RankSign,            // 2 = fastest (purple), -1 = top 3 (green), 0 = rest
     string StratText,        // expected pit lap / stops to end
-    string PaceText,         // ▲ ▼ plus "S" when fuel-saving
+    string PaceText,         // ▲ ▼ ► vs the player, plus "S" when fuel-saving
     int PaceSign,
     bool IsPlayer)
 {
@@ -106,7 +116,7 @@ public sealed record StandingsRow(
         Empty(RowKind.ClassHeader) with { Name = className, ClassColor = classColor };
 
     public static StandingsRow Empty(RowKind kind) =>
-        new(kind, "", "", "", 0, "", "", "", "", "", "", -1, "", "", "", 0, "", [], "", "", "", 0, false);
+        new(kind, "", "", "", 0, "", "", "", "", "", "", "", -1, "", "", "", 0, "", [], "", "", 0, "", "", 0, false);
 }
 
 public enum SessionKind { Practice, Qualify, Race }

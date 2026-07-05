@@ -11,9 +11,10 @@ namespace StandingsOverlay;
 /// <summary>Per-column Visibility flags for the active session type; the Window's DataContext,
 /// rebuilt on config change or session-type change.</summary>
 public sealed record ColumnVisibility(
-    Visibility Tyre, Visibility PosGained, Visibility IRating, Visibility License, Visibility LapsCount,
+    Visibility Tyre, Visibility PosGained, Visibility IRating, Visibility License, Visibility CarBrand,
+    Visibility LapsCount,
     Visibility Gap, Visibility Interval, Visibility BestLap, Visibility LastLap,
-    Visibility Delta, Visibility Strategy, Visibility Pace, Visibility Status,
+    Visibility Delta, Visibility PaceRank, Visibility Strategy, Visibility Pace, Visibility Status,
     double CellWidth)
 {
     public static ColumnVisibility From(SessionColumns c, SessionKind kind)
@@ -22,9 +23,11 @@ public sealed record ColumnVisibility(
         bool race = kind == SessionKind.Race;
         return new(
             V(c.ShowTyre),
-            V(c.ShowPositionsGained && race), V(c.ShowIRating), V(c.ShowLicense), V(c.ShowLapsCount),
+            V(c.ShowPositionsGained && race), V(c.ShowIRating), V(c.ShowLicense), V(c.ShowCarBrand),
+            V(c.ShowLapsCount),
             V(c.ShowGap), V(c.ShowInterval), V(c.ShowBestLap), V(c.ShowLastLap),
             V(c.ShowCells && kind != SessionKind.Practice),
+            V(c.ShowPaceRank),
             V(c.ShowStrategy && race), V(c.ShowPace && race), V(c.ShowStatus),
             // Race cells hold "0.4"; quali cells hold "1:43.210".
             CellWidth: kind == SessionKind.Qualify ? 62 : 34);

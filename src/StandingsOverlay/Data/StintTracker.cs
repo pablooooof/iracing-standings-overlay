@@ -11,21 +11,27 @@ public sealed class StintTracker
     private sealed class CarState
     {
         public int LastLapSeen = -1;
-        public readonly List<float> LapTimes = new(32);   // this car's recent laps, capped
+        public readonly List<float> LapTimes = new(32);   // this car's recent laps, capped; -1 = no time (tow/reset)
+        public readonly List<bool> PitLaps = new(32);     // parallel: lap touched the pit lane (in/out lap)
+        public bool PitThisLap;
         public readonly List<int> StintLengths = new(8);  // completed green-lap stints
         public int CurrentStintStartLap;
         public bool WasOnPit;
         public int PitCount;
         public int GridPos;                               // first valid race position seen
+        public double LastTotalDist = -1;                 // stopped-car detection
+        public double LastMoveTime = -1;
     }
 
     private const int MaxLapTimes = 30;
     private readonly Dictionary<int, CarState> _cars = new();
     private bool _isRace;
+    private double _now = -1;                             // last SessionTime seen
 
     public void Update(RawTick t)
     {
         _isRace = t.SessionType.Contains("Race", StringComparison.OrdinalIgnoreCase);
+        _now = t.SessionTime;
 
         for (int idx = 0; idx < t.Position.Length; idx++)
         {
@@ -37,15 +43,32 @@ public sealed class StintTracker
             if (_isRace && s.GridPos == 0 && t.Position[idx] > 0)
                 s.GridPos = t.Position[idx];
 
-            // Lap crossing for THIS car (not the player) → record its lap time.
+            // Lap crossing for THIS car (not the player) → record its lap time. A crossing with
+            // no time (mid-session) means a tow/reset; keep a -1 marker so quali cells can show it.
             if (t.Lap[idx] > s.LastLapSeen)
             {
-                if (s.LastLapSeen >= 0 && idx < t.LastLap.Length && t.LastLap[idx] > 5)
+                if (s.LastLapSeen >= 0 && idx < t.LastLap.Length
+                    && (t.LastLap[idx] > 5 || s.LapTimes.Count > 0))
                 {
-                    s.LapTimes.Add(t.LastLap[idx]);
-                    if (s.LapTimes.Count > MaxLapTimes) s.LapTimes.RemoveAt(0);
+                    s.LapTimes.Add(t.LastLap[idx] > 5 ? t.LastLap[idx] : -1f);
+                    s.PitLaps.Add(s.PitThisLap || t.OnPitRoad[idx]);
+                    if (s.LapTimes.Count > MaxLapTimes) { s.LapTimes.RemoveAt(0); s.PitLaps.RemoveAt(0); }
                 }
                 s.LastLapSeen = t.Lap[idx];
+                s.PitThisLap = t.OnPitRoad[idx];
+            }
+            if (t.OnPitRoad[idx]) s.PitThisLap = true;
+
+            // Track forward progress so a car parked on track (spin/crash) is detectable.
+            if (_now >= 0 && idx < t.LapDistPct.Length && t.Lap[idx] >= 0)
+            {
+                double total = t.Lap[idx] + t.LapDistPct[idx];
+                // ~0.0007 laps ≈ a few meters; a reset/tow jumps backwards, treat as movement.
+                if (s.LastMoveTime < 0 || total >= s.LastTotalDist + 0.0007 || total < s.LastTotalDist - 0.5)
+                {
+                    s.LastTotalDist = total;
+                    s.LastMoveTime = _now;
+                }
             }
 
             bool onPit = t.OnPitRoad[idx];
@@ -106,19 +129,40 @@ public sealed class StintTracker
             : $"{stops}stp{(splash ? "*" : "")}";
     }
 
-    /// <summary>All recorded lap times for the car, oldest first (session order; capped at 30).</summary>
+    /// <summary>All recorded laps for the car, oldest first (capped at 30). -1 = lap with no time.</summary>
     public IReadOnlyList<float> LapTimesFor(int idx) =>
         _cars.TryGetValue(idx, out var s) ? s.LapTimes : [];
 
     /// <summary>Completed timed laps for the car.</summary>
-    public int LapCount(int idx) => _cars.TryGetValue(idx, out var s) ? s.LapTimes.Count : 0;
+    public int LapCount(int idx) =>
+        _cars.TryGetValue(idx, out var s) ? s.LapTimes.Count(x => x > 0) : 0;
 
-    /// <summary>Average of the car's last <paramref name="n"/> lap times, or null.</summary>
+    /// <summary>Average of the car's last <paramref name="n"/> clean laps (timed, no pit lane), or null.</summary>
     public float? RecentPace(int idx, int n = 5)
     {
-        if (!_cars.TryGetValue(idx, out var s) || s.LapTimes.Count < Math.Min(n, 3)) return null;
-        return s.LapTimes.TakeLast(n).Average();
+        var clean = CleanLaps(idx);
+        if (clean.Count < Math.Min(n, 3)) return null;
+        return clean.TakeLast(n).Average();
     }
+
+    private List<float> CleanLaps(int idx)
+    {
+        if (!_cars.TryGetValue(idx, out var s)) return [];
+        var result = new List<float>(s.LapTimes.Count);
+        for (int i = 0; i < s.LapTimes.Count; i++)
+            if (s.LapTimes[i] > 0 && !(i < s.PitLaps.Count && s.PitLaps[i]))
+                result.Add(s.LapTimes[i]);
+        return result;
+    }
+
+    /// <summary>
+    /// True when the car has been stationary on track (not pit road) for a few seconds —
+    /// almost always a spin, crash, or a car waiting for a tow.
+    /// </summary>
+    public bool LooksStopped(int idx) =>
+        _now >= 0 && _cars.TryGetValue(idx, out var s)
+        && !s.WasOnPit && s.LastLapSeen >= 1 && s.LastMoveTime >= 0
+        && _now - s.LastMoveTime > 4.0;
 
     /// <summary>
     /// True when the car looks like it's fuel-saving: consistent laps well off its own best.
@@ -126,10 +170,12 @@ public sealed class StintTracker
     /// </summary>
     public bool LooksLikeFuelSaving(int idx)
     {
-        if (!_isRace || !_cars.TryGetValue(idx, out var s) || s.LapTimes.Count < 5) return false;
+        if (!_isRace) return false;
+        var timed = CleanLaps(idx);
+        if (timed.Count < 5) return false;
 
-        var recent = s.LapTimes.TakeLast(4).ToList();
-        float best = s.LapTimes.Min();
+        var recent = timed.TakeLast(4).ToList();
+        float best = timed.Min();
         float avg = recent.Average();
         if (avg < best * 1.015f) return false;                    // pushing
 

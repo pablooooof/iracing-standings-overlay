@@ -17,9 +17,10 @@ public sealed class OverlayConfig
     public string AccentColor { get; set; } = "#00FFD0";
     public string HighlightColor { get; set; } = "#FF8800";
 
-    // Layout: top N drivers + a window around the player.
+    // Layout: top N drivers + a window around the player (ahead = better positions).
     public int DriversAtTop { get; set; } = 3;
-    public int DriversAheadBehind { get; set; } = 3;
+    public int DriversAhead { get; set; } = 5;
+    public int DriversBehind { get; set; } = 3;
     public bool ShowColumnHeader { get; set; } = true;
 
     // ⭐ Per-lap gap delta columns for the last N laps, oldest left (the reason this project exists).
@@ -91,13 +92,15 @@ public sealed class SessionColumns
     public bool ShowPositionsGained { get; set; }
     public bool ShowTyre { get; set; } = true;       // dry/wet compound ring next to position
     public bool ShowIRating { get; set; } = true;
-    public bool ShowLicense { get; set; } = true;
+    public bool ShowLicense { get; set; }            // off by default in favor of the car brand
+    public bool ShowCarBrand { get; set; } = true;
     public bool ShowLapsCount { get; set; }
     public bool ShowGap { get; set; } = true;
     public bool ShowInterval { get; set; } = true;
     public bool ShowBestLap { get; set; } = true;
     public bool ShowLastLap { get; set; } = true;
     public bool ShowCells { get; set; } = true;      // race: per-lap deltas · quali: per-lap times
+    public bool ShowPaceRank { get; set; }           // # fastest in class over last 5 clean laps
     public bool ShowStatus { get; set; } = true;
     public bool ShowStrategy { get; set; }
     public bool ShowPace { get; set; }
@@ -106,6 +109,7 @@ public sealed class SessionColumns
     {
         ShowPositionsGained = true,
         ShowBestLap = false,      // LAST + deltas matter in a race; BEST is qual/practice info
+        ShowPaceRank = true,
         ShowStrategy = true,
         ShowPace = true,
     };
@@ -121,6 +125,7 @@ public sealed class SessionColumns
         ShowLapsCount = true,
         ShowCells = false,
         ShowInterval = false,
+        ShowPaceRank = true,
     };
 }
 

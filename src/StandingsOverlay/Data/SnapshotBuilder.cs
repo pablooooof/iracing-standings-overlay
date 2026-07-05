@@ -14,12 +14,15 @@ public static class SnapshotBuilder
         var kind = StandingsSnapshot.KindOf(t.SessionType);
         bool isRace = kind == SessionKind.Race;
 
-        // Quali: one cell per completed lap, growing with the session (min 2, max 4 columns).
+        // Quali: one cell per lap. Sessions with a lap limit tell us the count up front;
+        // timed sessions grow with the laps actually run (min 2, max 4 columns).
         int cellCount = kind switch
         {
             SessionKind.Race => cfg.DeltaLaps,
-            SessionKind.Qualify => Math.Clamp(
-                roster.Drivers.Keys.Select(stints.LapCount).DefaultIfEmpty(0).Max(), 2, 4),
+            SessionKind.Qualify => t.SessionLapsTotal is > 0 and <= 6
+                ? t.SessionLapsTotal
+                : Math.Clamp(
+                    roster.Drivers.Keys.Select(i => stints.LapTimesFor(i).Count).DefaultIfEmpty(0).Max(), 2, 4),
             _ => 0,
         };
         var cellHeaders = kind switch
@@ -33,6 +36,13 @@ public static class SnapshotBuilder
             .Where(d => !d.IsPaceCar && !d.IsSpectator && t.Has(d.CarIdx))
             .ToList();
 
+        // Practice/qual: hide cars that never turned a lap and aren't currently on track —
+        // otherwise the list is a wall of empty garage rows. The player always shows.
+        if (!isRace)
+            cars = cars.Where(d => d.CarIdx == t.PlayerCarIdx
+                                || EffBest(t, roster, d.CarIdx) > 0
+                                || (d.CarIdx < t.Lap.Length && t.Lap[d.CarIdx] >= 0)).ToList();
+
         // Group into classes, fastest class first. Single-class fields collapse to one group.
         var classes = cars.GroupBy(d => d.CarClassId)
                           .OrderBy(g => g.Min(d => d.ClassEstLap > 0 ? d.ClassEstLap : float.MaxValue))
@@ -43,6 +53,7 @@ public static class SnapshotBuilder
                             : classes.Count > 0 ? classes[0].Key : 0;
 
         double lapsRemain = EstimateLapsRemain(t, roster);
+        float? playerPace = stints.RecentPace(t.PlayerCarIdx);
 
         var rows = new List<StandingsRow>(24);
         foreach (var cls in classes)
@@ -50,7 +61,7 @@ public static class SnapshotBuilder
             bool isPlayerClass = cls.Key == playerClassId;
             if (multiclass && !isPlayerClass && cfg.OtherClassesDriversAtTop <= 0) continue;
 
-            var ordered = OrderClass(cls.ToList(), t, isRace);
+            var ordered = OrderClass(cls.ToList(), t, roster, isRace);
             if (ordered.Count == 0) continue;
 
             // Which indices of this class to show.
@@ -60,8 +71,8 @@ public static class SnapshotBuilder
                 for (int i = 0; i < Math.Min(cfg.DriversAtTop, ordered.Count); i++) picked.Add(i);
                 int playerPos = ordered.FindIndex(d => d.CarIdx == t.PlayerCarIdx);
                 if (playerPos >= 0)
-                    for (int i = Math.Max(0, playerPos - cfg.DriversAheadBehind);
-                         i <= Math.Min(ordered.Count - 1, playerPos + cfg.DriversAheadBehind); i++)
+                    for (int i = Math.Max(0, playerPos - cfg.DriversAhead);
+                         i <= Math.Min(ordered.Count - 1, playerPos + cfg.DriversBehind); i++)
                         picked.Add(i);
             }
             else
@@ -78,18 +89,25 @@ public static class SnapshotBuilder
                     first.ClassColor));
             }
 
-            float classBest = ordered.Where(d => t.BestLap[d.CarIdx] > 0)
-                                     .Select(d => t.BestLap[d.CarIdx])
+            float classBest = ordered.Select(d => EffBest(t, roster, d.CarIdx))
+                                     .Where(b => b > 0)
                                      .DefaultIfEmpty(0).Min();
-            float? classMedianPace = MedianRecentPace(ordered, stints);
+
+            // Who's actually fastest ON TRACK right now: rank the class by average of the
+            // last 5 clean laps (timed, no pit lane). Rank 1 = fastest.
+            var paceRank = new Dictionary<int, int>();
+            var byPace = ordered.Select(d => (d.CarIdx, Pace: stints.RecentPace(d.CarIdx)))
+                                .Where(x => x.Pace is not null)
+                                .OrderBy(x => x.Pace!.Value).ToList();
+            for (int r = 0; r < byPace.Count; r++) paceRank[byPace[r].CarIdx] = r + 1;
 
             int prev = -1;
             foreach (int i in picked)
             {
                 if (prev >= 0 && i != prev + 1) rows.Add(StandingsRow.Separator);
                 prev = i;
-                rows.Add(BuildRow(i, ordered, t, history, stints, cfg, kind, cellCount,
-                                  classBest, classMedianPace, lapsRemain));
+                rows.Add(BuildRow(i, ordered, t, roster, history, stints, cfg, kind, cellCount,
+                                  classBest, playerPace, paceRank, lapsRemain));
             }
         }
 
@@ -97,7 +115,7 @@ public static class SnapshotBuilder
             HeaderMid(t, roster, cfg), HeaderRight(t, roster, cfg), cellHeaders, rows);
     }
 
-    private static List<DriverEntry> OrderClass(List<DriverEntry> cars, RawTick t, bool isRace)
+    private static List<DriverEntry> OrderClass(List<DriverEntry> cars, RawTick t, Roster roster, bool isRace)
     {
         if (isRace)
         {
@@ -109,17 +127,28 @@ public static class SnapshotBuilder
             if (byPosition.Count > 0) return byPosition;
         }
 
-        // Practice/qual: iRacing often leaves CarIdxPosition at 0, so order by best lap.
-        return cars.Where(d => t.BestLap[d.CarIdx] > 0)
-                   .OrderBy(d => t.BestLap[d.CarIdx])
-                   .Concat(cars.Where(d => t.BestLap[d.CarIdx] <= 0)
+        // Practice/qual: iRacing often leaves CarIdxPosition at 0, so order by best lap
+        // (live telemetry, or the YAML results for laps done before the player joined).
+        return cars.Where(d => EffBest(t, roster, d.CarIdx) > 0)
+                   .OrderBy(d => EffBest(t, roster, d.CarIdx))
+                   .Concat(cars.Where(d => EffBest(t, roster, d.CarIdx) <= 0)
                                .OrderBy(d => d.CarNumber, StringComparer.Ordinal))
                    .ToList();
     }
 
-    private static StandingsRow BuildRow(int i, List<DriverEntry> ordered, RawTick t,
+    /// <summary>Best lap from live telemetry, falling back to the session-YAML results —
+    /// telemetry arrays go blank for cars that aren't currently in the world.</summary>
+    private static float EffBest(RawTick t, Roster roster, int idx) =>
+        idx < t.BestLap.Length && t.BestLap[idx] > 0 ? t.BestLap[idx]
+        : roster.Results.TryGetValue(idx, out var r) && r.BestLap > 0 ? r.BestLap : 0;
+
+    private static float EffLast(RawTick t, Roster roster, int idx) =>
+        idx < t.LastLap.Length && t.LastLap[idx] > 0 ? t.LastLap[idx]
+        : roster.Results.TryGetValue(idx, out var r) && r.LastLap > 0 ? r.LastLap : 0;
+
+    private static StandingsRow BuildRow(int i, List<DriverEntry> ordered, RawTick t, Roster roster,
         GapHistory history, StintTracker stints, OverlayConfig cfg, SessionKind kind, int cellCount,
-        float classBest, float? classMedianPace, double lapsRemain)
+        float classBest, float? playerPace, Dictionary<int, int> paceRank, double lapsRemain)
     {
         bool isRace = kind == SessionKind.Race;
         var d = ordered[i];
@@ -137,11 +166,11 @@ public static class SnapshotBuilder
         }
         else
         {
-            float best = t.BestLap[idx];
+            float best = EffBest(t, roster, idx);
             if (best > 0 && classBest > 0 && i > 0)
                 gap = "+" + FmtGap(best - classBest, cfg.GapPrecision);
-            if (best > 0 && i > 0 && t.BestLap[ordered[i - 1].CarIdx] > 0)
-                interval = "+" + FmtGap(best - t.BestLap[ordered[i - 1].CarIdx], cfg.IntervalPrecision);
+            if (best > 0 && i > 0 && EffBest(t, roster, ordered[i - 1].CarIdx) > 0)
+                interval = "+" + FmtGap(best - EffBest(t, roster, ordered[i - 1].CarIdx), cfg.IntervalPrecision);
         }
 
         var deltaCells = new DeltaCell[cellCount];
@@ -152,9 +181,13 @@ public static class SnapshotBuilder
             for (int k = 0; k < perLap.Length; k++)
             {
                 if (perLap[k] is not float dl) { deltaCells[k] = new DeltaCell("", 0); continue; }
-                // A swing this big means someone pitted (or crashed) that lap — mark it instead
-                // of letting a 35s number swamp the column.
-                if (Math.Abs(dl) >= 10f) { deltaCells[k] = new DeltaCell("P", 0); continue; }
+                // A swing this big means someone pitted (or crashed) that lap. Show the real
+                // number ("you gained 38s") but dimmed — it says nothing about raw pace.
+                if (Math.Abs(dl) >= 10f)
+                {
+                    deltaCells[k] = new DeltaCell(FmtGap(Math.Abs(dl), 0), 0);
+                    continue;
+                }
                 // Color carries the sign: green = player gained on this car during that lap.
                 int sign = Math.Abs(dl) < 0.05f ? 0 : Math.Sign(dl);
                 deltaCells[k] = new DeltaCell(Math.Abs(dl).ToString("F" + cfg.DeltaPrecision), sign);
@@ -162,13 +195,14 @@ public static class SnapshotBuilder
         }
         else if (kind == SessionKind.Qualify)
         {
-            // One cell per quali lap: purple = class best, green = this car's best.
+            // One cell per quali lap: purple = class best, green = this car's best, ✕ = no time.
             var lapTimes = stints.LapTimesFor(idx);
             float carBest = t.BestLap[idx];
             for (int k = 0; k < cellCount; k++)
             {
                 if (k >= lapTimes.Count) { deltaCells[k] = new DeltaCell("", 0); continue; }
                 float lt = lapTimes[k];
+                if (lt <= 0) { deltaCells[k] = new DeltaCell("✕", 0); continue; }
                 int sign = classBest > 0 && Math.Abs(lt - classBest) < 0.0005f ? 2
                          : carBest > 0 && Math.Abs(lt - carBest) < 0.0005f ? -1
                          : 0;
@@ -178,21 +212,27 @@ public static class SnapshotBuilder
 
         int gained = stints.PositionsGained(idx, t.Position.Length > idx ? t.Position[idx] : 0);
 
+        // Pace is relative to the PLAYER: ▲ red they're pulling away, ▼ green we're catching,
+        // ► yellow matched pace. "S" = looks like fuel saving.
         string pace = "";
         int paceSign = 0;
-        if (isRace && stints.RecentPace(idx) is float rp && classMedianPace is float med && med > 0)
+        if (isRace && idx != t.PlayerCarIdx
+            && stints.RecentPace(idx) is float rp && playerPace is float pp && pp > 0)
         {
-            if (rp < med * 0.997f) { pace = "▲"; paceSign = -1; }
-            else if (rp > med * 1.005f) { pace = "▼"; paceSign = 1; }
+            if (rp < pp * 0.997f) { pace = "▲"; paceSign = 1; }
+            else if (rp > pp * 1.003f) { pace = "▼"; paceSign = -1; }
+            else { pace = "►"; paceSign = 0; }
             if (stints.LooksLikeFuelSaving(idx)) pace += "S";
         }
 
-        float last = t.LastLap[idx];
-        float bestLap = t.BestLap[idx];
+        float last = EffLast(t, roster, idx);
+        float bestLap = EffBest(t, roster, idx);
+        int lapsDone = Math.Max(stints.LapCount(idx),
+            roster.Results.TryGetValue(idx, out var res) ? res.LapsComplete : 0);
 
         return new StandingsRow(
             Kind: RowKind.Normal,
-            LapsText: stints.LapCount(idx) is int lc and > 0 ? lc.ToString() : "",
+            LapsText: lapsDone > 0 ? lapsDone.ToString() : "",
             PosText: (i + 1).ToString(),
             PosGainedText: gained == 0 ? "" : gained > 0 ? $"+{gained}" : gained.ToString(),
             PosGainedSign: gained > 0 ? -1 : gained < 0 ? 1 : 0,
@@ -201,6 +241,7 @@ public static class SnapshotBuilder
             IRatingText: FmtIr(d.IRating),
             LicText: d.LicString,
             LicColor: d.LicColor,
+            CarBrand: d.CarBrand,
             ClassColor: d.ClassColor,
             // NOTE: some dry series use compound 1 for an alternate dry tyre; we render >=1 as wet.
             Tyre: idx < t.TireCompound.Length ? t.TireCompound[idx] : -1,
@@ -210,7 +251,9 @@ public static class SnapshotBuilder
             BestLapSign: bestLap > 0 && classBest > 0 && Math.Abs(bestLap - classBest) < 0.0005f ? 2 : 0,
             LastLapText: last > 0 ? FmtLap(last, cfg.LapTimePrecision) : "",
             DeltaCells: deltaCells,
-            StatusText: Status(t, idx),
+            StatusText: Status(t, stints, idx),
+            RankText: paceRank.TryGetValue(idx, out var rank) ? rank.ToString() : "",
+            RankSign: paceRank.TryGetValue(idx, out var rk) ? (rk == 1 ? 2 : rk <= 3 ? -1 : 0) : 0,
             StratText: stints.StrategyText(idx, t.Lap[idx], lapsRemain),
             PaceText: pace,
             PaceSign: paceSign,
@@ -228,23 +271,16 @@ public static class SnapshotBuilder
     }
 
     /// <summary>Highest-priority per-car status badge.</summary>
-    private static string Status(RawTick t, int idx)
+    private static string Status(RawTick t, StintTracker stints, int idx)
     {
         int flags = idx < t.SessionFlags.Length ? t.SessionFlags[idx] : 0;
         if ((flags & CarFlags.Disqualify) != 0) return "DQ";
         if ((flags & CarFlags.Black) != 0) return "BLK";
         if ((flags & CarFlags.Repair) != 0) return "DMG";
         if ((flags & CarFlags.Furled) != 0) return "WRN";
+        if (stints.LooksStopped(idx)) return "SPUN";
         if (idx < t.OnPitRoad.Length && t.OnPitRoad[idx]) return "PIT";
         return "";
-    }
-
-    private static float? MedianRecentPace(List<DriverEntry> ordered, StintTracker stints)
-    {
-        var paces = ordered.Select(d => stints.RecentPace(d.CarIdx))
-                           .Where(p => p is not null).Select(p => p!.Value)
-                           .OrderBy(p => p).ToList();
-        return paces.Count >= 3 ? paces[paces.Count / 2] : null;
     }
 
     private static double EstimateLapsRemain(RawTick t, Roster roster)
