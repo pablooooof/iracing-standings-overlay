@@ -19,6 +19,8 @@ src/StandingsOverlay/bin/Release/net10.0-windows/StandingsOverlay.exe
 
 There are no tests yet. Verification is visual: run `--demo`, screenshot the top-left of the screen (the overlay defaults to x=7, y=6), and check rows/gaps/delta signs. Kill with `Stop-Process -Name StandingsOverlay` (the window is click-through; interactive exit is via the tray icon).
 
+**Verification token budget** (tokens are limited — a past session burned most of a day's quota on screenshot loops): read at most 2-3 screenshots per change, never image-poll on an interval. Prefer `overlay.log` (the traffic detector logs every WATCH/PASSED transition with gap/tta/rate) and scripted pixel scans (`System.Drawing.GetPixel` for a marker color, print only matches) over eyeballing captures. For slow demo events (blue flag ≈ every 5 min), arm a background PowerShell job that greps the log and screenshots only when the event fires, then read just those frames.
+
 Note for fresh shells on this machine: git/dotnet/gh need `$env:Path = [System.Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [System.Environment]::GetEnvironmentVariable('Path','User')` first.
 
 ## Architecture

@@ -75,9 +75,9 @@ public sealed class DemoSource : ITelemetrySource
                 LicString: lics[i % lics.Length],
                 LicColor: licColors[i % licColors.Length],
                 CarBrand: brands[i % brands.Length],
-                CarClassId: gt3 ? 1 : 2,
-                ClassName: gt3 ? "GT3" : "GT4",
-                ClassColor: gt3 ? "#FFDA59" : "#57C1FF",
+                CarClassId: classId,
+                ClassName: className,
+                ClassColor: classColor,
                 ClassEstLap: classLap,
                 IsPaceCar: false,
                 IsSpectator: false);
