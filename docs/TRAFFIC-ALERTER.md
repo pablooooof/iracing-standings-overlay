@@ -16,6 +16,9 @@ Implementation status (2026-07-05): **Row + Beacon + audio implemented** — `Da
 Additional behaviors discovered/locked during implementation: alerts are suppressed while the
 player is on pit road (everyone "closes" on a stationary car); demo mode fields 3 GTP + a fast
 GT3 rabbit so faster-class, train, and blue-flag paths all fire within ~4 minutes.
+Faster-class alerts run in **all session types** (Pablo got swamped by GTPs in practice with
+race-only gating, 2026-07-05); blue-flag qualification stays race-only — lap counts don't mean
+"lapping you" in practice. `Traffic.RacesOnly` restores the old gating.
 
 Feasibility: fully local. Paid equivalents (RaceLab "Overtake Alert", iOverlay "traffic
 indicator") read the same iRacing shared-memory telemetry irsdkSharp exposes. No new

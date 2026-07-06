@@ -99,7 +99,8 @@ public sealed class TrafficDetector
     public TrafficSnapshot Update(RawTick t, Roster roster, OverlayConfig cfg)
     {
         var tc = cfg.Traffic;
-        if (!tc.Enabled || StandingsSnapshot.KindOf(t.SessionType) != SessionKind.Race ||
+        bool race = StandingsSnapshot.KindOf(t.SessionType) == SessionKind.Race;
+        if (!tc.Enabled || (tc.RacesOnly && !race) ||
             !t.Has(t.PlayerCarIdx) || t.SessionTime < 0 ||
             // No traffic warnings while the player is in the pit lane — everyone "closes"
             // at full speed on a stationary car and none of it is actionable.
@@ -130,7 +131,8 @@ public sealed class TrafficDetector
             double deltaBehind = t.LapDistPct[t.PlayerCarIdx] - t.LapDistPct[d.CarIdx];
             if (deltaBehind < 0) deltaBehind += 1;
 
-            bool isBlue = lappingOn && d.CarClassId == playerClassId &&
+            // Lap counts only mean "lapping you" in a race; practice/qual has no blue flags.
+            bool isBlue = race && lappingOn && d.CarClassId == playerClassId &&
                           (t.Lap[d.CarIdx] + t.LapDistPct[d.CarIdx]) - playerTotal >= 0.9;
             bool isFaster = d.ClassEstLap > 10 && playerLapTime - d.ClassEstLap > 1.0;
 

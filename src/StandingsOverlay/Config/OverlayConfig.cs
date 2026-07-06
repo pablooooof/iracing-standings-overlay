@@ -88,10 +88,11 @@ public sealed class OverlayConfig
     }
 }
 
-/// <summary>Traffic alerter settings. Races only; detection details in docs/TRAFFIC-ALERTER.md.</summary>
+/// <summary>Traffic alerter settings. Detection details in docs/TRAFFIC-ALERTER.md.</summary>
 public sealed class TrafficConfig
 {
     public bool Enabled { get; set; } = true;
+    public bool RacesOnly { get; set; }                         // default: also alert in practice/qual (blue flags stay race-only)
     public string Style { get; set; } = "Row";                  // Row | Beacon
     public string Mode { get; set; } = "FasterClassAndLapping"; // FasterClassOnly | FasterClassAndLapping | AllClosing
     public double AlertLeadTimeSec { get; set; } = 12;  // WATCH threshold (time to arrival) for traffic
