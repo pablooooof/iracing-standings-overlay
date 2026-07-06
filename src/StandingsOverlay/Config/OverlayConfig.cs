@@ -49,6 +49,10 @@ public sealed class OverlayConfig
     public int IntervalPrecision { get; set; } = 1;
     public int LapTimePrecision { get; set; } = 3;
     public int DeltaPrecision { get; set; } = 1;
+    public int QualifyGapPrecision { get; set; } = 2;   // quali gaps/intervals: hundredths matter
+
+    // Quali: list the whole class instead of the top-N + window layout.
+    public bool QualifyShowFullClass { get; set; } = true;
 
     // Traffic alerter (multiclass "faster class approaching" / blue-flag warnings).
     public TrafficConfig Traffic { get; set; } = new();

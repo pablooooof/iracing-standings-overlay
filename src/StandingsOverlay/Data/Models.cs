@@ -26,6 +26,7 @@ public sealed class RawTick
     public bool DeclaredWet;
     public int TrackWetness = -1;        // irsdk_TrackWetness: 1 dry … 7 extremely wet
     public int PlayerIncidents = -1;
+    public int SessionState;             // irsdk_SessionState: 4 racing, 5 checkered, 6 cool down
     public string SessionType = "Race";
 
     public bool Has(int idx) => idx >= 0 && idx < Position.Length;
@@ -56,14 +57,29 @@ public sealed record DriverEntry(
     bool IsSpectator);
 
 /// <summary>Per-car line from the session YAML results — the only place laps completed before
-/// the player joined (or after a car left the world) are recorded.</summary>
-public readonly record struct SessionResult(float BestLap, float LastLap, int LapsComplete);
+/// the player joined (or after a car left the world) are recorded, and the official positions.</summary>
+public readonly record struct SessionResult(
+    float BestLap, float LastLap, int LapsComplete, int Position, int ClassPosition);
+
+/// <summary>Maps a car screen name to a compact 3-letter brand code ("Ferrari 296 GT3" → "FER").</summary>
+public static class Brands
+{
+    public static string Code(string? screenName)
+    {
+        if (string.IsNullOrWhiteSpace(screenName)) return "";
+        var tok = screenName.Trim().Split(' ', '-')[0];
+        return (tok.Length <= 3 ? tok : tok[..3]).ToUpperInvariant();
+    }
+}
 
 /// <summary>Session-scoped info parsed from the session YAML (or fabricated by the demo source).</summary>
 public sealed class Roster
 {
     public Dictionary<int, DriverEntry> Drivers { get; } = new();
     public Dictionary<int, SessionResult> Results { get; } = new();
+    /// <summary>False when Results were borrowed from an earlier session (e.g. quali grid
+    /// shown before a race has results) — lap counts/last times don't apply then.</summary>
+    public bool ResultsFromCurrentSession = true;
     public string TrackName = "";
     public double StrengthOfField;
 

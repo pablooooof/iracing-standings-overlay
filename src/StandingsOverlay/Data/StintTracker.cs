@@ -14,6 +14,9 @@ public sealed class StintTracker
         public readonly List<float> LapTimes = new(32);   // this car's recent laps, capped; -1 = no time (tow/reset)
         public readonly List<bool> PitLaps = new(32);     // parallel: lap touched the pit lane (in/out lap)
         public bool PitThisLap;
+        public bool PendingCrossing;                      // lap completed, time not yet published
+        public bool PendingPit;
+        public float LastLapValue = -999f;                // last CarIdxLastLapTime we recorded
         public readonly List<int> StintLengths = new(8);  // completed green-lap stints
         public int CurrentStintStartLap;
         public bool WasOnPit;
@@ -38,26 +41,40 @@ public sealed class StintTracker
             if (idx >= t.Lap.Length || idx >= t.OnPitRoad.Length) break;
 
             if (!_cars.TryGetValue(idx, out var s))
-                _cars[idx] = s = new CarState();
+                _cars[idx] = s = new CarState
+                {
+                    // Don't treat a LastLapTime that predates us as a fresh lap.
+                    LastLapValue = idx < t.LastLap.Length ? t.LastLap[idx] : -999f,
+                };
 
             if (_isRace && s.GridPos == 0 && t.Position[idx] > 0)
                 s.GridPos = t.Position[idx];
 
-            // Lap crossing for THIS car (not the player) → record its lap time. A crossing with
-            // no time (mid-session) means a tow/reset; keep a -1 marker so quali cells can show it.
+            // Lap crossing: note it, but don't read CarIdxLastLapTime yet — iRacing bumps the
+            // lap counter a beat before it publishes the time, and at 4 Hz we land in between.
+            // The lap is recorded below once the value actually changes.
             if (t.Lap[idx] > s.LastLapSeen)
             {
-                if (s.LastLapSeen >= 0 && idx < t.LastLap.Length
-                    && (t.LastLap[idx] > 5 || s.LapTimes.Count > 0))
+                if (s.LastLapSeen >= 0)
                 {
-                    s.LapTimes.Add(t.LastLap[idx] > 5 ? t.LastLap[idx] : -1f);
-                    s.PitLaps.Add(s.PitThisLap || t.OnPitRoad[idx]);
-                    if (s.LapTimes.Count > MaxLapTimes) { s.LapTimes.RemoveAt(0); s.PitLaps.RemoveAt(0); }
+                    // Crossed again and the previous lap never produced a time → tow/reset.
+                    // (Skip if the car has no laps yet: that's just the out lap.)
+                    if (s.PendingCrossing && s.LapTimes.Count > 0) AddLap(s, -1f, s.PendingPit);
+                    s.PendingCrossing = true;
+                    s.PendingPit = s.PitThisLap || t.OnPitRoad[idx];
                 }
                 s.LastLapSeen = t.Lap[idx];
                 s.PitThisLap = t.OnPitRoad[idx];
             }
             if (t.OnPitRoad[idx]) s.PitThisLap = true;
+
+            if (s.PendingCrossing && idx < t.LastLap.Length && t.LastLap[idx] > 5
+                && Math.Abs(t.LastLap[idx] - s.LastLapValue) > 0.0005f)
+            {
+                AddLap(s, t.LastLap[idx], s.PendingPit);
+                s.LastLapValue = t.LastLap[idx];
+                s.PendingCrossing = false;
+            }
 
             // Track forward progress so a car parked on track (spin/crash) is detectable.
             if (_now >= 0 && idx < t.LapDistPct.Length && t.Lap[idx] >= 0)
@@ -84,6 +101,13 @@ public sealed class StintTracker
             }
             s.WasOnPit = onPit;
         }
+    }
+
+    private static void AddLap(CarState s, float time, bool pit)
+    {
+        s.LapTimes.Add(time);
+        s.PitLaps.Add(pit);
+        if (s.LapTimes.Count > MaxLapTimes) { s.LapTimes.RemoveAt(0); s.PitLaps.RemoveAt(0); }
     }
 
     public int PositionsGained(int idx, int currentPos)
