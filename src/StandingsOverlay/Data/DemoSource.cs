@@ -106,6 +106,7 @@ public sealed class DemoSource : ITelemetrySource
         _tick.SessionFlags = new int[Cars];
         _tick.TireCompound = new int[Cars];
         _tick.TrackSurface = new int[Cars];
+        _tick.EstTime = new float[Cars];
         _tick.TrackTemp = 31.2f;
         _tick.PlayerIncidents = 3;
         _tick.SessionType = sessionType;
@@ -164,6 +165,8 @@ public sealed class DemoSource : ITelemetrySource
             bool crossed = newLap != _tick.Lap[i];
             _tick.Lap[i] = newLap;
             _tick.LapDistPct[i] = (float)(_totalDist[i] - newLap);
+            // Demo track has uniform speed, so est time is just pct × class lap.
+            _tick.EstTime[i] = _tick.LapDistPct[i] * _roster.Drivers[i].ClassEstLap;
             _tick.LastLap[i] = _pace[i] * (float)jitter + (i is 14 or 17 ? 0f : (float)Math.Sin(_elapsed / 5.0 + i) * 0.15f);
             // Best = fastest recorded lap, latched at the crossing like iRacing does.
             if (crossed && (_tick.BestLap[i] <= 0 || _tick.LastLap[i] < _tick.BestLap[i]))

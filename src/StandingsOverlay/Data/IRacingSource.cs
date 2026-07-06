@@ -192,6 +192,7 @@ public sealed class IRacingSource : ITelemetrySource
             SessionFlags = _sdk.GetData("CarIdxSessionFlags") as int[] ?? [],
             TireCompound = _sdk.GetData("CarIdxTireCompound") as int[] ?? [],
             TrackSurface = _sdk.GetData("CarIdxTrackSurface") as int[] ?? [],
+            EstTime = _sdk.GetData("CarIdxEstTime") as float[] ?? [],
             SessionType = _currentSessionType,
         };
         if (_sdk.GetData("CarLeftRight") is int clr) t.CarLeftRight = clr;

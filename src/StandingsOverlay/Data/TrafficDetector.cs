@@ -152,7 +152,22 @@ public sealed class TrafficDetector
                 state = null;
             }
 
-            float gap = (float)(deltaBehind * (d.ClassEstLap > 10 ? d.ClassEstLap : playerLapTime));
+            float chaserLap = d.ClassEstLap > 10 ? d.ClassEstLap : playerLapTime;
+            float gap = (float)(deltaBehind * chaserLap);
+            // Refine with CarIdxEstTime where available: it maps track position to time along
+            // the reference lap, so it knows a hairpin from a straight — this is what the
+            // sim's own relative box uses. Distance × lap time stays as the fallback and as a
+            // sanity bound (est time reads 0 in the pits and can tear mid-crossing).
+            if (t.PlayerCarIdx < t.EstTime.Length && d.CarIdx < t.EstTime.Length)
+            {
+                float pe = t.EstTime[t.PlayerCarIdx], ce = t.EstTime[d.CarIdx];
+                if (pe > 0.5f && ce > 0.5f)
+                {
+                    float estGap = pe - ce;
+                    if (estGap < -0.5f * chaserLap) estGap += chaserLap;  // S/F line between us
+                    if (estGap > 0 && Math.Abs(estGap - gap) < 0.35f * chaserLap) gap = estGap;
+                }
+            }
             bool inWindow = deltaBehind < 0.5 && gap < WindowSec;
 
             if (!inWindow)
@@ -180,12 +195,21 @@ public sealed class TrafficDetector
 
             // Closing rate (s/s): measured over the buffer; until enough history exists,
             // fall back to the class-pace difference for faster-class cars.
+            float classPace = isFaster ? (playerLapTime - d.ClassEstLap) / playerLapTime : 0f;
             float rate = float.MinValue;
             double span = state.Samples.Count > 1 ? now - state.Samples[0].T : 0;
             if (span >= MinRateSpanSec)
+            {
                 rate = (float)((state.Samples[0].Gap - gap) / span);
+                // A player accelerating out of a corner briefly "holds off" a faster car in
+                // the numbers, which used to blow the countdown up to 99 s. They are still
+                // coming — never let a faster car's rate fall below a third of class pace.
+                if (isFaster) rate = Math.Max(rate, classPace * 0.3f);
+            }
             else if (isFaster)
-                rate = (playerLapTime - d.ClassEstLap) / playerLapTime;
+            {
+                rate = classPace;
+            }
 
             float tta = rate > 0.05f ? gap / rate : float.MaxValue;
             double lead = isBlue && !isFaster ? tc.BlueLeadTimeSec : tc.AlertLeadTimeSec;

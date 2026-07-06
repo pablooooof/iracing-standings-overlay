@@ -40,8 +40,13 @@ Add to `ReadTick()` (same 4 Hz tick, three extra `GetData` calls):
 ## Detection (pure function, testable in `--demo`)
 
 1. **Gap behind (seconds).** `deltaPct = (playerPct − carPct + 1) % 1`; candidate when
-   `deltaPct < 0.5`. `gapSec = deltaPct × car.ClassEstLap` (the *chaser's* pace decides
-   arrival), refined with `CarIdxEstTime` deltas when available. Window: `gapSec < 30`.
+   `deltaPct < 0.5`. Primary gap = `CarIdxEstTime` delta (wrap: `+chaserLap` when negative;
+   trusted only when > 0, both ests > 0.5 s, and within 35 % of a lap of the distance
+   estimate — est reads 0 in pits and tears mid-crossing). Fallback/bound:
+   `deltaPct × car.ClassEstLap`. Distance-only math made the TTA blow up to 99 s on corner
+   exit (Pablo, live, 2026-07-05) because pct-gap stops closing when the player accelerates
+   first; est time knows a hairpin from a straight. Faster-class closing rate is also floored
+   at 30 % of the class-pace difference for the same reason. Window: `gapSec < 30`.
 2. **Qualification.**
    - *Faster class:* `car.ClassEstLap < player.ClassEstLap − 1.0s` — alert regardless of laps.
    - *Being lapped (blue):* same class, `carTotal − playerTotal ≥ ~0.9` laps
