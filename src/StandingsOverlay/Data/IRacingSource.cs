@@ -36,6 +36,7 @@ public sealed class IRacingSource : ITelemetrySource
         {
             _lastSessionInfoUpdate = -1;
             _lastSessionNum = -1;
+            _emitted = false;
             _history.Reset();
             _stints.Reset();
             _traffic.Reset();
@@ -61,10 +62,15 @@ public sealed class IRacingSource : ITelemetrySource
             var t = ReadTick();
             if (t is null) return;
 
+            // After the checkered/cooldown, telemetry goes weird (cars warp to pit, times
+            // churn) — freeze the last standings rather than showing garbage.
+            if (t.SessionState >= 5 && _emitted) return;
+
             _history.Update(t, _roster);
             _stints.Update(t);
             SnapshotReady?.Invoke(SnapshotBuilder.Build(t, _roster, _history, _stints, cfg));
             TrafficReady?.Invoke(_traffic.Update(t, _roster, cfg));
+            _emitted = true;
         }
         catch (Exception ex)
         {
@@ -107,6 +113,7 @@ public sealed class IRacingSource : ITelemetrySource
         if (sessionNum != _lastSessionNum)
         {
             _lastSessionNum = sessionNum;
+            _emitted = false;
             _history.Reset();
             _stints.Reset();
             _traffic.Reset();
@@ -124,7 +131,7 @@ public sealed class IRacingSource : ITelemetrySource
                     IRating: d.IRating,
                     LicString: d.LicString ?? "",
                     LicColor: HexColor(d.LicColor),
-                    CarBrand: BrandOf(d.CarScreenNameShort),
+                    CarBrand: Brands.Code(d.CarScreenNameShort),
                     CarClassId: d.CarClassID,
                     ClassName: d.CarClassShortName ?? "",
                     ClassColor: HexColor(d.CarClassColor),
@@ -133,12 +140,19 @@ public sealed class IRacingSource : ITelemetrySource
                     IsSpectator: d.IsSpectator == 1);
             }
 
-            // Session results: the only source of laps run before we joined (or by cars
-            // that have since left the world) — telemetry arrays are blank for those.
+            // Session results: laps run before we joined, official quali/practice positions,
+            // and — when the current session has no results yet (race pre-grid) — the most
+            // recent earlier session's results, so the grid matches qualifying.
             _roster.Results.Clear();
-            if (session?.ResultsPositions is not null)
-                foreach (var r in session.ResultsPositions)
-                    _roster.Results[r.CarIdx] = new SessionResult(r.FastestTime, r.LastTime, r.LapsComplete);
+            var resultsSession = session?.ResultsPositions is { Count: > 0 } ? session
+                : model.SessionInfo?.Sessions?
+                    .Where(x => x.SessionNum <= sessionNum && x.ResultsPositions is { Count: > 0 })
+                    .OrderBy(x => x.SessionNum).LastOrDefault();
+            _roster.ResultsFromCurrentSession = resultsSession == session;
+            if (resultsSession?.ResultsPositions is not null)
+                foreach (var r in resultsSession.ResultsPositions)
+                    _roster.Results[r.CarIdx] = new SessionResult(
+                        r.FastestTime, r.LastTime, r.LapsComplete, r.Position, r.ClassPosition);
 
             _roster.TrackName = model.WeekendInfo?.TrackDisplayShortName ?? "";
             _roster.ComputeSof();
@@ -157,14 +171,7 @@ public sealed class IRacingSource : ITelemetrySource
 
     private string _currentSessionType = "Race";
     private int _sessionLapsTotal = -1;
-
-    /// <summary>"Ferrari 296 GT3" → "Ferrari"; "Mercedes-AMG GT3 2020" → "Mercedes".</summary>
-    private static string BrandOf(string? screenNameShort)
-    {
-        if (string.IsNullOrWhiteSpace(screenNameShort)) return "";
-        var tok = screenNameShort.Trim().Split(' ', '-')[0];
-        return tok.Length > 9 ? tok[..9] : tok;
-    }
+    private bool _emitted;
 
     private RawTick? ReadTick()
     {
@@ -202,6 +209,7 @@ public sealed class IRacingSource : ITelemetrySource
         if (_sdk.GetData("Precipitation") is float precip) t.Precipitation = precip;
         if (_sdk.GetData("WeatherDeclaredWet") is bool wet) t.DeclaredWet = wet;
         if (_sdk.GetData("TrackWetness") is int wetness) t.TrackWetness = wetness;
+        if (_sdk.GetData("SessionState") is int state) t.SessionState = state;
 
         return t;
     }

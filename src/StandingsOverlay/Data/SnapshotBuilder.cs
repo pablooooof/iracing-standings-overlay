@@ -68,12 +68,18 @@ public static class SnapshotBuilder
             var picked = new SortedSet<int>();
             if (isPlayerClass)
             {
-                for (int i = 0; i < Math.Min(cfg.DriversAtTop, ordered.Count); i++) picked.Add(i);
-                int playerPos = ordered.FindIndex(d => d.CarIdx == t.PlayerCarIdx);
-                if (playerPos >= 0)
-                    for (int i = Math.Max(0, playerPos - cfg.DriversAhead);
-                         i <= Math.Min(ordered.Count - 1, playerPos + cfg.DriversBehind); i++)
-                        picked.Add(i);
+                // Quali fields are small and you want the full picture once your run is done.
+                if (kind == SessionKind.Qualify && cfg.QualifyShowFullClass)
+                    for (int i = 0; i < ordered.Count; i++) picked.Add(i);
+                else
+                {
+                    for (int i = 0; i < Math.Min(cfg.DriversAtTop, ordered.Count); i++) picked.Add(i);
+                    int playerPos = ordered.FindIndex(d => d.CarIdx == t.PlayerCarIdx);
+                    if (playerPos >= 0)
+                        for (int i = Math.Max(0, playerPos - cfg.DriversAhead);
+                             i <= Math.Min(ordered.Count - 1, playerPos + cfg.DriversBehind); i++)
+                            picked.Add(i);
+                }
             }
             else
             {
@@ -119,22 +125,38 @@ public static class SnapshotBuilder
     {
         if (isRace)
         {
-            var byPosition = cars.Where(d => t.Position[d.CarIdx] > 0)
-                                 .OrderBy(d => t.Position[d.CarIdx])
-                                 .ToList();
-            // Pre-grid (and during pace laps in some configs) every CarIdxPosition is 0;
-            // fall through to the practice ordering so the field is still listed.
-            if (byPosition.Count > 0) return byPosition;
+            // Live track-position ordering, like a relative: an overtake swaps the rows
+            // immediately instead of waiting for iRacing to re-score at the next timing line.
+            var moving = cars.Where(d => t.Lap[d.CarIdx] >= 0
+                                      && t.Lap[d.CarIdx] + t.LapDistPct[d.CarIdx] > 0.001)
+                             .OrderByDescending(d => t.Lap[d.CarIdx] + t.LapDistPct[d.CarIdx])
+                             .ToList();
+            if (moving.Count > 0)
+            {
+                // Cars no longer in the world (retired/towed) sit below, in scored order.
+                var rest = cars.Except(moving)
+                               .OrderBy(d => t.Position[d.CarIdx] > 0 ? t.Position[d.CarIdx] : int.MaxValue)
+                               .ThenBy(d => OfficialPos(roster, d.CarIdx))
+                               .ToList();
+                return moving.Concat(rest).ToList();
+            }
+            // Pre-grid nobody has telemetry yet — fall through to the official order below
+            // (the source substitutes quali results, so the grid matches qualifying).
         }
 
-        // Practice/qual: iRacing often leaves CarIdxPosition at 0, so order by best lap
-        // (live telemetry, or the YAML results for laps done before the player joined).
-        return cars.Where(d => EffBest(t, roster, d.CarIdx) > 0)
-                   .OrderBy(d => EffBest(t, roster, d.CarIdx))
-                   .Concat(cars.Where(d => EffBest(t, roster, d.CarIdx) <= 0)
-                               .OrderBy(d => d.CarNumber, StringComparer.Ordinal))
+        // Practice/qual/pre-grid: official results position first (matches the sim's own
+        // standings, including invalid-lap handling), then live best lap, then car number.
+        return cars.OrderBy(d => OfficialPos(roster, d.CarIdx))
+                   .ThenBy(d => EffBest(t, roster, d.CarIdx) is var b and > 0 ? b : float.MaxValue)
+                   .ThenBy(d => d.CarNumber, StringComparer.Ordinal)
                    .ToList();
     }
+
+    /// <summary>Official position from the session results (class position when scored).</summary>
+    private static int OfficialPos(Roster roster, int idx) =>
+        roster.Results.TryGetValue(idx, out var r)
+            ? r.ClassPosition > 0 ? r.ClassPosition : r.Position > 0 ? r.Position : int.MaxValue
+            : int.MaxValue;
 
     /// <summary>Best lap from live telemetry, falling back to the session-YAML results —
     /// telemetry arrays go blank for cars that aren't currently in the world.</summary>
@@ -144,7 +166,8 @@ public static class SnapshotBuilder
 
     private static float EffLast(RawTick t, Roster roster, int idx) =>
         idx < t.LastLap.Length && t.LastLap[idx] > 0 ? t.LastLap[idx]
-        : roster.Results.TryGetValue(idx, out var r) && r.LastLap > 0 ? r.LastLap : 0;
+        : roster.ResultsFromCurrentSession
+          && roster.Results.TryGetValue(idx, out var r) && r.LastLap > 0 ? r.LastLap : 0;
 
     private static StandingsRow BuildRow(int i, List<DriverEntry> ordered, RawTick t, Roster roster,
         GapHistory history, StintTracker stints, OverlayConfig cfg, SessionKind kind, int cellCount,
@@ -166,11 +189,14 @@ public static class SnapshotBuilder
         }
         else
         {
+            // Quali gaps are best-lap deltas where hundredths decide positions.
+            int gapPrec = kind == SessionKind.Qualify ? cfg.QualifyGapPrecision : cfg.GapPrecision;
+            int intPrec = kind == SessionKind.Qualify ? cfg.QualifyGapPrecision : cfg.IntervalPrecision;
             float best = EffBest(t, roster, idx);
             if (best > 0 && classBest > 0 && i > 0)
-                gap = "+" + FmtGap(best - classBest, cfg.GapPrecision);
+                gap = "+" + FmtGap(best - classBest, gapPrec);
             if (best > 0 && i > 0 && EffBest(t, roster, ordered[i - 1].CarIdx) > 0)
-                interval = "+" + FmtGap(best - EffBest(t, roster, ordered[i - 1].CarIdx), cfg.IntervalPrecision);
+                interval = "+" + FmtGap(best - EffBest(t, roster, ordered[i - 1].CarIdx), intPrec);
         }
 
         var deltaCells = new DeltaCell[cellCount];
@@ -228,7 +254,8 @@ public static class SnapshotBuilder
         float last = EffLast(t, roster, idx);
         float bestLap = EffBest(t, roster, idx);
         int lapsDone = Math.Max(stints.LapCount(idx),
-            roster.Results.TryGetValue(idx, out var res) ? res.LapsComplete : 0);
+            roster.ResultsFromCurrentSession
+            && roster.Results.TryGetValue(idx, out var res) ? res.LapsComplete : 0);
 
         return new StandingsRow(
             Kind: RowKind.Normal,

@@ -74,10 +74,10 @@ public sealed class DemoSource : ITelemetrySource
                 IRating: 1200 + _rng.Next(4500),
                 LicString: lics[i % lics.Length],
                 LicColor: licColors[i % licColors.Length],
-                CarBrand: brands[i % brands.Length],
-                CarClassId: gt3 ? 1 : 2,
-                ClassName: gt3 ? "GT3" : "GT4",
-                ClassColor: gt3 ? "#FFDA59" : "#57C1FF",
+                CarBrand: Brands.Code(brands[i % brands.Length]),
+                CarClassId: classId,
+                ClassName: className,
+                ClassColor: classColor,
                 ClassEstLap: classLap,
                 IsPaceCar: false,
                 IsSpectator: false);
@@ -113,6 +113,7 @@ public sealed class DemoSource : ITelemetrySource
         _tick.SessionLapsTotal = _isRace ? 40 : sessionType.Contains("Qual", StringComparison.OrdinalIgnoreCase) ? 4 : -1;
         _tick.Precipitation = 0.0f;
         _tick.TrackWetness = 1; // dry
+        _tick.SessionState = 4; // racing (never freezes the demo)
 
         // A little chaos for the status column: every penalty flag kind gets one car.
         _tick.SessionFlags[10] = CarFlags.Repair;     // meatball
