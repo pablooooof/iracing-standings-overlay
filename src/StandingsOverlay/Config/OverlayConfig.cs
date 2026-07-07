@@ -57,6 +57,9 @@ public sealed class OverlayConfig
     // Traffic alerter (multiclass "faster class approaching" / blue-flag warnings).
     public TrafficConfig Traffic { get; set; } = new();
 
+    // Relative box (cars physically around the player). Spec: docs/RELATIVE.md.
+    public RelativeConfig Relative { get; set; } = new();
+
     public SessionColumns ColumnsFor(Data.SessionKind kind) => kind switch
     {
         Data.SessionKind.Race => Race,
@@ -122,6 +125,31 @@ public sealed class TrafficAudioConfig
     public bool WatchCue { get; set; } = true;    // rising chirp when traffic enters the window
     public bool ImminentCue { get; set; } = true; // urgent triple beep
     public bool BlueCue { get; set; } = true;     // calm two-tone when being lapped; never escalates
+}
+
+/// <summary>Relative box settings. Useful in every session type by design (no RacesOnly:
+/// lap-parity coloring and stint age simply stay neutral outside races). docs/RELATIVE.md.</summary>
+public sealed class RelativeConfig
+{
+    public bool Enabled { get; set; } = true;
+    public int CarsAhead { get; set; } = 3;
+    public int CarsBehind { get; set; } = 3;
+
+    public bool ShowClassPos { get; set; } = true;
+    public bool ShowBrand { get; set; } = true;
+    public bool ShowIRating { get; set; } = true;
+    public bool ShowLicense { get; set; }
+    public bool ShowStintAge { get; set; } = true;   // laps since last pit stop; green while fresh
+    public bool ShowLastLap { get; set; } = true;
+    public bool ShowPace { get; set; } = true;       // ▲/▼/► recent pace vs the player
+
+    // Same-class same-lap cars within this many seconds get the ▸ battle marker + white gap.
+    public double BattleGapSec { get; set; } = 1.5;
+    public int GapPrecision { get; set; } = 1;
+
+    // Widget position (DIPs); -1 = auto bottom-right corner until dragged in edit mode.
+    public double X { get; set; } = -1;
+    public double Y { get; set; } = -1;
 }
 
 /// <summary>Column toggles for one session type. Not every column is meaningful everywhere —

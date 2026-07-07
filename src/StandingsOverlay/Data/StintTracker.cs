@@ -153,6 +153,13 @@ public sealed class StintTracker
             : $"{stops}stp{(splash ? "*" : "")}";
     }
 
+    /// <summary>Laps since the car's last pit stop, or null before its first stop (tyre age
+    /// from the race start isn't comparable to a fresh set).</summary>
+    public int? LapsSincePit(int idx, int carLap) =>
+        _cars.TryGetValue(idx, out var s) && s.PitCount > 0 && !s.WasOnPit
+            ? Math.Max(0, carLap - s.CurrentStintStartLap)
+            : null;
+
     /// <summary>All recorded laps for the car, oldest first (capped at 30). -1 = lap with no time.</summary>
     public IReadOnlyList<float> LapTimesFor(int idx) =>
         _cars.TryGetValue(idx, out var s) ? s.LapTimes : [];

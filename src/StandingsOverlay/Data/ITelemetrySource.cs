@@ -8,5 +8,8 @@ public interface ITelemetrySource : IDisposable
     /// <summary>Raised alongside SnapshotReady with the traffic alerter's view of the same tick.</summary>
     event Action<TrafficSnapshot>? TrafficReady;
 
+    /// <summary>Raised alongside SnapshotReady with the relative box's view of the same tick.</summary>
+    event Action<RelativeSnapshot>? RelativeReady;
+
     void Start();
 }

@@ -25,6 +25,7 @@ public sealed class IRacingSource : ITelemetrySource
 
     public event Action<StandingsSnapshot>? SnapshotReady;
     public event Action<TrafficSnapshot>? TrafficReady;
+    public event Action<RelativeSnapshot>? RelativeReady;
 
     public IRacingSource(Func<OverlayConfig> cfg) => _cfg = cfg;
 
@@ -43,6 +44,7 @@ public sealed class IRacingSource : ITelemetrySource
             lock (_roster) _roster.Drivers.Clear();
             SnapshotReady?.Invoke(StandingsSnapshot.Disconnected);
             TrafficReady?.Invoke(TrafficSnapshot.Empty);
+            RelativeReady?.Invoke(RelativeSnapshot.Empty);
         };
         SnapshotReady?.Invoke(StandingsSnapshot.Disconnected);
     }
@@ -70,6 +72,7 @@ public sealed class IRacingSource : ITelemetrySource
             _stints.Update(t);
             SnapshotReady?.Invoke(SnapshotBuilder.Build(t, _roster, _history, _stints, cfg));
             TrafficReady?.Invoke(_traffic.Update(t, _roster, cfg));
+            RelativeReady?.Invoke(RelativeBuilder.Build(t, _roster, _stints, cfg));
             _emitted = true;
         }
         catch (Exception ex)

@@ -1,0 +1,99 @@
+<Window x:Class="StandingsOverlay.UI.RelativeWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Relative"
+        WindowStyle="None" AllowsTransparency="True" Background="Transparent"
+        Topmost="True" ShowInTaskbar="False" ShowActivated="False"
+        ResizeMode="NoResize" SizeToContent="WidthAndHeight">
+
+    <StackPanel x:Name="Root">
+        <TextBlock x:Name="EditHint" Text="RELATIVE — drag to move" Visibility="Collapsed"
+                   FontSize="10" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,0,0,3"/>
+
+        <Border x:Name="RootBorder" Visibility="Collapsed" Width="400" CornerRadius="6"
+                Padding="5,4" BorderBrush="#34343F" BorderThickness="1">
+            <ItemsControl x:Name="RowsControl" Grid.IsSharedSizeScope="True">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Border Background="{Binding RowBackground}" CornerRadius="3" MinHeight="21">
+                            <Grid VerticalAlignment="Center" Margin="3,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" SharedSizeGroup="Pos"/>
+                                    <ColumnDefinition Width="Auto" SharedSizeGroup="Num"/>
+                                    <ColumnDefinition Width="Auto" SharedSizeGroup="Brand"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto" SharedSizeGroup="Status"/>
+                                    <ColumnDefinition Width="Auto" SharedSizeGroup="Lic"/>
+                                    <ColumnDefinition Width="Auto" SharedSizeGroup="Ir"/>
+                                    <ColumnDefinition Width="Auto" SharedSizeGroup="Stint"/>
+                                    <ColumnDefinition Width="Auto" SharedSizeGroup="Last"/>
+                                    <ColumnDefinition Width="Auto" SharedSizeGroup="Pace"/>
+                                    <ColumnDefinition Width="Auto" SharedSizeGroup="Gap"/>
+                                </Grid.ColumnDefinitions>
+
+                                <TextBlock Text="{Binding Pos}" Foreground="{Binding PosBrush}"
+                                           FontFamily="Consolas" FontSize="11" Margin="0,0,4,0"
+                                           VerticalAlignment="Center"/>
+
+                                <Border Grid.Column="1" Background="{Binding NumBrush}" CornerRadius="2"
+                                        Padding="4,0" VerticalAlignment="Center"
+                                        Visibility="{Binding NumVisibility}">
+                                    <TextBlock Text="{Binding CarNumber}" Foreground="#17171D"
+                                               FontFamily="Consolas" FontWeight="Bold" FontSize="11"/>
+                                </Border>
+
+                                <TextBlock Grid.Column="2" Text="{Binding Brand}" Foreground="#9DA0AA"
+                                           FontSize="10" Margin="5,0,0,0" VerticalAlignment="Center"/>
+
+                                <Grid Grid.Column="3" Margin="6,0,4,0" VerticalAlignment="Center">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="{Binding Name}" Foreground="{Binding NameBrush}"
+                                               FontWeight="{Binding NameWeight}"
+                                               TextTrimming="CharacterEllipsis"/>
+                                    <TextBlock Grid.Column="1" Text="▸" Foreground="{Binding BattleBrush}"
+                                               FontWeight="Bold" Margin="4,0,0,0"
+                                               Visibility="{Binding BattleVisibility}"/>
+                                </Grid>
+
+                                <TextBlock Grid.Column="4" Text="{Binding Status}"
+                                           Foreground="{Binding StatusBrush}" FontSize="10"
+                                           FontWeight="Bold" Margin="0,0,5,0" VerticalAlignment="Center"/>
+
+                                <Border Grid.Column="5" Background="{Binding LicBrush}" CornerRadius="2"
+                                        Padding="3,0" Margin="0,1,5,1" VerticalAlignment="Center"
+                                        Visibility="{Binding LicVisibility}">
+                                    <TextBlock Text="{Binding License}" Foreground="{Binding LicTextBrush}"
+                                               FontFamily="Consolas" FontSize="10"/>
+                                </Border>
+
+                                <TextBlock Grid.Column="6" Text="{Binding IRating}" Foreground="#9DA0AA"
+                                           FontFamily="Consolas" FontSize="11" Margin="0,0,6,0"
+                                           VerticalAlignment="Center"/>
+
+                                <TextBlock Grid.Column="7" Text="{Binding Stint}"
+                                           Foreground="{Binding StintBrush}" FontFamily="Consolas"
+                                           FontSize="11" Margin="0,0,6,0" VerticalAlignment="Center"/>
+
+                                <TextBlock Grid.Column="8" Text="{Binding LastLap}" Foreground="#C9C9CF"
+                                           FontFamily="Consolas" FontSize="11" Margin="0,0,5,0"
+                                           VerticalAlignment="Center"/>
+
+                                <TextBlock Grid.Column="9" Text="{Binding Pace}"
+                                           Foreground="{Binding PaceBrush}" FontSize="10"
+                                           Margin="0,0,5,0" VerticalAlignment="Center"/>
+
+                                <TextBlock Grid.Column="10" Text="{Binding Gap}"
+                                           Foreground="{Binding GapBrush}" FontFamily="Consolas"
+                                           FontWeight="Bold" TextAlignment="Right" MinWidth="34"
+                                           VerticalAlignment="Center"/>
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </Border>
+    </StackPanel>
+</Window>

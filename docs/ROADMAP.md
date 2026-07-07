@@ -43,7 +43,8 @@ strategy phase.
 - **Settings window** (tray → Settings): GUI editor over `config.json` — same file, so hot-reload keeps working and the JSON stays the source of truth.
 - **Laps-to-catch display** — already computed in `GapHistory.LapsToCatch`, not yet shown; could alternate with the Δ column or show on the car directly ahead/behind.
 - **Driver tagging** (friends/rivals with colors), like iOverlay's module.
-- **Relative overlay** — phase 2 widget, reusing the same data layer.
+- [x] ~~Relative overlay~~ (v0.5 — `RelativeBuilder`/`RelativeWindow`, shared `RelativeGap`
+  helper with the traffic alerter; spec in `docs/RELATIVE.md`)
 
 ## Distribution
 

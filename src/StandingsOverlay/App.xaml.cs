@@ -12,6 +12,7 @@ public partial class App : Application
     private ITelemetrySource? _source;
     private OverlayWindow? _window;
     private TrafficWindow? _trafficWindow;
+    private RelativeWindow? _relativeWindow;
     private TrafficAudio? _trafficAudio;
     private TrayIcon? _tray;
 
@@ -56,6 +57,7 @@ public partial class App : Application
 
         _window = new OverlayWindow(_configService);
         _trafficWindow = new TrafficWindow(_configService);
+        _relativeWindow = new RelativeWindow(_configService);
         _trafficAudio = new TrafficAudio();
         _tray = new TrayIcon(demo);
 
@@ -70,14 +72,17 @@ public partial class App : Application
             _trafficWindow.OnTraffic(traffic);
             _trafficAudio.Handle(traffic.Cues, _configService.Current.Traffic.Audio);
         };
+        _source.RelativeReady += relative => _relativeWindow.OnRelative(relative);
         _window.Show();
         _trafficWindow.Show();
+        _relativeWindow.Show();
         _source.Start();
 
         _tray.EditModeToggled += on => Dispatcher.BeginInvoke(() =>
         {
             _window.EditMode = on;
             _trafficWindow.EditMode = on;
+            _relativeWindow.EditMode = on;
         });
         _tray.ExitRequested += () => Dispatcher.BeginInvoke(() => Shutdown());
     }

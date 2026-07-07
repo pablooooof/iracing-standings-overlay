@@ -111,7 +111,7 @@ public sealed class TrafficDetector
         }
 
         double now = t.SessionTime;
-        float playerLapTime = PlayerRefLap(t, roster);
+        float playerLapTime = RelativeGap.PlayerRefLap(t, roster);
         double playerTotal = t.Lap[t.PlayerCarIdx] + t.LapDistPct[t.PlayerCarIdx];
         bool lappingOn = !tc.Mode.Equals("FasterClassOnly", StringComparison.OrdinalIgnoreCase);
         bool allClosing = tc.Mode.Equals("AllClosing", StringComparison.OrdinalIgnoreCase);
@@ -153,21 +153,10 @@ public sealed class TrafficDetector
             }
 
             float chaserLap = d.ClassEstLap > 10 ? d.ClassEstLap : playerLapTime;
-            float gap = (float)(deltaBehind * chaserLap);
-            // Refine with CarIdxEstTime where available: it maps track position to time along
-            // the reference lap, so it knows a hairpin from a straight — this is what the
-            // sim's own relative box uses. Distance × lap time stays as the fallback and as a
-            // sanity bound (est time reads 0 in the pits and can tear mid-crossing).
-            if (t.PlayerCarIdx < t.EstTime.Length && d.CarIdx < t.EstTime.Length)
-            {
-                float pe = t.EstTime[t.PlayerCarIdx], ce = t.EstTime[d.CarIdx];
-                if (pe > 0.5f && ce > 0.5f)
-                {
-                    float estGap = pe - ce;
-                    if (estGap < -0.5f * chaserLap) estGap += chaserLap;  // S/F line between us
-                    if (estGap > 0 && Math.Abs(estGap - gap) < 0.35f * chaserLap) gap = estGap;
-                }
-            }
+            // Shared est-time gap (docs/RELATIVE.md): negative = the car is behind us, so flip
+            // the sign for a chaser gap. Floor at zero — est time occasionally puts a car with
+            // deltaBehind ≈ 0 marginally "ahead", and for TTA purposes alongside is zero gap.
+            float gap = Math.Max(0f, -RelativeGap.SignedSeconds(t, d.CarIdx, chaserLap));
             bool inWindow = deltaBehind < 0.5 && gap < WindowSec;
 
             if (!inWindow)
@@ -356,13 +345,5 @@ public sealed class TrafficDetector
             Chevrons: chevrons,
             TrainCount: 1,
             BarPct: Math.Round(Math.Clamp(1 - tta / lead, 0.03, 1), 2));
-    }
-
-    private static float PlayerRefLap(RawTick t, Roster roster)
-    {
-        if (roster.Drivers.TryGetValue(t.PlayerCarIdx, out var me) && me.ClassEstLap > 10)
-            return me.ClassEstLap;
-        if (t.BestLap[t.PlayerCarIdx] > 10) return t.BestLap[t.PlayerCarIdx];
-        return 90f;
     }
 }

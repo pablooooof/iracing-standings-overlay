@@ -41,6 +41,7 @@ public sealed class DemoSource : ITelemetrySource
 
     public event Action<StandingsSnapshot>? SnapshotReady;
     public event Action<TrafficSnapshot>? TrafficReady;
+    public event Action<RelativeSnapshot>? RelativeReady;
 
     public DemoSource(Func<OverlayConfig> cfg, string sessionType = "Race")
     {
@@ -207,6 +208,7 @@ public sealed class DemoSource : ITelemetrySource
         _stints.Update(_tick);
         SnapshotReady?.Invoke(SnapshotBuilder.Build(_tick, _roster, _history, _stints, cfg));
         TrafficReady?.Invoke(_traffic.Update(_tick, _roster, cfg));
+        RelativeReady?.Invoke(RelativeBuilder.Build(_tick, _roster, _stints, cfg));
     }
 
     public void Dispose() => _timer?.Dispose();

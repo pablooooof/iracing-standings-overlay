@@ -1,0 +1,169 @@
+using StandingsOverlay.Config;
+
+namespace StandingsOverlay.Data;
+
+/// <summary>One display-ready relative row. All formatting happens here, not in XAML.</summary>
+public sealed record RelativeRow(
+    bool IsPlayer,
+    string PosText,          // class position ("P3") or overall, per config
+    string ClassColor,
+    string CarNumber,
+    string CarBrand,
+    string Name,
+    int LapParity,           // -1 you lap them (blue) · 0 same lap · +1 they lap you (red)
+    string StatusText,       // "" | "PIT" | "SPUN"
+    bool Battle,             // same class, same lap, within BattleGapSec → ▸ marker
+    string IRatingText,
+    string LicText,
+    string LicColor,
+    string StintText,        // laps since last pit stop
+    bool StintFresh,         // ≤3 laps old rubber — a threat worth highlighting
+    string LastLapText,
+    string PaceText,         // ▲ ▼ ► vs the player (same convention as the standings)
+    int PaceSign,
+    string GapText)          // "+2.3" ahead · "-0.8" behind · "—" on the player row
+{
+    public static readonly RelativeRow Blank =
+        new(false, "", "", "", "", "", 0, "", false, "", "", "", "", false, "", "", 0, "");
+
+    public bool IsBlank => CarNumber.Length == 0 && !IsPlayer;
+}
+
+public sealed record RelativeSnapshot(IReadOnlyList<RelativeRow> Rows)
+{
+    public static readonly RelativeSnapshot Empty = new([]);
+
+    /// <summary>Value comparison (the record alone compares Rows by reference).</summary>
+    public bool VisuallyEquals(RelativeSnapshot? o)
+    {
+        if (o is null || Rows.Count != o.Rows.Count) return false;
+        for (int i = 0; i < Rows.Count; i++)
+            if (Rows[i] != o.Rows[i]) return false;
+        return true;
+    }
+}
+
+/// <summary>
+/// Builds the relative box: the cars physically around the player in track order, nearest the
+/// middle, with the context the sim's own F3 box lacks — pace, stint age, class position,
+/// battle relevance. Pure function of the tick, shared by demo and live sources.
+/// Gap math is the shared RelativeGap helper (also used by the traffic alerter).
+/// Spec: docs/RELATIVE.md.
+/// </summary>
+public static class RelativeBuilder
+{
+    private const int FreshTyreLaps = 3;
+
+    public static RelativeSnapshot Build(RawTick t, Roster roster, StintTracker stints, OverlayConfig cfg)
+    {
+        var rc = cfg.Relative;
+        if (!rc.Enabled || !t.Has(t.PlayerCarIdx)) return RelativeSnapshot.Empty;
+        // In the garage / on the flatbed there is no meaningful "around me".
+        if (t.PlayerCarIdx < t.TrackSurface.Length && t.TrackSurface[t.PlayerCarIdx] == -1)
+            return RelativeSnapshot.Empty;
+        if (!roster.Drivers.TryGetValue(t.PlayerCarIdx, out var me)) return RelativeSnapshot.Empty;
+
+        bool isRace = StandingsSnapshot.KindOf(t.SessionType) == SessionKind.Race;
+        float refLap = RelativeGap.PlayerRefLap(t, roster);
+        double playerTotal = t.Lap[t.PlayerCarIdx] + t.LapDistPct[t.PlayerCarIdx];
+        float? playerPace = stints.RecentPace(t.PlayerCarIdx);
+
+        var ahead = new List<(float Gap, DriverEntry D)>();
+        var behind = new List<(float Gap, DriverEntry D)>();
+        foreach (var d in roster.Drivers.Values)
+        {
+            if (d.CarIdx == t.PlayerCarIdx || d.IsPaceCar || d.IsSpectator || !t.Has(d.CarIdx)) continue;
+            if (d.CarIdx < t.TrackSurface.Length && t.TrackSurface[d.CarIdx] == -1) continue;
+            if (t.Lap[d.CarIdx] < 0) continue;
+
+            float gap = RelativeGap.SignedSeconds(t, d.CarIdx, refLap);
+            (gap >= 0 ? ahead : behind).Add((gap, d));
+        }
+        ahead.Sort((a, b) => a.Gap.CompareTo(b.Gap));    // nearest first
+        behind.Sort((a, b) => b.Gap.CompareTo(a.Gap));   // nearest first (closest to zero)
+
+        // Fixed slot count: blanks instead of a resizing window, so the player row never
+        // jumps on screen (the window is usually anchored near the bottom edge).
+        int nAhead = Math.Max(0, rc.CarsAhead), nBehind = Math.Max(0, rc.CarsBehind);
+        var rows = new List<RelativeRow>(nAhead + nBehind + 1);
+        int takeAhead = Math.Min(ahead.Count, nAhead);
+        for (int i = takeAhead; i < nAhead; i++) rows.Add(RelativeRow.Blank);
+        for (int i = takeAhead - 1; i >= 0; i--)   // furthest ahead at the top
+            rows.Add(BuildRow(ahead[i].D, ahead[i].Gap, false, t, stints, cfg, isRace,
+                              playerTotal, me.CarClassId, playerPace));
+        rows.Add(BuildRow(me, 0, true, t, stints, cfg, isRace, playerTotal, me.CarClassId, playerPace));
+        for (int i = 0; i < Math.Min(behind.Count, nBehind); i++)
+            rows.Add(BuildRow(behind[i].D, behind[i].Gap, false, t, stints, cfg, isRace,
+                              playerTotal, me.CarClassId, playerPace));
+        while (rows.Count < nAhead + 1 + nBehind) rows.Add(RelativeRow.Blank);
+
+        return new RelativeSnapshot(rows);
+    }
+
+    private static RelativeRow BuildRow(DriverEntry d, float gap, bool isPlayer, RawTick t,
+        StintTracker stints, OverlayConfig cfg, bool isRace, double playerTotal,
+        int playerClassId, float? playerPace)
+    {
+        var rc = cfg.Relative;
+        int idx = d.CarIdx;
+        bool inPit = idx < t.OnPitRoad.Length && t.OnPitRoad[idx];
+
+        // Lap parity relative to where the row is DISPLAYED: total-distance delta minus the
+        // wrapped on-track delta is a near-integer lap count. A car shown 2 s behind you that
+        // is 0.95 total laps up rounds to +1 — it is lapping you, exactly like the sim colors it.
+        int parity = 0;
+        if (isRace && !isPlayer)
+            parity = Math.Sign((int)Math.Round(
+                t.Lap[idx] + t.LapDistPct[idx] - playerTotal - RelativeGap.SignedLaps(t, idx)));
+
+        bool battle = isRace && !isPlayer && !inPit && parity == 0 &&
+                      d.CarClassId == playerClassId && Math.Abs(gap) <= rc.BattleGapSec;
+
+        string pos = "";
+        int cp = idx < t.ClassPosition.Length ? t.ClassPosition[idx] : 0;
+        int op = idx < t.Position.Length ? t.Position[idx] : 0;
+        if (rc.ShowClassPos && cp > 0) pos = $"P{cp}";
+        else if (op > 0) pos = $"P{op}";
+
+        string stint = "";
+        bool fresh = false;
+        if (rc.ShowStintAge && stints.LapsSincePit(idx, t.Lap[idx]) is int age)
+        {
+            stint = age.ToString();
+            fresh = age <= FreshTyreLaps;
+        }
+
+        string pace = "";
+        int paceSign = 0;
+        if (rc.ShowPace && !isPlayer
+            && stints.RecentPace(idx) is float rp && playerPace is float pp && pp > 0)
+        {
+            if (rp < pp * 0.997f) { pace = "▲"; paceSign = 1; }
+            else if (rp > pp * 1.003f) { pace = "▼"; paceSign = -1; }
+            else { pace = "►"; }
+        }
+
+        float last = idx < t.LastLap.Length ? t.LastLap[idx] : 0;
+
+        return new RelativeRow(
+            IsPlayer: isPlayer,
+            PosText: pos,
+            ClassColor: d.ClassColor,
+            CarNumber: "#" + d.CarNumber,
+            CarBrand: rc.ShowBrand ? d.CarBrand : "",
+            Name: d.Name,
+            LapParity: parity,
+            StatusText: inPit ? "PIT" : stints.LooksStopped(idx) ? "SPUN" : "",
+            Battle: battle,
+            IRatingText: rc.ShowIRating ? SnapshotBuilder.FmtIr(d.IRating) : "",
+            LicText: rc.ShowLicense ? d.LicString : "",
+            LicColor: d.LicColor,
+            StintText: stint,
+            StintFresh: fresh,
+            LastLapText: rc.ShowLastLap && last > 0 ? SnapshotBuilder.FmtLap(last, cfg.LapTimePrecision) : "",
+            PaceText: pace,
+            PaceSign: paceSign,
+            GapText: isPlayer ? "—"
+                : (gap >= 0 ? "+" : "-") + SnapshotBuilder.FmtGap(Math.Abs(gap), rc.GapPrecision));
+    }
+}
