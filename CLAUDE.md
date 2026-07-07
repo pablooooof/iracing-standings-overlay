@@ -15,6 +15,8 @@ dotnet build src/StandingsOverlay -c Release
 src/StandingsOverlay/bin/Release/net10.0-windows/StandingsOverlay.exe --demo
 # run against live iRacing (waits for the sim; iRacing must be windowed borderless):
 src/StandingsOverlay/bin/Release/net10.0-windows/StandingsOverlay.exe
+# open the settings window on launch (also reachable from the tray / tray double-click):
+src/StandingsOverlay/bin/Release/net10.0-windows/StandingsOverlay.exe --demo --settings
 ```
 
 There are no tests yet. Verification is visual: run `--demo`, screenshot the top-left of the screen (the overlay defaults to x=7, y=6), and check rows/gaps/delta signs. Kill with `Stop-Process -Name StandingsOverlay` (the window is click-through; interactive exit is via the tray icon).
@@ -36,6 +38,7 @@ Data flows one way: **source → snapshot → render**.
 - The traffic alerter is a parallel branch of the same tick: `Data/TrafficDetector.Update(RawTick, Roster, OverlayConfig)` → `TrafficReady` → `UI/TrafficWindow` (own window/position, two styles: `Row`/`Beacon`) + `UI/TrafficAudio` (synthesized WAV cues, arbitration already done in the detector). Faster-class alerts fire in every session type (`Traffic.RacesOnly` restores race-only); blue-flag alerts are race-only by definition; suppressed while the player is on pit road. Spec: `docs/TRAFFIC-ALERTER.md`.
 - The fuel calculator is another parallel branch: `Data/FuelModel.Update(RawTick)` (player-only measurement — iRacing exposes no fuel for other cars) + `Data/StrategyPlanner.Build(RawTick, FuelModel, OverlayConfig)` → `FuelReady` → `UI/FuelWindow` (live numbers + Pirelli-style strategy stint bars). The planner enumerates (stops remaining × min fuel-save level) and prices pit loss vs save penalty, so "push + splash-and-dash" vs "save, one stop fewer" fall out with an honest Δ. Each re-plan is logged to `overlay.log` (`fuel plan:`). Spec: `docs/FUEL-STRATEGY.md`.
 - `Config/ConfigService` owns `config.json` (created next to the exe), hot-reloads on external edits via `FileSystemWatcher`, and debounces its own saves.
+- `UI/SettingsWindow` is the app's only real chrome: a normal (activatable, dark-title-bar via `Win32.UseDarkTitleBar`) window opened from the tray "Settings…" item (or `--settings`). It edits `ConfigService.Current` live and persists through **`ConfigService.SaveAndNotify()`** — plain `Save()` suppresses the watcher echo, so in-app edits MUST use `SaveAndNotify` to reach the widgets; external file edits still flow via the watcher. Rows are built from descriptor helpers (`Toggle`/`Slider`/`Segmented`/`ColorRow`/`Master`), so adding a setting is one line — do not hand-roll bound XAML per control. Every widget's `Enabled` flag and the "Move overlays" edit-mode toggle route here; edit mode has one owner (`App.SetEditMode`) that mirrors state back to both the tray checkbox and the settings switch. Autostart lives in `Config/AutoStart` (shared by tray + settings).
 
 ## Constraints & gotchas
 

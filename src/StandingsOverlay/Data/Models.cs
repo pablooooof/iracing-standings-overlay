@@ -23,6 +23,9 @@ public sealed class RawTick
     public int SessionLapsRemain = -1;
     public int SessionLapsTotal = -1;    // from YAML SessionLaps; -1 = unlimited/unknown
     public float TrackTemp = float.NaN;  // °C
+    public double TimeOfDay = -1;        // SessionTimeOfDay: in-sim local time, seconds since midnight
+    public float WindVel = float.NaN;    // m/s
+    public float WindDir = float.NaN;    // radians, compass bearing the wind blows FROM (0 = North)
     public float Precipitation = float.NaN; // 0..1
     public bool DeclaredWet;
     public int TrackWetness = -1;        // irsdk_TrackWetness: 1 dry … 7 extremely wet

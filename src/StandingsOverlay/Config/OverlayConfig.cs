@@ -13,6 +13,7 @@ public sealed class OverlayConfig
     // Style
     public double Opacity { get; set; } = 0.75;
     public double FontSize { get; set; } = 14;
+    public double Scale { get; set; } = 1.0;   // standings size multiplier (LayoutTransform)
     public string BackgroundColor { get; set; } = "#212129";
     public string AccentColor { get; set; } = "#00FFD0";
     public string HighlightColor { get; set; } = "#FF8800";
@@ -40,9 +41,11 @@ public sealed class OverlayConfig
 
     // Header extras
     public bool ShowSof { get; set; } = true;
+    public bool ShowTimeOfDay { get; set; } = true; // in-sim local time of day (iOverlay-style clock)
     public bool ShowTrackTemp { get; set; } = true;
     public bool ShowIncidents { get; set; } = true;
     public bool ShowWeather { get; set; } = true;   // track state (Dry/Damp/Wet) + precipitation %
+    public bool ShowWind { get; set; } = true;      // wind direction arrow + speed
 
     // Decimal places
     public int GapPrecision { get; set; } = 1;
@@ -109,6 +112,7 @@ public sealed class TrafficConfig
     public double BlueLeadTimeSec { get; set; } = 20;   // WATCH threshold when being lapped (planning, not reflexes)
     public double ImminentSec { get; set; } = 4;
     public int MaxRows { get; set; } = 3;
+    public double Scale { get; set; } = 1.0;            // widget size multiplier (LayoutTransform)
     public bool ShowIRating { get; set; } = true;
     public bool AlongsideBanner { get; set; } = true;   // CarLeftRight banner; fires for alerted traffic only
     public TrafficAudioConfig Audio { get; set; } = new();
@@ -135,8 +139,9 @@ public sealed class TrafficAudioConfig
 public sealed class RelativeConfig
 {
     public bool Enabled { get; set; } = true;
-    public int CarsAhead { get; set; } = 3;
-    public int CarsBehind { get; set; } = 3;
+    public int CarsAhead { get; set; } = 5;
+    public int CarsBehind { get; set; } = 5;
+    public double Scale { get; set; } = 1.15;   // reads bigger than the dense standings by default
 
     public bool ShowClassPos { get; set; } = true;
     public bool ShowBrand { get; set; } = true;
@@ -172,6 +177,7 @@ public sealed class FuelConfig
     public double FillRateLps { get; set; } = -1;       // -1 = learn while refueling (fallback 2.6)
 
     public double BarWidth { get; set; } = 420;         // strategy bar length, DIPs
+    public double Scale { get; set; } = 1.0;            // widget size multiplier (LayoutTransform)
 
     // Widget position (DIPs), draggable in edit mode like every widget.
     public double X { get; set; } = 810;
@@ -267,6 +273,15 @@ public sealed class ConfigService : IDisposable
     {
         _lastSelfWrite = DateTime.UtcNow;
         Current.Save(_path);
+    }
+
+    /// <summary>Persist an in-app edit (the settings window) and push it to every widget.
+    /// <see cref="Save"/> alone suppresses the watcher echo, so it would NOT re-apply live —
+    /// this raises <see cref="Changed"/> directly. External file edits still flow via the watcher.</summary>
+    public void SaveAndNotify()
+    {
+        Save();
+        Changed?.Invoke(Current);
     }
 
     public void Dispose() => _watcher?.Dispose();

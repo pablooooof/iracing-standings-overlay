@@ -16,6 +16,8 @@ public partial class App : Application
     private FuelWindow? _fuelWindow;
     private TrafficAudio? _trafficAudio;
     private TrayIcon? _tray;
+    private SettingsWindow? _settings;
+    private bool _editMode;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -82,14 +84,41 @@ public partial class App : Application
         _fuelWindow.Show();
         _source.Start();
 
-        _tray.EditModeToggled += on => Dispatcher.BeginInvoke(() =>
-        {
-            _window.EditMode = on;
-            _trafficWindow.EditMode = on;
-            _relativeWindow.EditMode = on;
-            _fuelWindow.EditMode = on;
-        });
+        _tray.EditModeToggled += on => Dispatcher.BeginInvoke(() => SetEditMode(on));
+        _tray.SettingsRequested += () => Dispatcher.BeginInvoke(ShowSettings);
         _tray.ExitRequested += () => Dispatcher.BeginInvoke(() => Shutdown());
+
+        // --settings opens the settings window on launch (useful as a desktop shortcut target).
+        if (e.Args.Any(a => a.Equals("--settings", StringComparison.OrdinalIgnoreCase)))
+            Dispatcher.BeginInvoke(ShowSettings);
+    }
+
+    /// <summary>Single source of truth for "move overlays" mode: both the tray checkbox and the
+    /// settings toggle route here, and it mirrors the resulting state back to whichever UI is open.</summary>
+    private void SetEditMode(bool on)
+    {
+        if (_editMode == on) return;   // idempotent: the mirrors below re-enter this harmlessly
+        _editMode = on;
+        _window!.EditMode = on;
+        _trafficWindow!.EditMode = on;
+        _relativeWindow!.EditMode = on;
+        _fuelWindow!.EditMode = on;
+        _tray?.ReflectEditMode(on);
+        _settings?.ReflectEditMode(on);
+    }
+
+    private void ShowSettings()
+    {
+        if (_settings is not null)
+        {
+            _settings.Activate();
+            return;
+        }
+        _settings = new SettingsWindow(_configService!, _editMode);
+        _settings.EditModeChanged += on => SetEditMode(on);
+        _settings.Closed += (_, _) => _settings = null;
+        _settings.Show();
+        _settings.Activate();
     }
 
     protected override void OnExit(ExitEventArgs e)

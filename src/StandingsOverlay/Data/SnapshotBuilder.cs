@@ -321,7 +321,9 @@ public static class SnapshotBuilder
 
     private static string HeaderMid(RawTick t, Roster roster, OverlayConfig cfg)
     {
-        var parts = new List<string>(4);
+        var parts = new List<string>(6);
+        if (cfg.ShowTimeOfDay && t.TimeOfDay >= 0)
+            parts.Add(FmtTimeOfDay(t.TimeOfDay));
         if (cfg.ShowSof && roster.StrengthOfField > 25)
             parts.Add($"SoF {FmtIr((int)roster.StrengthOfField)}");
         if (cfg.ShowTrackTemp && !float.IsNaN(t.TrackTemp))
@@ -332,7 +334,27 @@ public static class SnapshotBuilder
             if (!string.IsNullOrEmpty(wet)) parts.Add(wet);
             if (!float.IsNaN(t.Precipitation)) parts.Add($"☂ {t.Precipitation * 100:0}%");
         }
+        if (cfg.ShowWind && WindText(t.WindVel, t.WindDir) is { Length: > 0 } wind)
+            parts.Add(wind);
         return string.Join("  ·  ", parts);
+    }
+
+    /// <summary>In-sim local time of day, "H:mm" (24h), like iOverlay's clock.</summary>
+    private static string FmtTimeOfDay(double s)
+    {
+        var ts = TimeSpan.FromSeconds(((s % 86400) + 86400) % 86400);
+        return $"{ts.Hours}:{ts.Minutes:00}";
+    }
+
+    private static readonly string[] WindArrows = ["↑", "↗", "→", "↘", "↓", "↙", "←", "↖"];
+
+    /// <summary>Compass arrow (pointing where the wind blows TO) + speed in km/h. WindDir is the
+    /// bearing the wind comes FROM, so we add π to get the travel direction.</summary>
+    private static string WindText(float velMs, float dirRad)
+    {
+        if (float.IsNaN(velMs) || float.IsNaN(dirRad)) return "";
+        int idx = (int)Math.Round((dirRad + Math.PI) / (Math.PI / 4)) & 7;
+        return $"{WindArrows[idx]} {velMs * 3.6:0} km/h";
     }
 
     private static string WetnessText(int w) => w switch

@@ -11,9 +11,9 @@ namespace StandingsOverlay.UI;
 public sealed record RelativeRowViewModel(
     string Pos, string CarNumber, string Brand, string Name, string Status,
     string License, string IRating, string Stint, string LastLap, string Pace, string Gap,
-    Brush PosBrush, Brush NumBrush, Brush NameBrush, FontWeight NameWeight, Brush StatusBrush,
-    Brush LicBrush, Brush LicTextBrush, Brush StintBrush, Brush PaceBrush, Brush GapBrush,
-    Brush BattleBrush, Brush RowBackground,
+    Brush PosBrush, Brush NumBrush, Brush ClassBarBrush, Brush NameBrush, FontWeight NameWeight,
+    Brush StatusBrush, Brush LicBrush, Brush LicTextBrush, Brush StintBrush, Brush PaceBrush,
+    Brush GapBrush, Brush BattleBrush, Brush RowBackground,
     Visibility NumVisibility, Visibility LicVisibility, Visibility BattleVisibility)
 {
     private static readonly Brush White = RowViewModel.Frozen("#E8E9EE");
@@ -58,6 +58,7 @@ public sealed record RelativeRowViewModel(
             Gap: r.GapText,
             PosBrush: RowViewModel.TryBrush(r.ClassColor) ?? Dim,
             NumBrush: RowViewModel.TryBrush(r.ClassColor) ?? Dim,
+            ClassBarBrush: RowViewModel.TryBrush(r.ClassColor) ?? Brushes.Transparent,
             NameBrush: nameBrush,
             NameWeight: r.IsPlayer ? FontWeights.SemiBold : FontWeights.Normal,
             StatusBrush: r.StatusText == "SPUN" ? Danger : PitAmber,
@@ -125,6 +126,7 @@ public partial class RelativeWindow : Window
         else AutoPlace();
 
         FontSize = Math.Max(9, cfg.FontSize - 1.5);   // a relative reads at a glance; slightly denser
+        Root.LayoutTransform = RowViewModel.ScaleTransformFor(cfg.Relative.Scale);
         var bg = RowViewModel.TryBrush(cfg.BackgroundColor) is SolidColorBrush b
             ? b.Color : Color.FromRgb(0x21, 0x21, 0x29);
         var brush = new SolidColorBrush(bg) { Opacity = Math.Clamp(cfg.Opacity, 0.05, 1.0) };

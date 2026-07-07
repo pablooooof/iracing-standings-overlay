@@ -55,6 +55,7 @@ public partial class FuelWindow : Window
     {
         Left = cfg.Fuel.X;
         Top = cfg.Fuel.Y;
+        Root.LayoutTransform = RowViewModel.ScaleTransformFor(cfg.Fuel.Scale);
         var accent = RowViewModel.TryBrush(cfg.AccentColor) ?? Brushes.Cyan;
         TargetValue.Foreground = accent;
         EditHint.Foreground = accent;

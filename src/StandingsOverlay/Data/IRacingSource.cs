@@ -226,6 +226,9 @@ public sealed class IRacingSource : ITelemetrySource
             t.SessionLapsRemain = lapsRemain;
         t.SessionLapsTotal = _sessionLapsTotal;
         if (_sdk.GetData("TrackTempCrew") is float trackTemp) t.TrackTemp = trackTemp;
+        if (_sdk.GetData("SessionTimeOfDay") is float tod) t.TimeOfDay = tod;
+        if (_sdk.GetData("WindVel") is float windVel) t.WindVel = windVel;
+        if (_sdk.GetData("WindDir") is float windDir) t.WindDir = windDir;
         if (_sdk.GetData("PlayerCarMyIncidentCount") is int incs) t.PlayerIncidents = incs;
         if (_sdk.GetData("Precipitation") is float precip) t.Precipitation = precip;
         if (_sdk.GetData("WeatherDeclaredWet") is bool wet) t.DeclaredWet = wet;

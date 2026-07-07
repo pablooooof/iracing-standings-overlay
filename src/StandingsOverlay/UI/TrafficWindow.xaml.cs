@@ -131,6 +131,7 @@ public partial class TrafficWindow : Window
     {
         Left = cfg.Traffic.X;
         Top = cfg.Traffic.Y;
+        Root.LayoutTransform = RowViewModel.ScaleTransformFor(cfg.Traffic.Scale);
         var accent = RowViewModel.TryBrush(cfg.AccentColor) ?? Brushes.Cyan;
         YouBar.Background = accent;
         EditHint.Foreground = accent;

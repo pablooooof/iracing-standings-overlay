@@ -66,6 +66,7 @@ public partial class OverlayWindow : Window
         Left = cfg.X;
         Top = cfg.Y;
         FontSize = cfg.FontSize;
+        RootBorder.LayoutTransform = RowViewModel.ScaleTransformFor(cfg.Scale);
         FontFamily = new FontFamily("Segoe UI");
         Foreground = Brushes.White;
         DataContext = ColumnVisibility.From(cfg.ColumnsFor(_visibleKind ?? SessionKind.Race),

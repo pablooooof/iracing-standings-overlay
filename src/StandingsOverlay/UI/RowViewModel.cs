@@ -164,4 +164,15 @@ public sealed class RowViewModel
         b.Freeze();
         return b;
     }
+
+    /// <summary>Per-widget size multiplier as a frozen LayoutTransform (identity at 1.0).
+    /// Every overlay window applies this to its root element so one slider scales the whole box.</summary>
+    public static Transform ScaleTransformFor(double scale)
+    {
+        double s = Math.Clamp(scale, 0.5, 2.0);
+        if (Math.Abs(s - 1.0) < 0.001) return Transform.Identity;
+        var t = new ScaleTransform(s, s);
+        t.Freeze();
+        return t;
+    }
 }

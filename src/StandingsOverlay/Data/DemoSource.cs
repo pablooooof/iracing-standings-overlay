@@ -119,6 +119,8 @@ public sealed class DemoSource : ITelemetrySource
         _tick.TrackSurface = new int[Cars];
         _tick.EstTime = new float[Cars];
         _tick.TrackTemp = 31.2f;
+        _tick.WindVel = 3.3f;              // ~12 km/h
+        _tick.WindDir = 2.36f;             // ~SW, so the header arrow points NE
         _tick.PlayerIncidents = 3;
         _tick.SessionType = sessionType;
         _tick.SessionTimeTotal = 40 * Gt3LapSeconds;
@@ -209,6 +211,7 @@ public sealed class DemoSource : ITelemetrySource
         _tick.SessionLapsRemain = Math.Max(0, 40 - _tick.Lap[order[0]]);
         _tick.SessionTimeRemain = _tick.SessionLapsRemain * Gt3LapSeconds;
         _tick.SessionTime = _elapsed;
+        _tick.TimeOfDay = 14 * 3600 + 30 * 60 + _elapsed;   // starts 14:30, clock ticks with the session
 
         // Traffic-alerter inputs: everyone is on track (pit stall while stopped), and the
         // spotter squawks "car left" whenever another car overlaps the player's position.
