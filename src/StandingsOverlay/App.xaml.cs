@@ -13,6 +13,7 @@ public partial class App : Application
     private OverlayWindow? _window;
     private TrafficWindow? _trafficWindow;
     private RelativeWindow? _relativeWindow;
+    private FuelWindow? _fuelWindow;
     private TrafficAudio? _trafficAudio;
     private TrayIcon? _tray;
 
@@ -58,6 +59,7 @@ public partial class App : Application
         _window = new OverlayWindow(_configService);
         _trafficWindow = new TrafficWindow(_configService);
         _relativeWindow = new RelativeWindow(_configService);
+        _fuelWindow = new FuelWindow(_configService);
         _trafficAudio = new TrafficAudio();
         _tray = new TrayIcon(demo);
 
@@ -73,9 +75,11 @@ public partial class App : Application
             _trafficAudio.Handle(traffic.Cues, _configService.Current.Traffic.Audio);
         };
         _source.RelativeReady += relative => _relativeWindow.OnRelative(relative);
+        _source.FuelReady += fuel => _fuelWindow.OnFuel(fuel);
         _window.Show();
         _trafficWindow.Show();
         _relativeWindow.Show();
+        _fuelWindow.Show();
         _source.Start();
 
         _tray.EditModeToggled += on => Dispatcher.BeginInvoke(() =>
@@ -83,6 +87,7 @@ public partial class App : Application
             _window.EditMode = on;
             _trafficWindow.EditMode = on;
             _relativeWindow.EditMode = on;
+            _fuelWindow.EditMode = on;
         });
         _tray.ExitRequested += () => Dispatcher.BeginInvoke(() => Shutdown());
     }

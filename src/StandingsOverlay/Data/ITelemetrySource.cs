@@ -11,5 +11,8 @@ public interface ITelemetrySource : IDisposable
     /// <summary>Raised alongside SnapshotReady with the relative box's view of the same tick.</summary>
     event Action<RelativeSnapshot>? RelativeReady;
 
+    /// <summary>Raised alongside SnapshotReady with the fuel calculator's view of the same tick.</summary>
+    event Action<FuelSnapshot>? FuelReady;
+
     void Start();
 }

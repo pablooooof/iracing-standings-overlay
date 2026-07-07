@@ -27,6 +27,21 @@ Still open:
   detection for team events (roster changes mid-session).
 - **Driver consistency tag**: lap time variance percentile within class.
 
+## ⛽ Player fuel calculator & endurance strategy (v0.6, spec: docs/FUEL-STRATEGY.md)
+
+Shipped: `FuelModel` (per-lap fuel sampling with green/yellow/in-out classification, learned
+fill rate + pit lane loss), `StrategyPlanner` (stops × min-save enumeration; push-plus-splash
+vs save-a-stop with projected Δ), `FuelWindow` (live numbers + Pirelli-style stint bars).
+
+Follow-ups:
+- **Auto-set pit fuel** — broadcast `PitCommand_Fuel` so the planned fill is preloaded in the
+  black box (read `PitSvFuel` back to confirm); opt-in config.
+- **Yellow-aware projection** — during a caution, project the current stint with the yellow
+  consumption EWMA instead of waiting for re-plan on green.
+- **Unit display** — gallons / kWh label from the session (math already unit-agnostic).
+- **Save-level calibration** — learn MaxSave/penalty from the player's own observed saving
+  laps instead of config constants.
+
 ## Sector mini-bar (idea, evaluated 2026-07)
 
 A small horizontal bar per row split by sector, colored improved/personal-best/class-best.

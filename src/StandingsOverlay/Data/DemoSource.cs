@@ -22,11 +22,20 @@ public sealed class DemoSource : ITelemetrySource
     private const float Gt4LapSeconds = 29f;
     private const float PitDuration = 35f;   // seconds stationary per stop
 
+    // Player fuel: 30 L tank at 2.4 L/lap ≈ 12-lap stints, sized so the strategy planner's
+    // "push + splash" vs "save a tenth, one stop fewer" fork shows up mid-demo.
+    private const float PlayerTank = 30f;
+    private const float PlayerBurnPerLap = 2.4f;
+    private const float DemoFillRate = 2.5f;  // L/s while stopped
+
     private readonly Func<OverlayConfig> _cfg;
     private readonly GapHistory _history = new();
     private readonly StintTracker _stints = new();
     private readonly TrafficDetector _traffic = new();
+    private readonly FuelModel _fuel = new();
+    private readonly StrategyPlanner _planner = new();
     private readonly Roster _roster = new();
+    private double _playerFuel = PlayerTank;
     private readonly RawTick _tick = new();
     private readonly double[] _totalDist = new double[Cars];
     private readonly float[] _pace = new float[Cars];       // seconds per lap
@@ -42,6 +51,7 @@ public sealed class DemoSource : ITelemetrySource
     public event Action<StandingsSnapshot>? SnapshotReady;
     public event Action<TrafficSnapshot>? TrafficReady;
     public event Action<RelativeSnapshot>? RelativeReady;
+    public event Action<FuelSnapshot>? FuelReady;
 
     public DemoSource(Func<OverlayConfig> cfg, string sessionType = "Race")
     {
@@ -116,6 +126,7 @@ public sealed class DemoSource : ITelemetrySource
         _tick.Precipitation = 0.0f;
         _tick.TrackWetness = 1; // dry
         _tick.SessionState = 4; // racing (never freezes the demo)
+        _tick.TankCapacity = PlayerTank;
 
         // A little chaos for the status column: every penalty flag kind gets one car.
         _tick.SessionFlags[10] = CarFlags.Repair;     // meatball
@@ -142,7 +153,12 @@ public sealed class DemoSource : ITelemetrySource
         for (int i = 0; i < Cars; i++)
         {
             // In the pits: stationary at the start/finish area until the stop ends.
-            if (_elapsed < _pitUntil[i]) { _tick.OnPitRoad[i] = true; continue; }
+            if (_elapsed < _pitUntil[i])
+            {
+                _tick.OnPitRoad[i] = true;
+                if (i == PlayerIdx) _playerFuel = Math.Min(PlayerTank, _playerFuel + DemoFillRate * dt);
+                continue;
+            }
             _tick.OnPitRoad[i] = false;
 
             // Car 9 spins and sits stationary for ~8 s every ~90 s so the SPUN badge shows up.
@@ -162,6 +178,8 @@ public sealed class DemoSource : ITelemetrySource
             double jitter = 1.0 + 0.02 * Math.Sin(_elapsed / 7.0 + i * 1.7);
             if (i is 14 or 17) jitter = 1.022; // fuel saving: consistent +2.2%
             _totalDist[i] += dt / (_pace[i] * jitter);
+            if (i == PlayerIdx)
+                _playerFuel = Math.Max(0, _playerFuel - PlayerBurnPerLap * dt / (_pace[i] * jitter));
             int newLap = (int)_totalDist[i];
             bool crossed = newLap != _tick.Lap[i];
             _tick.Lap[i] = newLap;
@@ -203,12 +221,17 @@ public sealed class DemoSource : ITelemetrySource
             if (Math.Min(d, 1.0 - d) < 0.006) _tick.CarLeftRight = 2; // car left
         }
 
+        _tick.PlayerFuelLevel = (float)_playerFuel;
+        _tick.PlayerInPitStall = _tick.OnPitRoad[PlayerIdx];
+
         var cfg = _cfg();
         _history.Update(_tick, _roster);
         _stints.Update(_tick);
+        _fuel.Update(_tick);
         SnapshotReady?.Invoke(SnapshotBuilder.Build(_tick, _roster, _history, _stints, cfg));
         TrafficReady?.Invoke(_traffic.Update(_tick, _roster, cfg));
         RelativeReady?.Invoke(RelativeBuilder.Build(_tick, _roster, _stints, cfg));
+        FuelReady?.Invoke(_planner.Build(_tick, _fuel, cfg));
     }
 
     public void Dispose() => _timer?.Dispose();
