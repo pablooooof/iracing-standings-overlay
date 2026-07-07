@@ -16,6 +16,8 @@ public sealed class IRacingSource : ITelemetrySource
     private readonly GapHistory _history = new();
     private readonly StintTracker _stints = new();
     private readonly TrafficDetector _traffic = new();
+    private readonly FuelModel _fuel = new();
+    private readonly StrategyPlanner _planner = new();
     private readonly Roster _roster = new();
 
     private int _frameCount;
@@ -25,6 +27,7 @@ public sealed class IRacingSource : ITelemetrySource
 
     public event Action<StandingsSnapshot>? SnapshotReady;
     public event Action<TrafficSnapshot>? TrafficReady;
+    public event Action<FuelSnapshot>? FuelReady;
 
     public IRacingSource(Func<OverlayConfig> cfg) => _cfg = cfg;
 
@@ -40,9 +43,12 @@ public sealed class IRacingSource : ITelemetrySource
             _history.Reset();
             _stints.Reset();
             _traffic.Reset();
+            _fuel.Reset();
+            _planner.Reset();
             lock (_roster) _roster.Drivers.Clear();
             SnapshotReady?.Invoke(StandingsSnapshot.Disconnected);
             TrafficReady?.Invoke(TrafficSnapshot.Empty);
+            FuelReady?.Invoke(FuelSnapshot.Empty);
         };
         SnapshotReady?.Invoke(StandingsSnapshot.Disconnected);
     }
@@ -68,8 +74,10 @@ public sealed class IRacingSource : ITelemetrySource
 
             _history.Update(t, _roster);
             _stints.Update(t);
+            _fuel.Update(t);
             SnapshotReady?.Invoke(SnapshotBuilder.Build(t, _roster, _history, _stints, cfg));
             TrafficReady?.Invoke(_traffic.Update(t, _roster, cfg));
+            FuelReady?.Invoke(_planner.Build(t, _fuel, cfg));
             _emitted = true;
         }
         catch (Exception ex)
@@ -109,6 +117,12 @@ public sealed class IRacingSource : ITelemetrySource
         _currentSessionType = session?.SessionType ?? "Race";
         _sessionLapsTotal = int.TryParse(session?.SessionLaps, out var sl) && sl > 0 ? sl : -1;
 
+        // Usable tank: BoP can cap the physical tank, so the max-pct multiplier is not optional.
+        var di = model.DriverInfo;
+        _tankCapacity = di.DriverCarFuelMaxLtr > 0
+            ? di.DriverCarFuelMaxLtr * (di.DriverCarMaxFuelPct > 0 ? di.DriverCarMaxFuelPct : 1f)
+            : -1f;
+
         // New session (practice → race, race restart, …): lap/gap/stint history is stale.
         if (sessionNum != _lastSessionNum)
         {
@@ -117,6 +131,8 @@ public sealed class IRacingSource : ITelemetrySource
             _history.Reset();
             _stints.Reset();
             _traffic.Reset();
+            _fuel.Reset();
+            _planner.Reset();
         }
 
         lock (_roster)
@@ -171,6 +187,7 @@ public sealed class IRacingSource : ITelemetrySource
 
     private string _currentSessionType = "Race";
     private int _sessionLapsTotal = -1;
+    private float _tankCapacity = -1;
     private bool _emitted;
 
     private RawTick? ReadTick()
@@ -211,6 +228,11 @@ public sealed class IRacingSource : ITelemetrySource
         if (_sdk.GetData("WeatherDeclaredWet") is bool wet) t.DeclaredWet = wet;
         if (_sdk.GetData("TrackWetness") is int wetness) t.TrackWetness = wetness;
         if (_sdk.GetData("SessionState") is int state) t.SessionState = state;
+
+        if (_sdk.GetData("FuelLevel") is float fuelLevel) t.PlayerFuelLevel = fuelLevel;
+        if (_sdk.GetData("PlayerCarInPitStall") is bool stall) t.PlayerInPitStall = stall;
+        if (_sdk.GetData("SessionFlags") is int flags) t.GlobalFlags = flags;
+        t.TankCapacity = _tankCapacity;
 
         return t;
     }

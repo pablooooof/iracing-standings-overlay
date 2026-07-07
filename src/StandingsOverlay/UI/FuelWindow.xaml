@@ -1,0 +1,39 @@
+<Window x:Class="StandingsOverlay.UI.FuelWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Fuel Strategy"
+        WindowStyle="None" AllowsTransparency="True" Background="Transparent"
+        Topmost="True" ShowInTaskbar="False" ShowActivated="False"
+        ResizeMode="NoResize" SizeToContent="WidthAndHeight">
+
+    <StackPanel x:Name="Root">
+        <TextBlock x:Name="EditHint" Text="FUEL — drag to move" Visibility="Collapsed"
+                   FontSize="10" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,0,0,3"/>
+
+        <Border x:Name="Panel" Background="#F0212129" CornerRadius="6"
+                BorderBrush="#34343F" BorderThickness="1" Padding="10,7,10,8">
+            <StackPanel>
+                <!-- Live numbers: the glanceable row. -->
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="FUEL" Foreground="#9DA0AA" FontSize="10" FontWeight="Bold"
+                               VerticalAlignment="Bottom" Margin="0,0,7,2"/>
+                    <TextBlock x:Name="FuelValue" FontFamily="Consolas" FontWeight="Bold" FontSize="17"
+                               Foreground="#E8E9EE"/>
+                    <TextBlock x:Name="PerLapValue" FontFamily="Consolas" FontSize="13"
+                               Foreground="#9DA0AA" VerticalAlignment="Bottom" Margin="12,0,0,1"/>
+                    <TextBlock x:Name="LapsValue" FontFamily="Consolas" FontSize="13"
+                               Foreground="#E8E9EE" VerticalAlignment="Bottom" Margin="12,0,0,1"/>
+                    <TextBlock x:Name="TargetValue" FontFamily="Consolas" FontSize="13" FontWeight="Bold"
+                               VerticalAlignment="Bottom" Margin="12,0,0,1"/>
+                </StackPanel>
+
+                <!-- Plan summary: next stop lap, fill, laps to go. -->
+                <TextBlock x:Name="PlanLine" Foreground="#9DA0AA" FontFamily="Consolas" FontSize="11"
+                           Margin="0,3,0,0"/>
+
+                <!-- Pirelli-style strategy bars, built in code-behind. -->
+                <StackPanel x:Name="BarsPanel" Margin="0,7,0,0"/>
+            </StackPanel>
+        </Border>
+    </StackPanel>
+</Window>

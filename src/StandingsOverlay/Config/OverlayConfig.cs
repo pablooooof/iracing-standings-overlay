@@ -57,6 +57,9 @@ public sealed class OverlayConfig
     // Traffic alerter (multiclass "faster class approaching" / blue-flag warnings).
     public TrafficConfig Traffic { get; set; } = new();
 
+    // Fuel calculator + endurance strategy bars. Spec: docs/FUEL-STRATEGY.md.
+    public FuelConfig Fuel { get; set; } = new();
+
     public SessionColumns ColumnsFor(Data.SessionKind kind) => kind switch
     {
         Data.SessionKind.Race => Race,
@@ -122,6 +125,29 @@ public sealed class TrafficAudioConfig
     public bool WatchCue { get; set; } = true;    // rising chirp when traffic enters the window
     public bool ImminentCue { get; set; } = true; // urgent triple beep
     public bool BlueCue { get; set; } = true;     // calm two-tone when being lapped; never escalates
+}
+
+/// <summary>Fuel calculator + strategy bars. Live numbers show in every session (practice is
+/// where you learn your per-lap burn); strategy bars are race-only by definition.</summary>
+public sealed class FuelConfig
+{
+    public bool Enabled { get; set; } = true;
+    public int Strategies { get; set; } = 2;            // bars shown (1-3)
+    public double MarginLaps { get; set; } = 1.0;       // safety fuel budgeted at the end, in laps
+
+    // Fuel-save model: the car's realistic lift-and-coast ceiling, and what it costs.
+    // Linear in between (Simracing-PC-style); tune per car once you know your numbers.
+    public double MaxSaveLPerLap { get; set; } = 0.20;
+    public double MaxSavePenaltySec { get; set; } = 0.55;
+
+    public double PitLaneLossSec { get; set; } = -1;    // -1 = learn from own stops (fallback 45)
+    public double FillRateLps { get; set; } = -1;       // -1 = learn while refueling (fallback 2.6)
+
+    public double BarWidth { get; set; } = 420;         // strategy bar length, DIPs
+
+    // Widget position (DIPs), draggable in edit mode like every widget.
+    public double X { get; set; } = 810;
+    public double Y { get; set; } = 130;
 }
 
 /// <summary>Column toggles for one session type. Not every column is meaningful everywhere —

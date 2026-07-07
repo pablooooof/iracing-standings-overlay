@@ -30,6 +30,12 @@ public sealed class RawTick
     public int SessionState;             // irsdk_SessionState: 4 racing, 5 checkered, 6 cool down
     public string SessionType = "Race";
 
+    // Player-only fuel telemetry (iRacing exposes no fuel data for other cars).
+    public float PlayerFuelLevel = float.NaN;  // liters (kWh on electric content; math is identical)
+    public bool PlayerInPitStall;              // refueling only happens here, not anywhere on pit road
+    public int GlobalFlags;                    // SessionFlags bitfield (global green/yellow/caution…)
+    public float TankCapacity = -1;            // usable liters: DriverCarFuelMaxLtr × DriverCarMaxFuelPct (BoP)
+
     public bool Has(int idx) => idx >= 0 && idx < Position.Length;
 }
 
