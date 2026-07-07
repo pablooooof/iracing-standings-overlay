@@ -17,6 +17,9 @@ src/StandingsOverlay/bin/Release/net10.0-windows/StandingsOverlay.exe --demo
 src/StandingsOverlay/bin/Release/net10.0-windows/StandingsOverlay.exe
 # open the settings window on launch (also reachable from the tray / tray double-click):
 src/StandingsOverlay/bin/Release/net10.0-windows/StandingsOverlay.exe --demo --settings
+# time-limited race joined in its final ~2.6 laps, to exercise the race-end / extra-lap
+# estimator (fuel widget "≈N laps · you M to go") without a 40-minute wait:
+src/StandingsOverlay/bin/Release/net10.0-windows/StandingsOverlay.exe --demo timed
 ```
 
 There are no tests yet. Verification is visual: run `--demo`, screenshot the top-left of the screen (the overlay defaults to x=7, y=6), and check rows/gaps/delta signs. Kill with `Stop-Process -Name StandingsOverlay` (the window is click-through; interactive exit is via the tray icon).

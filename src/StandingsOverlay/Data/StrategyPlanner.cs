@@ -22,16 +22,19 @@ public sealed record FuelSnapshot(
     string LapsText,         // "18.7 laps"
     string TargetText,       // "tgt 2.21" — per-lap number that makes the planned window
     string PlanText,         // "next stop ~L168 · add 74L · 214 laps to go"
+    string RaceText,         // timed races: "≈24 laps · you 12 to go · extra lap likely"
+    int RaceEmphasis,        // 0 normal · 1 borderline · 2 extra-lap likely (colors RaceText)
     double NowFrac,          // 0..1 position of the now marker on the bars
     IReadOnlyList<FuelStrategyBar> Bars)
 {
-    public static readonly FuelSnapshot Empty = new(false, "", "", "", "", "", 0, []);
+    public static readonly FuelSnapshot Empty = new(false, "", "", "", "", "", "", 0, 0, []);
 
     public bool VisuallyEquals(FuelSnapshot? o)
     {
         if (o is null) return false;
         if (Show != o.Show || FuelText != o.FuelText || PerLapText != o.PerLapText ||
             LapsText != o.LapsText || TargetText != o.TargetText || PlanText != o.PlanText ||
+            RaceText != o.RaceText || RaceEmphasis != o.RaceEmphasis ||
             Math.Abs(NowFrac - o.NowFrac) > 0.004 || Bars.Count != o.Bars.Count) return false;
         for (int i = 0; i < Bars.Count; i++)
             if (!Bars[i].VisuallyEquals(o.Bars[i])) return false;
@@ -90,17 +93,38 @@ public sealed class StrategyPlanner
         string fuelText = $"{fuelNow:0.0}L";
         string perLapText = perLap > 0 ? $"{perLap:0.00}/lap" : "—/lap";
         string lapsText = perLap > 0 ? $"{fuelNow / perLap:0.0} laps" : "";
-        var numbersOnly = new FuelSnapshot(true, fuelText, perLapText, lapsText, "", "", 0, []);
+
+        bool isRace = StandingsSnapshot.KindOf(t.SessionType) == SessionKind.Race;
+        bool lapMode = t.SessionLapsTotal > 0 && t.SessionLapsRemain >= 0;
+
+        // Race-distance readout: only meaningful (and uncertain) in a timed race, but it does NOT
+        // need fuel confidence — it rides on the leader's clock, so compute it every tick and show
+        // it even before we trust the per-lap number. This is the live "extra lap or not?" answer.
+        string raceText = ""; int raceEmphasis = 0;
+        RaceEndEstimate? est = null;
+        if (isRace && !lapMode && t.SessionState < 5)
+        {
+            double pp = pace > 5 ? pace
+                      : p < t.LastLap.Length && t.LastLap[p] > 5 ? t.LastLap[p] : 0;
+            est = RaceEndEstimate.Estimate(t, pp);
+            if (est is { } e) { raceText = RaceLine(e); raceEmphasis = e.Risk == ExtraLapRisk.Likely ? 2
+                                                                     : e.Risk == ExtraLapRisk.Borderline ? 1 : 0; }
+        }
+
+        var numbersOnly = new FuelSnapshot(true, fuelText, perLapText, lapsText, "", "",
+                                           raceText, raceEmphasis, 0, []);
 
         // Bars need confidence + a race that is actually running toward an end.
-        bool isRace = StandingsSnapshot.KindOf(t.SessionType) == SessionKind.Race;
         if (!isRace || t.SessionState >= 5 || fuel.GreenLaps < 3 || perLap <= 0.01 ||
             pace <= 5 || tank <= 1 || t.SessionTime < 0)
             return numbersOnly;
 
-        bool lapMode = t.SessionLapsTotal > 0 && t.SessionLapsRemain >= 0;
         double timeRemain = t.SessionTimeRemain;
         if (!lapMode && (timeRemain <= 0 || timeRemain > 200 * 3600)) return numbersOnly;
+
+        // In a timed race the flag falls when the leader finishes, which is a touch past the raw
+        // clock — budget fuel to the leader's checker, not to t=0 (the endurance-correct end).
+        double timeBudget = !lapMode && est is { } re ? re.CheckerSec : timeRemain;
 
         int playerLap = p < t.Lap.Length ? t.Lap[p] : 0;
         bool onPit = p < t.OnPitRoad.Length && t.OnPitRoad[p];
@@ -111,12 +135,24 @@ public sealed class StrategyPlanner
             _planOnPit = onPit;
             _planGreenLaps = fuel.GreenLaps;
             _planCfg = cfg;
-            Replan(t, fuel, fc, fuelNow, perLap, tank, pace, lapMode, timeRemain, playerLap);
+            Replan(t, fuel, fc, fuelNow, perLap, tank, pace, lapMode, timeBudget, playerLap);
         }
 
         return new FuelSnapshot(true, fuelText, perLapText, lapsText,
-                                _targetText, _planText, _nowFrac, _bars);
+                                _targetText, _planText, raceText, raceEmphasis, _nowFrac, _bars);
     }
+
+    /// <summary>One glanceable line: projected race length, the player's laps to go, and whether
+    /// the count is about to tip a lap (the fuel-relevant knife-edge).</summary>
+    private static string RaceLine(RaceEndEstimate e) => e.Risk switch
+    {
+        ExtraLapRisk.None => $"final lap · {e.TotalLaps} laps · you {e.PlayerLapsToGo} to go",
+        ExtraLapRisk.Likely =>
+            $"≈{e.TotalLaps}(+1?) laps · you {e.PlayerLapsToGo} to go · extra lap likely — fuel for {e.PlayerLapsToGo + 1}",
+        ExtraLapRisk.Borderline =>
+            $"≈{e.TotalLaps} laps · you {e.PlayerLapsToGo} to go · borderline (±1)",
+        _ => $"≈{e.TotalLaps} laps · you {e.PlayerLapsToGo} to go",
+    };
 
     private void Replan(RawTick t, FuelModel fuel, FuelConfig fc, double fuelNow, double perLap,
                         double tank, double pace, bool lapMode, double timeRemain, int playerLap)

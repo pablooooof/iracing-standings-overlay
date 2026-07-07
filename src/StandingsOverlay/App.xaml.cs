@@ -42,20 +42,21 @@ public partial class App : Application
         var configPath = Path.Combine(AppContext.BaseDirectory, "config.json");
         _configService = new ConfigService(configPath);
 
-        // --demo [race|qual|practice]
+        // --demo [race|qual|practice|timed]
         int demoIdx = Array.FindIndex(e.Args, a => a.Equals("--demo", StringComparison.OrdinalIgnoreCase));
         bool demo = demoIdx >= 0;
-        string demoSession = demoIdx >= 0 && demoIdx + 1 < e.Args.Length
-            ? e.Args[demoIdx + 1].ToLowerInvariant() switch
-            {
-                "qual" or "quali" or "qualify" => "Lone Qualify",
-                "practice" => "Practice",
-                _ => "Race",
-            }
-            : "Race";
+        string demoArg = demoIdx >= 0 && demoIdx + 1 < e.Args.Length
+            ? e.Args[demoIdx + 1].ToLowerInvariant() : "";
+        string demoSession = demoArg switch
+        {
+            "qual" or "quali" or "qualify" => "Lone Qualify",
+            "practice" => "Practice",
+            _ => "Race",
+        };
+        bool demoTimed = demoArg is "timed" or "time";
 
         _source = demo
-            ? new DemoSource(() => _configService.Current, demoSession)
+            ? new DemoSource(() => _configService.Current, demoSession, demoTimed)
             : new IRacingSource(() => _configService.Current);
 
         _window = new OverlayWindow(_configService);

@@ -47,16 +47,21 @@ public sealed class DemoSource : ITelemetrySource
     private double _elapsed;
 
     private readonly bool _isRace;
+    // Timed sprint: join the last ~2.6 laps of a time-limited race so the race-end / extra-lap
+    // estimator is exercised immediately instead of after a 40-minute wait.
+    private readonly bool _timed;
+    private static readonly double TimedTailSeconds = 2.6 * Gt3LapSeconds;
 
     public event Action<StandingsSnapshot>? SnapshotReady;
     public event Action<TrafficSnapshot>? TrafficReady;
     public event Action<RelativeSnapshot>? RelativeReady;
     public event Action<FuelSnapshot>? FuelReady;
 
-    public DemoSource(Func<OverlayConfig> cfg, string sessionType = "Race")
+    public DemoSource(Func<OverlayConfig> cfg, string sessionType = "Race", bool timed = false)
     {
         _cfg = cfg;
         _isRace = sessionType.Contains("Race", StringComparison.OrdinalIgnoreCase);
+        _timed = timed && _isRace;
 
         string[] names =
         [
@@ -123,8 +128,9 @@ public sealed class DemoSource : ITelemetrySource
         _tick.WindDir = 2.36f;             // ~SW, so the header arrow points NE
         _tick.PlayerIncidents = 3;
         _tick.SessionType = sessionType;
-        _tick.SessionTimeTotal = 40 * Gt3LapSeconds;
-        _tick.SessionLapsTotal = _isRace ? 40 : sessionType.Contains("Qual", StringComparison.OrdinalIgnoreCase) ? 4 : -1;
+        _tick.SessionTimeTotal = _timed ? TimedTailSeconds : 40 * Gt3LapSeconds;
+        _tick.SessionLapsTotal = _timed ? -1
+            : _isRace ? 40 : sessionType.Contains("Qual", StringComparison.OrdinalIgnoreCase) ? 4 : -1;
         _tick.Precipitation = 0.0f;
         _tick.TrackWetness = 1; // dry
         _tick.SessionState = 4; // racing (never freezes the demo)
@@ -208,8 +214,18 @@ public sealed class DemoSource : ITelemetrySource
             _tick.ClassPosition[i] = classCounters[clsId];
         }
 
-        _tick.SessionLapsRemain = Math.Max(0, 40 - _tick.Lap[order[0]]);
-        _tick.SessionTimeRemain = _tick.SessionLapsRemain * Gt3LapSeconds;
+        if (_timed)
+        {
+            // Time-limited: the clock, not a lap target, ends it; laps remaining is unknown
+            // (that's exactly what the estimator infers from the leader's pace).
+            _tick.SessionTimeRemain = Math.Max(0, TimedTailSeconds - _elapsed);
+            _tick.SessionLapsRemain = -1;
+        }
+        else
+        {
+            _tick.SessionLapsRemain = Math.Max(0, 40 - _tick.Lap[order[0]]);
+            _tick.SessionTimeRemain = _tick.SessionLapsRemain * Gt3LapSeconds;
+        }
         _tick.SessionTime = _elapsed;
         _tick.TimeOfDay = 14 * 3600 + 30 * 60 + _elapsed;   // starts 14:30, clock ticks with the session
 

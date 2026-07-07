@@ -27,6 +27,10 @@
                                VerticalAlignment="Bottom" Margin="12,0,0,1"/>
                 </StackPanel>
 
+                <!-- Timed-race distance: projected laps, your laps to go, extra-lap knife-edge. -->
+                <TextBlock x:Name="RaceLine" Foreground="#E8E9EE" FontFamily="Consolas" FontSize="12"
+                           FontWeight="Bold" Margin="0,3,0,0"/>
+
                 <!-- Plan summary: next stop lap, fill, laps to go. -->
                 <TextBlock x:Name="PlanLine" Foreground="#9DA0AA" FontFamily="Consolas" FontSize="11"
                            Margin="0,3,0,0"/>

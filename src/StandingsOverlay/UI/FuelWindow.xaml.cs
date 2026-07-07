@@ -29,6 +29,7 @@ public partial class FuelWindow : Window
     private FuelSnapshot? _last;
     private bool _editMode;
     private string _lastLoggedPlan = "";
+    private string _lastLoggedRace = "";
 
     public FuelWindow(ConfigService configService)
     {
@@ -76,6 +77,14 @@ public partial class FuelWindow : Window
             }
         }
 
+        // The timed-race estimate updates every lap even without strategy bars — log its
+        // transitions so the extra-lap logic is verifiable from overlay.log.
+        if (snapshot.RaceText.Length > 0 && snapshot.RaceText != _lastLoggedRace)
+        {
+            _lastLoggedRace = snapshot.RaceText;
+            Log.Write($"race est: {snapshot.RaceText}");
+        }
+
         bool same = snapshot.VisuallyEquals(_last);
         _last = snapshot;
         if (same || _editMode) return;
@@ -92,6 +101,9 @@ public partial class FuelWindow : Window
         LapsValue.Text = s.LapsText;
         TargetValue.Text = s.TargetText;
         TargetValue.Visibility = s.TargetText.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+        RaceLine.Text = s.RaceText;
+        RaceLine.Visibility = s.RaceText.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+        RaceLine.Foreground = s.RaceEmphasis >= 2 ? SplashBrush : s.RaceEmphasis == 1 ? SaveBrush : TextBrush;
         PlanLine.Text = s.PlanText;
         PlanLine.Visibility = s.PlanText.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
 
@@ -191,6 +203,8 @@ public partial class FuelWindow : Window
             Show: true,
             FuelText: "43.2L", PerLapText: "2.31/lap", LapsText: "18.7 laps", TargetText: "tgt 2.21",
             PlanText: "next stop ~L168 · add 74L · 214 laps to go",
+            RaceText: "≈24(+1?) laps · you 12 to go · extra lap likely — fuel for 13",
+            RaceEmphasis: 2,
             NowFrac: 0.75,
             Bars:
             [
