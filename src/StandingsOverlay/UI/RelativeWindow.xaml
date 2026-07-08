@@ -46,12 +46,11 @@
                                          VerticalAlignment="Center" Stroke="{Binding TyreBrush}" Fill="#1A1A1E"
                                          Visibility="{Binding TyreVisibility}"/>
 
-                                <Border Grid.Column="3" Background="{Binding NumBrush}" CornerRadius="2"
-                                        Padding="4,0" VerticalAlignment="Center"
-                                        Visibility="{Binding NumVisibility}">
-                                    <TextBlock Text="{Binding CarNumber}" Foreground="#17171D"
-                                               FontFamily="Consolas" FontWeight="Bold" FontSize="11"/>
-                                </Border>
+                                <!-- Car number: coloured text like the standings, not a filled box -->
+                                <TextBlock Grid.Column="3" Text="{Binding CarNumber}" Foreground="{Binding NumBrush}"
+                                           FontFamily="Consolas" FontWeight="Bold" FontSize="11"
+                                           Margin="0,0,2,0" VerticalAlignment="Center"
+                                           Visibility="{Binding NumVisibility}"/>
 
                                 <TextBlock Grid.Column="4" Text="{Binding Brand}" Foreground="#9DA0AA"
                                            FontSize="10" Margin="5,0,0,0" VerticalAlignment="Center"/>

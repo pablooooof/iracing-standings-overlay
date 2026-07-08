@@ -120,11 +120,12 @@ public static class RelativeBuilder
         bool battle = isRace && !isPlayer && !inPit && parity == 0 &&
                       d.CarClassId == playerClassId && Math.Abs(gap) <= rc.BattleGapSec;
 
+        // Position is just the number in the relative (the column is self-evidently position).
         string pos = "";
         int cp = idx < t.ClassPosition.Length ? t.ClassPosition[idx] : 0;
         int op = idx < t.Position.Length ? t.Position[idx] : 0;
-        if (rc.ShowClassPos && cp > 0) pos = $"P{cp}";
-        else if (op > 0) pos = $"P{op}";
+        if (rc.ShowClassPos && cp > 0) pos = cp.ToString();
+        else if (op > 0) pos = op.ToString();
 
         string stint = "";
         bool fresh = false;
@@ -155,10 +156,7 @@ public static class RelativeBuilder
             CarBrand: rc.ShowBrand ? d.CarBrand : "",
             Name: d.Name,
             LapParity: parity,
-            StatusText: inPit ? "PIT"
-                : stints.OnOutLap(idx, t.Lap[idx]) ? "OUT"
-                : (idx >= t.TrackSurface.Length || t.TrackSurface[idx] != -1) && stints.LooksStopped(idx) ? "SPUN"
-                : "",
+            StatusText: RelativeStatus(t, stints, idx, inPit, cfg.ShowRejoinState),
             Battle: battle,
             IRatingText: rc.ShowIRating ? SnapshotBuilder.FmtIr(d.IRating) : "",
             LicText: rc.ShowLicense ? d.LicString : "",
@@ -168,7 +166,25 @@ public static class RelativeBuilder
             LastLapText: rc.ShowLastLap && last > 0 ? SnapshotBuilder.FmtLap(last, cfg.LapTimePrecision) : "",
             PaceText: pace,
             PaceSign: paceSign,
+            // Ahead is unsigned (list order shows it); behind keeps its "-".
             GapText: isPlayer ? "—"
-                : (gap >= 0 ? "+" : "-") + SnapshotBuilder.FmtGap(Math.Abs(gap), rc.GapPrecision));
+                : (gap < 0 ? "-" : "") + SnapshotBuilder.FmtGap(Math.Abs(gap), rc.GapPrecision));
+    }
+
+    /// <summary>Relative status badge, sharing the standings' penalty flags plus the relative-only
+    /// PIT / OUT (out-lap) / REJOIN / SPUN states.</summary>
+    private static string RelativeStatus(RawTick t, StintTracker stints, int idx, bool inPit, bool showRejoin)
+    {
+        int flags = idx < t.SessionFlags.Length ? t.SessionFlags[idx] : 0;
+        if ((flags & CarFlags.Disqualify) != 0) return "DQ";
+        if ((flags & CarFlags.Black) != 0) return "BLK";
+        if ((flags & CarFlags.Repair) != 0) return "DMG";
+        if ((flags & CarFlags.Furled) != 0) return "WRN";
+        bool inWorld = idx >= t.TrackSurface.Length || t.TrackSurface[idx] != -1;
+        if (inWorld && stints.LooksStopped(idx)) return "SPUN";
+        if (showRejoin && inWorld && stints.IsRejoining(idx, 6)) return "REJOIN";
+        if (inPit) return "PIT";
+        if (stints.OnOutLap(idx, t.Lap[idx])) return "OUT";
+        return "";
     }
 }

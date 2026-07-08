@@ -24,6 +24,7 @@ public sealed class StintTracker
         public int GridPos;                               // first valid race position seen
         public double LastTotalDist = -1;                 // stopped-car detection
         public double LastMoveTime = -1;
+        public double RejoinTime = -1;                    // when it started moving again after a stop
         public double LastPitExitTime = -1;               // when the car last rejoined from pit road
         public int LastCompound = -1;                     // CarIdxTireCompound (0 dry, >=1 wet)
         public double CompoundSwitchTime = -1;            // when it last crossed dry<->wet
@@ -87,6 +88,9 @@ public sealed class StintTracker
                 // ~0.0007 laps ≈ a few meters; a reset/tow jumps backwards, treat as movement.
                 if (s.LastMoveTime < 0 || total >= s.LastTotalDist + 0.0007 || total < s.LastTotalDist - 0.5)
                 {
+                    // Moving again after sitting still for a while = rejoining (spin recovery / tow).
+                    if (s.LastMoveTime >= 0 && _now - s.LastMoveTime > 4.0 && !s.WasOnPit)
+                        s.RejoinTime = _now;
                     s.LastTotalDist = total;
                     s.LastMoveTime = _now;
                 }
@@ -228,6 +232,12 @@ public sealed class StintTracker
         _now >= 0 && _cars.TryGetValue(idx, out var s)
         && !s.WasOnPit && s.LastLapSeen >= 1 && s.LastMoveTime >= 0
         && _now - s.LastMoveTime > 4.0;
+
+    /// <summary>True for a few seconds after a stopped car started moving again — a spin recovery
+    /// or tow rejoining the track. Experimental; toggle via config if it misfires.</summary>
+    public bool IsRejoining(int idx, double withinSec) =>
+        _now >= 0 && _cars.TryGetValue(idx, out var s)
+        && s.RejoinTime >= 0 && _now - s.RejoinTime <= withinSec && !LooksStopped(idx);
 
     /// <summary>
     /// True when the car looks like it's fuel-saving: consistent laps well off its own best.

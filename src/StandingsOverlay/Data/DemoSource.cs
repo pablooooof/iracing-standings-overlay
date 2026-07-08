@@ -83,9 +83,11 @@ public sealed class DemoSource : ITelemetrySource
         for (int i = 0; i < Cars; i++)
         {
             // Class layout: GTP (fast prototypes) / GT3 (player's class) / GT4.
+            // Colours follow the common iRacing convention: GTP/prototype yellow, GT3 pink,
+            // the slower class blue (like LMP2). Live sessions use iRacing's own class colours.
             var (classId, className, classColor, classLap) =
-                i < GtpCars ? (1, "GTP", "#E33241", GtpLapSeconds)
-                : i < Gt3End ? (2, "GT3", "#FFDA59", Gt3LapSeconds)
+                i < GtpCars ? (1, "GTP", "#FFD24D", GtpLapSeconds)
+                : i < Gt3End ? (2, "GT3", "#FF5FA8", Gt3LapSeconds)
                 : (3, "GT4", "#57C1FF", Gt4LapSeconds);
 
             _roster.Drivers[i] = new DriverEntry(

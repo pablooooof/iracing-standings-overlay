@@ -23,6 +23,7 @@ public sealed class OverlayConfig
     public int DriversAhead { get; set; } = 5;
     public int DriversBehind { get; set; } = 3;
     public bool ShowColumnHeader { get; set; } = true;
+    public bool ShowRejoinState { get; set; } = true;   // "REJOIN" badge when a stopped car moves again (experimental)
     // Driver-name column: fixed width in DIPs so long names don't resize the whole table
     // (names past this length ellipsize). Tune to taste.
     public double NameColumnWidth { get; set; } = 150;

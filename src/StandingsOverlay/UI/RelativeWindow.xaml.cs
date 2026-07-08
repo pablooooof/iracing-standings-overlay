@@ -27,7 +27,11 @@ public sealed record RelativeRowViewModel(
     private static readonly Brush SamePaceYellow = RowViewModel.Frozen("#FFD34D");
     private static readonly Brush PitAmber = RowViewModel.Frozen("#FFB84D");
     private static readonly Brush PitExitCyan = RowViewModel.Frozen("#40D8FF");   // cold out-lap car
+    private static readonly Brush RejoinGreen = RowViewModel.Frozen("#4CFF6A");
+    private static readonly Brush WarnYellow = RowViewModel.Frozen("#FFD34D");
+    private static readonly Brush Meatball = RowViewModel.Frozen("#FF8A00");
     private static readonly Brush Danger = RowViewModel.Frozen("#FF4040");
+    private static readonly Brush NoClass = RowViewModel.Frozen("#FFC24D");
     private static readonly Brush LicFallback = RowViewModel.Frozen("#3A3A46");
 
     public static RelativeRowViewModel From(RelativeRow r, Brush highlight, Brush accent)
@@ -60,12 +64,21 @@ public sealed record RelativeRowViewModel(
             Pace: r.PaceText,
             Gap: r.GapText,
             PosBrush: RowViewModel.TryBrush(r.ClassColor) ?? Dim,
-            NumBrush: RowViewModel.TryBrush(r.ClassColor) ?? Dim,
+            NumBrush: RowViewModel.TryBrush(r.ClassColor) ?? NoClass,
             ClassBarBrush: RowViewModel.TryBrush(r.ClassColor) ?? Brushes.Transparent,
             TyreBrush: r.Tyre >= 1 ? WetTyre : DryTyre,
             NameBrush: nameBrush,
             NameWeight: r.IsPlayer ? FontWeights.SemiBold : FontWeights.Normal,
-            StatusBrush: r.StatusText == "SPUN" ? Danger : r.StatusText == "OUT" ? PitExitCyan : PitAmber,
+            StatusBrush: r.StatusText switch
+            {
+                "SPUN" or "DQ" => Danger,
+                "OUT" => PitExitCyan,
+                "REJOIN" => RejoinGreen,
+                "WRN" => WarnYellow,
+                "DMG" => Meatball,
+                "BLK" => White,
+                _ => PitAmber,   // PIT
+            },
             LicBrush: licChip,
             LicTextBrush: Brushes.White,
             StintBrush: r.StintFresh ? FreshGreen : Dim,

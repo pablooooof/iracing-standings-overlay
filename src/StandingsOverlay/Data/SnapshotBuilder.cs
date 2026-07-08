@@ -195,9 +195,9 @@ public static class SnapshotBuilder
             int intPrec = kind == SessionKind.Qualify ? cfg.QualifyGapPrecision : cfg.IntervalPrecision;
             float best = EffBest(t, roster, idx);
             if (best > 0 && classBest > 0 && i > 0)
-                gap = "+" + FmtGap(best - classBest, gapPrec);
+                gap = FmtGap(best - classBest, gapPrec);
             if (best > 0 && i > 0 && EffBest(t, roster, ordered[i - 1].CarIdx) > 0)
-                interval = "+" + FmtGap(best - EffBest(t, roster, ordered[i - 1].CarIdx), intPrec);
+                interval = FmtGap(best - EffBest(t, roster, ordered[i - 1].CarIdx), intPrec);
         }
 
         var deltaCells = new DeltaCell[cellCount];
@@ -262,7 +262,8 @@ public static class SnapshotBuilder
             Kind: RowKind.Normal,
             LapsText: lapsDone > 0 ? lapsDone.ToString() : "",
             PosText: (i + 1).ToString(),
-            PosGainedText: gained == 0 ? "" : gained > 0 ? $"+{gained}" : gained.ToString(),
+            // Green (gained) / red (lost) already carries the direction — show just the count.
+            PosGainedText: gained == 0 ? "" : Math.Abs(gained).ToString(),
             PosGainedSign: gained > 0 ? -1 : gained < 0 ? 1 : 0,
             CarNumber: "#" + d.CarNumber,
             Name: d.Name,
@@ -279,7 +280,7 @@ public static class SnapshotBuilder
             BestLapSign: bestLap > 0 && classBest > 0 && Math.Abs(bestLap - classBest) < 0.0005f ? 2 : 0,
             LastLapText: last > 0 ? FmtLap(last, cfg.LapTimePrecision) : "",
             DeltaCells: deltaCells,
-            StatusText: Status(t, stints, idx),
+            StatusText: Status(t, stints, idx, cfg.ShowRejoinState),
             RankText: paceRank.TryGetValue(idx, out var rank) ? rank.ToString() : "",
             RankSign: paceRank.TryGetValue(idx, out var rk) ? (rk == 1 ? 2 : rk <= 3 ? -1 : 0) : 0,
             StratText: stints.StrategyText(idx, t.Lap[idx], lapsRemain),
@@ -294,12 +295,13 @@ public static class SnapshotBuilder
         double refTotal = t.Lap[refIdx] + t.LapDistPct[refIdx];
         double carTotal = t.Lap[idx] + t.LapDistPct[idx];
         if (refTotal - carTotal >= 1.0)
-            return $"+{(int)(refTotal - carTotal)}L";
-        return "+" + FmtGap(Math.Max(0, t.F2Time[idx] - t.F2Time[refIdx]), precision);
+            return $"{(int)(refTotal - carTotal)}L";
+        // Positive by construction (gap to a car ahead) — no leading "+" clutter.
+        return FmtGap(Math.Max(0, t.F2Time[idx] - t.F2Time[refIdx]), precision);
     }
 
     /// <summary>Highest-priority per-car status badge.</summary>
-    private static string Status(RawTick t, StintTracker stints, int idx)
+    private static string Status(RawTick t, StintTracker stints, int idx, bool showRejoin)
     {
         int flags = idx < t.SessionFlags.Length ? t.SessionFlags[idx] : 0;
         if ((flags & CarFlags.Disqualify) != 0) return "DQ";
@@ -310,6 +312,7 @@ public static class SnapshotBuilder
         // forever — SPUN is only real while the car is still in the world (surface != -1).
         bool inWorld = idx >= t.TrackSurface.Length || t.TrackSurface[idx] != -1;
         if (inWorld && stints.LooksStopped(idx)) return "SPUN";
+        if (showRejoin && inWorld && stints.IsRejoining(idx, 6)) return "REJOIN";
         if (idx < t.OnPitRoad.Length && t.OnPitRoad[idx]) return "PIT";
         return "";
     }
