@@ -35,7 +35,9 @@ public sealed class DemoSource : ITelemetrySource
     private readonly FuelModel _fuel = new();
     private readonly StrategyPlanner _planner = new();
     private readonly WeatherTracker _weather = new();
+    private readonly DriverSwapTracker _driverSwap = new();
     private readonly Roster _roster = new();
+    private bool _swapDone;
     private double _playerFuel = PlayerTank;
     private readonly RawTick _tick = new();
     private readonly double[] _totalDist = new double[Cars];
@@ -265,13 +267,23 @@ public sealed class DemoSource : ITelemetrySource
         _tick.PlayerInPitStall = _tick.OnPitRoad[PlayerIdx];
 
         var cfg = _cfg();
+        // ~35s in, one team swaps drivers (roster entry gets a new name) so the SWAP tag is
+        // exercisable offline.
+        if (!_swapDone && _elapsed > 35)
+        {
+            _swapDone = true;
+            var old = _roster.Drivers[6];
+            _roster.Drivers[6] = old with { Name = "F. Alesi" };
+        }
+
         _history.Update(_tick, _roster);
         _stints.Update(_tick);
         _fuel.Update(_tick);
         _weather.Update(_tick);
-        SnapshotReady?.Invoke(SnapshotBuilder.Build(_tick, _roster, _history, _stints, _weather, cfg));
+        _driverSwap.Update(_tick, _roster);
+        SnapshotReady?.Invoke(SnapshotBuilder.Build(_tick, _roster, _history, _stints, _weather, _driverSwap, cfg));
         TrafficReady?.Invoke(_traffic.Update(_tick, _roster, cfg));
-        RelativeReady?.Invoke(RelativeBuilder.Build(_tick, _roster, _stints, cfg));
+        RelativeReady?.Invoke(RelativeBuilder.Build(_tick, _roster, _stints, _driverSwap, cfg));
         FuelReady?.Invoke(_planner.Build(_tick, _fuel, cfg));
     }
 

@@ -19,6 +19,7 @@ public sealed class IRacingSource : ITelemetrySource
     private readonly FuelModel _fuel = new();
     private readonly StrategyPlanner _planner = new();
     private readonly WeatherTracker _weather = new();
+    private readonly DriverSwapTracker _driverSwap = new();
     private readonly Roster _roster = new();
 
     private int _frameCount;
@@ -48,6 +49,7 @@ public sealed class IRacingSource : ITelemetrySource
             _fuel.Reset();
             _planner.Reset();
             _weather.Reset();
+            _driverSwap.Reset();
             lock (_roster) _roster.Drivers.Clear();
             SnapshotReady?.Invoke(StandingsSnapshot.Disconnected);
             TrafficReady?.Invoke(TrafficSnapshot.Empty);
@@ -80,9 +82,10 @@ public sealed class IRacingSource : ITelemetrySource
             _stints.Update(t);
             _fuel.Update(t);
             _weather.Update(t);
-            SnapshotReady?.Invoke(SnapshotBuilder.Build(t, _roster, _history, _stints, _weather, cfg));
+            _driverSwap.Update(t, _roster);
+            SnapshotReady?.Invoke(SnapshotBuilder.Build(t, _roster, _history, _stints, _weather, _driverSwap, cfg));
             TrafficReady?.Invoke(_traffic.Update(t, _roster, cfg));
-            RelativeReady?.Invoke(RelativeBuilder.Build(t, _roster, _stints, cfg));
+            RelativeReady?.Invoke(RelativeBuilder.Build(t, _roster, _stints, _driverSwap, cfg));
             FuelReady?.Invoke(_planner.Build(t, _fuel, cfg));
             _emitted = true;
         }
@@ -140,6 +143,7 @@ public sealed class IRacingSource : ITelemetrySource
             _fuel.Reset();
             _planner.Reset();
             _weather.Reset();
+            _driverSwap.Reset();
         }
 
         lock (_roster)

@@ -9,7 +9,7 @@ namespace StandingsOverlay.Data;
 public static class SnapshotBuilder
 {
     public static StandingsSnapshot Build(RawTick t, Roster roster, GapHistory history,
-        StintTracker stints, WeatherTracker weather, OverlayConfig cfg)
+        StintTracker stints, WeatherTracker weather, DriverSwapTracker swap, OverlayConfig cfg)
     {
         var kind = StandingsSnapshot.KindOf(t.SessionType);
         bool isRace = kind == SessionKind.Race;
@@ -112,7 +112,7 @@ public static class SnapshotBuilder
             {
                 if (prev >= 0 && i != prev + 1) rows.Add(StandingsRow.Separator);
                 prev = i;
-                rows.Add(BuildRow(i, ordered, t, roster, history, stints, cfg, kind, cellCount,
+                rows.Add(BuildRow(i, ordered, t, roster, history, stints, swap, cfg, kind, cellCount,
                                   classBest, playerPace, paceRank, lapsRemain));
             }
         }
@@ -171,7 +171,8 @@ public static class SnapshotBuilder
           && roster.Results.TryGetValue(idx, out var r) && r.LastLap > 0 ? r.LastLap : 0;
 
     private static StandingsRow BuildRow(int i, List<DriverEntry> ordered, RawTick t, Roster roster,
-        GapHistory history, StintTracker stints, OverlayConfig cfg, SessionKind kind, int cellCount,
+        GapHistory history, StintTracker stints, DriverSwapTracker swap, OverlayConfig cfg,
+        SessionKind kind, int cellCount,
         float classBest, float? playerPace, Dictionary<int, int> paceRank, double lapsRemain)
     {
         bool isRace = kind == SessionKind.Race;
@@ -280,7 +281,7 @@ public static class SnapshotBuilder
             BestLapSign: bestLap > 0 && classBest > 0 && Math.Abs(bestLap - classBest) < 0.0005f ? 2 : 0,
             LastLapText: last > 0 ? FmtLap(last, cfg.LapTimePrecision) : "",
             DeltaCells: deltaCells,
-            StatusText: Status(t, stints, idx, cfg.ShowRejoinState),
+            StatusText: Status(t, stints, idx, cfg.ShowRejoinState, swap.JustSwapped(idx, 60)),
             RankText: paceRank.TryGetValue(idx, out var rank) ? rank.ToString() : "",
             RankSign: paceRank.TryGetValue(idx, out var rk) ? (rk == 1 ? 2 : rk <= 3 ? -1 : 0) : 0,
             StratText: stints.StrategyText(idx, t.Lap[idx], lapsRemain),
@@ -302,7 +303,7 @@ public static class SnapshotBuilder
     }
 
     /// <summary>Highest-priority per-car status badge.</summary>
-    private static string Status(RawTick t, StintTracker stints, int idx, bool showRejoin)
+    private static string Status(RawTick t, StintTracker stints, int idx, bool showRejoin, bool swapped)
     {
         int flags = idx < t.SessionFlags.Length ? t.SessionFlags[idx] : 0;
         if ((flags & CarFlags.Disqualify) != 0) return "DQ";
@@ -313,6 +314,7 @@ public static class SnapshotBuilder
         // forever — SPUN is only real while the car is still in the world (surface != -1).
         bool inWorld = idx >= t.TrackSurface.Length || t.TrackSurface[idx] != -1;
         if (inWorld && stints.LooksStopped(idx)) return StoppedBadge(t, stints, idx);
+        if (swapped) return "SWAP";   // new driver just took over (team endurance)
         if (showRejoin && inWorld && stints.IsRejoining(idx, 6)) return "REJOIN";
         if (idx < t.OnPitRoad.Length && t.OnPitRoad[idx]) return "PIT";
         return "";

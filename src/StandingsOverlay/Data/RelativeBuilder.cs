@@ -55,7 +55,8 @@ public static class RelativeBuilder
 {
     private const int FreshTyreLaps = 3;
 
-    public static RelativeSnapshot Build(RawTick t, Roster roster, StintTracker stints, OverlayConfig cfg)
+    public static RelativeSnapshot Build(RawTick t, Roster roster, StintTracker stints,
+        DriverSwapTracker swap, OverlayConfig cfg)
     {
         var rc = cfg.Relative;
         if (!rc.Enabled || !t.Has(t.PlayerCarIdx)) return RelativeSnapshot.Empty;
@@ -90,11 +91,11 @@ public static class RelativeBuilder
         int takeAhead = Math.Min(ahead.Count, nAhead);
         for (int i = takeAhead; i < nAhead; i++) rows.Add(RelativeRow.Blank);
         for (int i = takeAhead - 1; i >= 0; i--)   // furthest ahead at the top
-            rows.Add(BuildRow(ahead[i].D, ahead[i].Gap, false, t, stints, cfg, isRace,
+            rows.Add(BuildRow(ahead[i].D, ahead[i].Gap, false, t, stints, swap, cfg, isRace,
                               playerTotal, me.CarClassId, playerPace));
-        rows.Add(BuildRow(me, 0, true, t, stints, cfg, isRace, playerTotal, me.CarClassId, playerPace));
+        rows.Add(BuildRow(me, 0, true, t, stints, swap, cfg, isRace, playerTotal, me.CarClassId, playerPace));
         for (int i = 0; i < Math.Min(behind.Count, nBehind); i++)
-            rows.Add(BuildRow(behind[i].D, behind[i].Gap, false, t, stints, cfg, isRace,
+            rows.Add(BuildRow(behind[i].D, behind[i].Gap, false, t, stints, swap, cfg, isRace,
                               playerTotal, me.CarClassId, playerPace));
         while (rows.Count < nAhead + 1 + nBehind) rows.Add(RelativeRow.Blank);
 
@@ -102,7 +103,7 @@ public static class RelativeBuilder
     }
 
     private static RelativeRow BuildRow(DriverEntry d, float gap, bool isPlayer, RawTick t,
-        StintTracker stints, OverlayConfig cfg, bool isRace, double playerTotal,
+        StintTracker stints, DriverSwapTracker swap, OverlayConfig cfg, bool isRace, double playerTotal,
         int playerClassId, float? playerPace)
     {
         var rc = cfg.Relative;
@@ -156,7 +157,7 @@ public static class RelativeBuilder
             CarBrand: rc.ShowBrand ? d.CarBrand : "",
             Name: d.Name,
             LapParity: parity,
-            StatusText: RelativeStatus(t, stints, idx, inPit, cfg.ShowRejoinState),
+            StatusText: RelativeStatus(t, stints, idx, inPit, cfg.ShowRejoinState, swap.JustSwapped(idx, 60)),
             Battle: battle,
             IRatingText: rc.ShowIRating ? SnapshotBuilder.FmtIr(d.IRating) : "",
             LicText: rc.ShowLicense ? d.LicString : "",
@@ -173,7 +174,8 @@ public static class RelativeBuilder
 
     /// <summary>Relative status badge, sharing the standings' penalty flags plus the relative-only
     /// PIT / OUT (out-lap) / REJOIN / SPUN states.</summary>
-    private static string RelativeStatus(RawTick t, StintTracker stints, int idx, bool inPit, bool showRejoin)
+    private static string RelativeStatus(RawTick t, StintTracker stints, int idx, bool inPit,
+        bool showRejoin, bool swapped)
     {
         int flags = idx < t.SessionFlags.Length ? t.SessionFlags[idx] : 0;
         if ((flags & CarFlags.Disqualify) != 0) return "DQ";
@@ -182,6 +184,7 @@ public static class RelativeBuilder
         if ((flags & CarFlags.Furled) != 0) return "WRN";
         bool inWorld = idx >= t.TrackSurface.Length || t.TrackSurface[idx] != -1;
         if (inWorld && stints.LooksStopped(idx)) return SnapshotBuilder.StoppedBadge(t, stints, idx);
+        if (swapped) return "SWAP";
         if (showRejoin && inWorld && stints.IsRejoining(idx, 6)) return "REJOIN";
         if (inPit) return "PIT";
         // Fresh out of the pits (~15s) reads EXIT — bright, to catch the eye; the rest of the
