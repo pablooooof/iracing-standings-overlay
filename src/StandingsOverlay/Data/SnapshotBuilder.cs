@@ -9,7 +9,7 @@ namespace StandingsOverlay.Data;
 public static class SnapshotBuilder
 {
     public static StandingsSnapshot Build(RawTick t, Roster roster, GapHistory history,
-        StintTracker stints, OverlayConfig cfg)
+        StintTracker stints, WeatherTracker weather, OverlayConfig cfg)
     {
         var kind = StandingsSnapshot.KindOf(t.SessionType);
         bool isRace = kind == SessionKind.Race;
@@ -118,7 +118,8 @@ public static class SnapshotBuilder
         }
 
         return new StandingsSnapshot(true, kind, isRace ? "RACE" : t.SessionType.ToUpperInvariant(),
-            HeaderGroups(t, roster, cfg, playerClassId), cellHeaders, rows);
+            HeaderGroups(t, roster, weather, cfg, playerClassId), cellHeaders, rows,
+            WeatherAlert: cfg.ShowWeather && weather.JustTurnedWet);
     }
 
     private static List<DriverEntry> OrderClass(List<DriverEntry> cars, RawTick t, Roster roster, bool isRace)
@@ -324,7 +325,8 @@ public static class SnapshotBuilder
 
     /// <summary>Header metrics grouped into chips by type: [time] · [track/field] · [weather].
     /// Each chip is rendered as a rounded pill so related numbers read as a cluster.</summary>
-    private static List<string> HeaderGroups(RawTick t, Roster roster, OverlayConfig cfg, int playerClassId)
+    private static List<string> HeaderGroups(RawTick t, Roster roster, WeatherTracker weather,
+        OverlayConfig cfg, int playerClassId)
     {
         var groups = new List<string>(3);
 
@@ -344,7 +346,7 @@ public static class SnapshotBuilder
             if (sof > 25) track.Add($"SoF {FmtIr((int)sof)}");
         }
         if (cfg.ShowTrackTemp && !float.IsNaN(t.TrackTemp))
-            track.Add($"{t.TrackTemp.ToString("F" + Math.Clamp(cfg.ShowTrackTempDecimals, 0, 2))}°C");
+            track.Add($"{t.TrackTemp.ToString("F" + Math.Clamp(cfg.ShowTrackTempDecimals, 0, 2))}°C{TrendArrow(weather.TempTrend)}");
         if (cfg.ShowIncidents && t.PlayerIncidents >= 0) track.Add($"{t.PlayerIncidents}x");
         if (track.Count > 0) groups.Add(string.Join(" · ", track));
 
@@ -354,13 +356,16 @@ public static class SnapshotBuilder
         {
             var wet = t.DeclaredWet ? "WET declared" : WetnessText(t.TrackWetness);
             if (!string.IsNullOrEmpty(wet)) sky.Add(wet);
-            if (!float.IsNaN(t.Precipitation)) sky.Add($"☂ {t.Precipitation * 100:0}%");
+            if (!float.IsNaN(t.Precipitation)) sky.Add($"☂ {t.Precipitation * 100:0}%{TrendArrow(weather.PrecipTrend)}");
         }
         if (cfg.ShowWind && WindText(t.WindVel, t.WindDir) is { Length: > 0 } wind) sky.Add(wind);
         if (sky.Count > 0) groups.Add(string.Join(" · ", sky));
 
         return groups;
     }
+
+    /// <summary>Trend suffix for a header metric: rising ↑, falling ↓, steady (nothing).</summary>
+    private static string TrendArrow(int trend) => trend > 0 ? " ↑" : trend < 0 ? " ↓" : "";
 
     /// <summary>"L 3/40" — player lap over the known or estimated total.</summary>
     private static string LapCounter(RawTick t, Roster roster)

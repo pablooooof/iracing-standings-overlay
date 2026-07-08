@@ -20,6 +20,9 @@ src/StandingsOverlay/bin/Release/net10.0-windows/StandingsOverlay.exe --demo --s
 # time-limited race joined in its final ~2.6 laps, to exercise the race-end / extra-lap
 # estimator (fuel widget "≈N laps · you M to go") without a 40-minute wait:
 src/StandingsOverlay/bin/Release/net10.0-windows/StandingsOverlay.exe --demo timed
+# scripted dry→wet arc (rain ramps in ~25s) to exercise the weather trend arrows and the
+# dry→wet header flash (iRacing exposes NO forecast in the SDK — only current conditions):
+src/StandingsOverlay/bin/Release/net10.0-windows/StandingsOverlay.exe --demo rain
 ```
 
 There are no tests yet. Verification is visual: run `--demo`, screenshot the top-left of the screen (the overlay defaults to x=7, y=6), and check rows/gaps/delta signs. Kill with `Stop-Process -Name StandingsOverlay` (the window is click-through; interactive exit is via the tray icon).

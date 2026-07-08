@@ -27,6 +27,11 @@
                         Background="#33FFFFFF" VerticalAlignment="Center">
                     <TextBlock x:Name="HeaderLeft" FontWeight="Bold" FontSize="11.5"/>
                 </Border>
+                <!-- Dry→wet flash: appears and blinks for a few seconds when the track turns wet. -->
+                <Border x:Name="WeatherFlash" CornerRadius="5" Padding="8,2" Margin="0,0,6,0"
+                        Background="#FF3B30" VerticalAlignment="Center" Visibility="Collapsed">
+                    <TextBlock Text="⚠ TRACK WET" FontWeight="Bold" FontSize="11.5" Foreground="White"/>
+                </Border>
                 <ItemsControl x:Name="HeaderGroups" VerticalAlignment="Center">
                     <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate>

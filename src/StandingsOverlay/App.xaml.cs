@@ -54,9 +54,10 @@ public partial class App : Application
             _ => "Race",
         };
         bool demoTimed = demoArg is "timed" or "time";
+        bool demoRain = demoArg is "rain" or "wet";
 
         _source = demo
-            ? new DemoSource(() => _configService.Current, demoSession, demoTimed)
+            ? new DemoSource(() => _configService.Current, demoSession, demoTimed, demoRain)
             : new IRacingSource(() => _configService.Current);
 
         _window = new OverlayWindow(_configService);

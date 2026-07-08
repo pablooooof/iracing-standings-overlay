@@ -163,7 +163,8 @@ public sealed record StandingsSnapshot(
     string HeaderLeft,      // e.g. "RACE"
     IReadOnlyList<string> HeaderGroups,  // grouped metric chips: time · track/field · weather
     IReadOnlyList<string> CellHeaders,   // "Δ-5"…"Δ-1" in race, "L1"…"L4" in quali
-    IReadOnlyList<StandingsRow> Rows)
+    IReadOnlyList<StandingsRow> Rows,
+    bool WeatherAlert = false)           // just crossed dry→wet → flash the header
 {
     public static readonly StandingsSnapshot Disconnected =
         new(false, SessionKind.Practice, "STANDINGS", ["waiting for iRacing…"], [], []);

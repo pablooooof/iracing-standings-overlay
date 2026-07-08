@@ -24,6 +24,7 @@ public sealed class StintTracker
         public int GridPos;                               // first valid race position seen
         public double LastTotalDist = -1;                 // stopped-car detection
         public double LastMoveTime = -1;
+        public double LastPitExitTime = -1;               // when the car last rejoined from pit road
     }
 
     private const int MaxLapTimes = 30;
@@ -98,6 +99,7 @@ public sealed class StintTracker
             else if (!onPit && s.WasOnPit)
             {
                 s.CurrentStintStartLap = t.Lap[idx];
+                if (_now >= 0) s.LastPitExitTime = _now;
             }
             s.WasOnPit = onPit;
         }
@@ -152,6 +154,12 @@ public sealed class StintTracker
             ? $"~{expectedPitLap}{(splash ? "*" : "")}"
             : $"{stops}stp{(splash ? "*" : "")}";
     }
+
+    /// <summary>True for a few seconds after the car rejoined the track from pit road — a cold,
+    /// slow out-lap car worth flagging in the relative.</summary>
+    public bool JustExitedPits(int idx, double withinSec) =>
+        _now >= 0 && _cars.TryGetValue(idx, out var s) && !s.WasOnPit
+        && s.LastPitExitTime >= 0 && _now - s.LastPitExitTime <= withinSec;
 
     /// <summary>Laps since the car's last pit stop, or null before its first stop (tyre age
     /// from the race start isn't comparable to a fresh set).</summary>

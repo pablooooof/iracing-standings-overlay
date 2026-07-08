@@ -18,6 +18,7 @@ public sealed class IRacingSource : ITelemetrySource
     private readonly TrafficDetector _traffic = new();
     private readonly FuelModel _fuel = new();
     private readonly StrategyPlanner _planner = new();
+    private readonly WeatherTracker _weather = new();
     private readonly Roster _roster = new();
 
     private int _frameCount;
@@ -46,6 +47,7 @@ public sealed class IRacingSource : ITelemetrySource
             _traffic.Reset();
             _fuel.Reset();
             _planner.Reset();
+            _weather.Reset();
             lock (_roster) _roster.Drivers.Clear();
             SnapshotReady?.Invoke(StandingsSnapshot.Disconnected);
             TrafficReady?.Invoke(TrafficSnapshot.Empty);
@@ -77,7 +79,8 @@ public sealed class IRacingSource : ITelemetrySource
             _history.Update(t, _roster);
             _stints.Update(t);
             _fuel.Update(t);
-            SnapshotReady?.Invoke(SnapshotBuilder.Build(t, _roster, _history, _stints, cfg));
+            _weather.Update(t);
+            SnapshotReady?.Invoke(SnapshotBuilder.Build(t, _roster, _history, _stints, _weather, cfg));
             TrafficReady?.Invoke(_traffic.Update(t, _roster, cfg));
             RelativeReady?.Invoke(RelativeBuilder.Build(t, _roster, _stints, cfg));
             FuelReady?.Invoke(_planner.Build(t, _fuel, cfg));
@@ -136,6 +139,7 @@ public sealed class IRacingSource : ITelemetrySource
             _traffic.Reset();
             _fuel.Reset();
             _planner.Reset();
+            _weather.Reset();
         }
 
         lock (_roster)

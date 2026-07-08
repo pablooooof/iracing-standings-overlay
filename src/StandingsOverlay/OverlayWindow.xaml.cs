@@ -97,7 +97,7 @@ public partial class OverlayWindow : Window
     {
         if (b is null) return false;
         if (a.Connected != b.Connected || a.Kind != b.Kind || a.HeaderLeft != b.HeaderLeft ||
-            !a.HeaderGroups.SequenceEqual(b.HeaderGroups) ||
+            a.WeatherAlert != b.WeatherAlert || !a.HeaderGroups.SequenceEqual(b.HeaderGroups) ||
             a.Rows.Count != b.Rows.Count || !a.CellHeaders.SequenceEqual(b.CellHeaders)) return false;
         for (int i = 0; i < a.Rows.Count; i++)
         {
@@ -129,6 +129,7 @@ public partial class OverlayWindow : Window
 
         HeaderLeft.Text = s.HeaderLeft;
         HeaderGroups.ItemsSource = s.HeaderGroups;
+        SetWeatherFlash(s.WeatherAlert);
 
         var highlightBase = RowViewModel.TryBrush(cfg.HighlightColor) is SolidColorBrush hb ? hb.Color : Colors.Orange;
         var highlight = new SolidColorBrush(highlightBase) { Opacity = 0.30 };
@@ -136,6 +137,32 @@ public partial class OverlayWindow : Window
         var accent = RowViewModel.TryBrush(cfg.AccentColor) ?? Brushes.Cyan;
 
         RowsControl.ItemsSource = s.Rows.Select(r => RowViewModel.From(r, highlight, accent)).ToList();
+    }
+
+    private bool _weatherFlashing;
+
+    /// <summary>Blink the "TRACK WET" pill while the dry→wet window is active, then hide it.</summary>
+    private void SetWeatherFlash(bool on)
+    {
+        if (on == _weatherFlashing) return;
+        _weatherFlashing = on;
+        if (on)
+        {
+            WeatherFlash.Visibility = Visibility.Visible;
+            var blink = new System.Windows.Media.Animation.DoubleAnimation(1.0, 0.25,
+                new Duration(TimeSpan.FromMilliseconds(450)))
+            {
+                AutoReverse = true,
+                RepeatBehavior = System.Windows.Media.Animation.RepeatBehavior.Forever,
+            };
+            WeatherFlash.BeginAnimation(OpacityProperty, blink);
+        }
+        else
+        {
+            WeatherFlash.BeginAnimation(OpacityProperty, null);
+            WeatherFlash.Opacity = 1.0;
+            WeatherFlash.Visibility = Visibility.Collapsed;
+        }
     }
 
     public bool EditMode

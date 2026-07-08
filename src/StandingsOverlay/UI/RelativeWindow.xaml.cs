@@ -24,6 +24,7 @@ public sealed record RelativeRowViewModel(
     private static readonly Brush LossRed = RowViewModel.Frozen("#FF5C5C");
     private static readonly Brush SamePaceYellow = RowViewModel.Frozen("#FFD34D");
     private static readonly Brush PitAmber = RowViewModel.Frozen("#FFB84D");
+    private static readonly Brush PitExitCyan = RowViewModel.Frozen("#40D8FF");   // cold out-lap car
     private static readonly Brush Danger = RowViewModel.Frozen("#FF4040");
     private static readonly Brush LicFallback = RowViewModel.Frozen("#3A3A46");
 
@@ -61,7 +62,7 @@ public sealed record RelativeRowViewModel(
             ClassBarBrush: RowViewModel.TryBrush(r.ClassColor) ?? Brushes.Transparent,
             NameBrush: nameBrush,
             NameWeight: r.IsPlayer ? FontWeights.SemiBold : FontWeights.Normal,
-            StatusBrush: r.StatusText == "SPUN" ? Danger : PitAmber,
+            StatusBrush: r.StatusText == "SPUN" ? Danger : r.StatusText == "OUT" ? PitExitCyan : PitAmber,
             LicBrush: licChip,
             LicTextBrush: Brushes.White,
             StintBrush: r.StintFresh ? FreshGreen : Dim,

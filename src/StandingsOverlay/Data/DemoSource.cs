@@ -34,6 +34,7 @@ public sealed class DemoSource : ITelemetrySource
     private readonly TrafficDetector _traffic = new();
     private readonly FuelModel _fuel = new();
     private readonly StrategyPlanner _planner = new();
+    private readonly WeatherTracker _weather = new();
     private readonly Roster _roster = new();
     private double _playerFuel = PlayerTank;
     private readonly RawTick _tick = new();
@@ -51,17 +52,21 @@ public sealed class DemoSource : ITelemetrySource
     // estimator is exercised immediately instead of after a 40-minute wait.
     private readonly bool _timed;
     private static readonly double TimedTailSeconds = 2.6 * Gt3LapSeconds;
+    // "--demo rain": a scripted dry→wet arc so the weather trend arrows and the dry→wet flash are
+    // exercisable offline (rain starts ramping ~25 s in, track goes damp→wet over the next minute).
+    private readonly bool _rain;
 
     public event Action<StandingsSnapshot>? SnapshotReady;
     public event Action<TrafficSnapshot>? TrafficReady;
     public event Action<RelativeSnapshot>? RelativeReady;
     public event Action<FuelSnapshot>? FuelReady;
 
-    public DemoSource(Func<OverlayConfig> cfg, string sessionType = "Race", bool timed = false)
+    public DemoSource(Func<OverlayConfig> cfg, string sessionType = "Race", bool timed = false, bool rain = false)
     {
         _cfg = cfg;
         _isRace = sessionType.Contains("Race", StringComparison.OrdinalIgnoreCase);
         _timed = timed && _isRace;
+        _rain = rain;
 
         string[] names =
         [
@@ -229,6 +234,18 @@ public sealed class DemoSource : ITelemetrySource
         _tick.SessionTime = _elapsed;
         _tick.TimeOfDay = 14 * 3600 + 30 * 60 + _elapsed;   // starts 14:30, clock ticks with the session
 
+        // Weather: the track cools slowly through the session (temp trend arrow → falling). With
+        // "--demo rain" a shower moves in ~25 s in and the track goes dry→damp→wet (precip arrow
+        // rising + the dry→wet header flash).
+        _tick.TrackTemp = 31.2f - (float)(_elapsed * 0.015);
+        if (_rain)
+        {
+            float ramp = (float)Math.Clamp((_elapsed - 25) / 45.0, 0, 1);
+            _tick.Precipitation = ramp * 0.55f;
+            _tick.TrackWetness = ramp <= 0 ? 1 : ramp < 0.35f ? 2 : ramp < 0.7f ? 4 : 6;
+            _tick.DeclaredWet = ramp >= 0.7f;
+        }
+
         // Traffic-alerter inputs: everyone is on track (pit stall while stopped), and the
         // spotter squawks "car left" whenever another car overlaps the player's position.
         _tick.CarLeftRight = 1; // clear
@@ -247,7 +264,8 @@ public sealed class DemoSource : ITelemetrySource
         _history.Update(_tick, _roster);
         _stints.Update(_tick);
         _fuel.Update(_tick);
-        SnapshotReady?.Invoke(SnapshotBuilder.Build(_tick, _roster, _history, _stints, cfg));
+        _weather.Update(_tick);
+        SnapshotReady?.Invoke(SnapshotBuilder.Build(_tick, _roster, _history, _stints, _weather, cfg));
         TrafficReady?.Invoke(_traffic.Update(_tick, _roster, cfg));
         RelativeReady?.Invoke(RelativeBuilder.Build(_tick, _roster, _stints, cfg));
         FuelReady?.Invoke(_planner.Build(_tick, _fuel, cfg));

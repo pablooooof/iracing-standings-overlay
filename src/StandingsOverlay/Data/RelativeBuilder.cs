@@ -153,7 +153,10 @@ public static class RelativeBuilder
             CarBrand: rc.ShowBrand ? d.CarBrand : "",
             Name: d.Name,
             LapParity: parity,
-            StatusText: inPit ? "PIT" : stints.LooksStopped(idx) ? "SPUN" : "",
+            StatusText: inPit ? "PIT"
+                : stints.JustExitedPits(idx, 12) ? "OUT"
+                : (idx >= t.TrackSurface.Length || t.TrackSurface[idx] != -1) && stints.LooksStopped(idx) ? "SPUN"
+                : "",
             Battle: battle,
             IRatingText: rc.ShowIRating ? SnapshotBuilder.FmtIr(d.IRating) : "",
             LicText: rc.ShowLicense ? d.LicString : "",
