@@ -27,6 +27,10 @@
                                VerticalAlignment="Bottom" Margin="12,0,0,1"/>
                 </StackPanel>
 
+                <!-- Fuel to the flag: the number you actually fuel to (and how far over you are). -->
+                <TextBlock x:Name="FinishLine" Foreground="#E8E9EE" FontFamily="Consolas" FontSize="13"
+                           FontWeight="Bold" Margin="0,4,0,0"/>
+
                 <!-- Timed-race distance: projected laps, your laps to go, extra-lap knife-edge. -->
                 <TextBlock x:Name="RaceLine" Foreground="#E8E9EE" FontFamily="Consolas" FontSize="12"
                            FontWeight="Bold" Margin="0,3,0,0"/>

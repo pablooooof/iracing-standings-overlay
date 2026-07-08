@@ -233,6 +233,11 @@ public sealed class StintTracker
         && !s.WasOnPit && s.LastLapSeen >= 1 && s.LastMoveTime >= 0
         && _now - s.LastMoveTime > 4.0;
 
+    /// <summary>Seconds the car has been sitting still (0 if moving / unknown).</summary>
+    public double StoppedSeconds(int idx) =>
+        _now >= 0 && _cars.TryGetValue(idx, out var s) && s.LastMoveTime >= 0
+            ? _now - s.LastMoveTime : 0;
+
     /// <summary>True for a few seconds after a stopped car started moving again — a spin recovery
     /// or tow rejoining the track. Experimental; toggle via config if it misfires.</summary>
     public bool IsRejoining(int idx, double withinSec) =>

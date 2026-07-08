@@ -72,6 +72,7 @@ public sealed record RelativeRowViewModel(
             StatusBrush: r.StatusText switch
             {
                 "SPUN" or "DQ" => Danger,
+                "TOW" => Meatball,
                 "OUT" => PitExitCyan,
                 "REJOIN" => RejoinGreen,
                 "WRN" => WarnYellow,

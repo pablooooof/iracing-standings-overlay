@@ -120,7 +120,7 @@ public sealed class RowViewModel
                     > 0 => LossBrush,
                     _ => (c.Text?.Length ?? 0) > 4 ? Brushes.White : DimBrush, // quali laps white, neutral deltas dim
                 })).ToList(),
-            Status = r.StatusText is "PIT" or "SPUN" or "REJOIN" ? r.StatusText : "",
+            Status = r.StatusText is "PIT" or "SPUN" or "REJOIN" or "TOW" ? r.StatusText : "",
             CarBrand = r.CarBrand,
             Rank = r.RankText,
             Strat = r.StratText,
@@ -132,12 +132,13 @@ public sealed class RowViewModel
             LicenseTextBrush = ContrastText(licChip),
             BestLapBrush = r.BestLapSign == 2 ? PurpleBrush : Brushes.White,
             StatusBrush = r.StatusText == "SPUN" ? DangerBrush
+                        : r.StatusText == "TOW" ? WarnBrush
                         : r.StatusText == "REJOIN" ? GainBrush : PitBrush,
             PaceBrush = r.PaceSign < 0 ? GainBrush : r.PaceSign > 0 ? LossBrush
                         : r.PaceText.Length > 0 ? SamePaceYellow : DimBrush,
             RankBrush = r.RankSign == 2 ? PurpleBrush : r.RankSign < 0 ? GainBrush : DimBrush,
             RowBackground = r.IsPlayer ? highlight : Brushes.Transparent,
-            NameBrush = r.StatusText == "PIT" ? DimBrush : Brushes.White,
+            NameBrush = r.Offline || r.StatusText == "PIT" ? DimBrush : Brushes.White,
             IrChipVisibility = string.IsNullOrEmpty(r.IRatingText) ? Visibility.Collapsed : Visibility.Visible,
             LicChipVisibility = string.IsNullOrEmpty(r.LicText) ? Visibility.Collapsed : Visibility.Visible,
             TyreVisibility = r.Tyre >= 0 ? Visibility.Visible : Visibility.Collapsed,

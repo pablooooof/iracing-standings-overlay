@@ -24,10 +24,12 @@ public sealed record FuelSnapshot(
     string PlanText,         // "next stop ~L168 · add 74L · 214 laps to go"
     string RaceText,         // timed races: "≈24 laps · you 12 to go · extra lap likely"
     int RaceEmphasis,        // 0 normal · 1 borderline · 2 extra-lap likely (colors RaceText)
+    string FinishText,       // "finish on 41.8L · 2.4L in hand" — the exact fuel-to-the-flag number
+    int FinishEmphasis,      // 0 ok (green) · 1 over-fuelled (amber) · 2 short (red)
     double NowFrac,          // 0..1 position of the now marker on the bars
     IReadOnlyList<FuelStrategyBar> Bars)
 {
-    public static readonly FuelSnapshot Empty = new(false, "", "", "", "", "", "", 0, 0, []);
+    public static readonly FuelSnapshot Empty = new(false, "", "", "", "", "", "", 0, "", 0, 0, []);
 
     public bool VisuallyEquals(FuelSnapshot? o)
     {
@@ -35,6 +37,7 @@ public sealed record FuelSnapshot(
         if (Show != o.Show || FuelText != o.FuelText || PerLapText != o.PerLapText ||
             LapsText != o.LapsText || TargetText != o.TargetText || PlanText != o.PlanText ||
             RaceText != o.RaceText || RaceEmphasis != o.RaceEmphasis ||
+            FinishText != o.FinishText || FinishEmphasis != o.FinishEmphasis ||
             Math.Abs(NowFrac - o.NowFrac) > 0.004 || Bars.Count != o.Bars.Count) return false;
         for (int i = 0; i < Bars.Count; i++)
             if (!Bars[i].VisuallyEquals(o.Bars[i])) return false;
@@ -111,16 +114,42 @@ public sealed class StrategyPlanner
                                                                      : e.Risk == ExtraLapRisk.Borderline ? 1 : 0; }
         }
 
-        var numbersOnly = new FuelSnapshot(true, fuelText, perLapText, lapsText, "", "",
-                                           raceText, raceEmphasis, 0, []);
+        // Fuel-to-the-flag: the single most useful number, especially in a sprint where you never
+        // stop. Needs only a per-lap figure + laps to go (lap count or the timed-race estimate),
+        // NOT full strategy confidence — so it shows the moment we have one clean lap, and tells
+        // you exactly how much to carry (and by how much you're over, which costs lap time).
+        string finishText = ""; int finishEmphasis = 0;
+        if (isRace && perLap > 0.01 && t.SessionState < 5)
+        {
+            double lapsToGo = lapMode ? t.SessionLapsRemain
+                            : est is { } fe ? fe.PlayerLapsToGo
+                            : pace > 5 && t.SessionTimeRemain > 0 && t.SessionTimeRemain < 200 * 3600
+                                ? Math.Ceiling(t.SessionTimeRemain / pace) : -1;
+            if (lapsToGo >= 1)
+            {
+                double margin = Math.Max(0, fc.MarginLaps);
+                double need = (lapsToGo + margin) * perLap;
+                double spare = fuelNow - need;
+                double overBy = spare / perLap;   // laps of dead weight being carried
+                finishText = spare < -0.05
+                    ? $"finish needs {need:0.0}L — SHORT {-spare:0.0}L"
+                    : overBy > 1.5
+                        ? $"finish on {need:0.0}L · carrying {spare:0.0}L extra ({overBy:0.0} laps)"
+                        : $"finish on {need:0.0}L · {spare:0.0}L in hand";
+                finishEmphasis = spare < -0.05 ? 2 : overBy > 1.5 ? 1 : 0;
+            }
+        }
+
+        FuelSnapshot Numbers() => new(true, fuelText, perLapText, lapsText, "", "",
+                                      raceText, raceEmphasis, finishText, finishEmphasis, 0, []);
 
         // Bars need confidence + a race that is actually running toward an end.
         if (!isRace || t.SessionState >= 5 || fuel.GreenLaps < 3 || perLap <= 0.01 ||
             pace <= 5 || tank <= 1 || t.SessionTime < 0)
-            return numbersOnly;
+            return Numbers();
 
         double timeRemain = t.SessionTimeRemain;
-        if (!lapMode && (timeRemain <= 0 || timeRemain > 200 * 3600)) return numbersOnly;
+        if (!lapMode && (timeRemain <= 0 || timeRemain > 200 * 3600)) return Numbers();
 
         // In a timed race the flag falls when the leader finishes, which is a touch past the raw
         // clock — budget fuel to the leader's checker, not to t=0 (the endurance-correct end).
@@ -139,7 +168,8 @@ public sealed class StrategyPlanner
         }
 
         return new FuelSnapshot(true, fuelText, perLapText, lapsText,
-                                _targetText, _planText, raceText, raceEmphasis, _nowFrac, _bars);
+                                _targetText, _planText, raceText, raceEmphasis,
+                                finishText, finishEmphasis, _nowFrac, _bars);
     }
 
     /// <summary>One glanceable line: projected race length, the player's laps to go, and whether

@@ -61,6 +61,72 @@ strategy phase.
 - [x] ~~Relative overlay~~ (v0.5 — `RelativeBuilder`/`RelativeWindow`, shared `RelativeGap`
   helper with the traffic alerter; spec in `docs/RELATIVE.md`)
 
+## Live-iteration backlog (2026-07)
+
+Ideas and requests captured during rapid iteration so nothing is lost. Roughly ordered.
+
+**Traffic alerter**
+- [ ] **"You're lapping a slower car" alert @ 5s** — mirror of the blue-flag branch: warn when
+  the player is closing on slower/lapped traffic *ahead* they're about to put a lap down. New
+  `IsLapping` row type + rendering. (Chosen semantics: you lapping them, not you un-lapping.)
+
+**Standings / relative**
+- [ ] **Smooth GAP/INT** — option to compute standings gap/interval from the relative's
+  continuous `CarIdxEstTime` method (`RelativeGap`) instead of `CarIdxF2Time`, config-toggled.
+- [ ] **Pit-exit flash (~15s)** — flash the out-lap badge for the first ~15s after pit exit,
+  distinct from the steady whole-out-lap `OUT`.
+- [ ] **Hide parked / no-driver cars in relative** — config to drop cars parked in the pit stall
+  (stationary, likely DNF / no driver) — cuts noise in practice and endurance. iRacing has no
+  clean "no driver" var; heuristic = in pit stall + stationary a long time.
+- [ ] **Driver-change alert (endurance teams)** — detect a car's current driver changing on YAML
+  reparse (name / UserID) → a 60s tag/alert. Roster already reparses on `SessionInfoUpdate`.
+- [ ] **Class-colour override map** — optional user map (GT3=pink, LMP2=blue, GTP=yellow…) that
+  overrides iRacing's own class colours when you prefer a convention.
+
+**Tyres / weather**
+- [ ] **Inline `o→o` tyre-switch marker** in the row (both widgets) + Settings toggle
+  (flash / inline / both) + configurable lifetime (until next stop / one lap / N sec).
+- [x] Tyre-switch flash duration configurable (`TyreSwitchAlertSec`, default 30s).
+- [x] Trend arrows latch until the trend reverses (not per-sample blink).
+
+**Fuel**
+- [x] **Fuel-to-the-flag number** — `finish on X L · N L in hand / carrying extra` so a sprint
+  tells you exactly what to fuel and flags over-fuelling (dead weight). Amber when >1.5 laps over.
+
+**Status states** — [x] TOW (heuristic), [x] REJOIN (experimental toggle), [x] offline dim name.
+
+**Settings window**
+- [ ] Expose the newer options in the GUI: real clock, name-column width, header font size,
+  rejoin toggle, tyre-switch duration, abbreviate-wetness, relative tyre ring, etc.
+
+**Pit-time columns** (see also "Pit stop duration tracking" above)
+- [ ] Toggleable race columns: pit lap + total / drive-through / stationary pit time.
+
+## Status badge legend
+
+| Badge | Meaning |
+|---|---|
+| `PIT` | on pit road |
+| `OUT` | on the out-lap (cold tyres) — the whole lap after a pit exit |
+| `SPUN` | stopped on the racing surface (likely to recover) |
+| `TOW` | stopped off-track, or stuck >15s — a tow is coming |
+| `REJOIN` | was stopped, moving again (spin recovery); experimental, `ShowRejoinState` |
+| `DQ` / `BLK` | disqualified / black flag |
+| `DMG` | meatball — car damaged, must pit for repair |
+| `WRN` | furled black flag — a warning (repair/behaviour) before a full black flag |
+| *(dim name)* | offline / not in the world (disconnected or retired) |
+
+## Known SDK limits
+
+- **No weather forecast.** iRacing's telemetry and session YAML expose only *current* conditions
+  (`Precipitation`, `TrackWetness`, `WeatherDeclaredWet`, temps, wind). There is **no** forward
+  forecast (rain chance next 15/60 min) in the SDK — the in-sim forecast panel isn't published.
+  Our substitute is the trend arrow (rising/falling from our own sampled history). Confirmed
+  against the irsdk telemetry + WeekendInfo references, 2026-07. Do not re-attempt without new SDK.
+- **Class colours** come from iRacing's session YAML per class (live); the demo uses convention
+  colours (GTP yellow / GT3 pink / GT4 blue) only as stand-ins.
+- **No "driver in car" var** — parked/no-driver detection must be heuristic (pit stall + stationary).
+
 ## Distribution
 
 - `dotnet publish -r win-x64 --self-contained -p:PublishSingleFile=true` → one exe, no .NET install needed for teammates.

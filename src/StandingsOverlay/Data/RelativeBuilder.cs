@@ -181,7 +181,7 @@ public static class RelativeBuilder
         if ((flags & CarFlags.Repair) != 0) return "DMG";
         if ((flags & CarFlags.Furled) != 0) return "WRN";
         bool inWorld = idx >= t.TrackSurface.Length || t.TrackSurface[idx] != -1;
-        if (inWorld && stints.LooksStopped(idx)) return "SPUN";
+        if (inWorld && stints.LooksStopped(idx)) return SnapshotBuilder.StoppedBadge(t, stints, idx);
         if (showRejoin && inWorld && stints.IsRejoining(idx, 6)) return "REJOIN";
         if (inPit) return "PIT";
         if (stints.OnOutLap(idx, t.Lap[idx])) return "OUT";

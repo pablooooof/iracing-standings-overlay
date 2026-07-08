@@ -47,11 +47,18 @@ public sealed class WeatherTracker
         }
         if (now - _lastSample < SampleSec) return;
 
+        // Latch the direction: an arrow persists until the value actually moves the *other* way,
+        // rather than blinking off whenever a sample happens to be flat.
         if (!float.IsNaN(t.TrackTemp) && !float.IsNaN(_tempPrev))
-            TempTrend = t.TrackTemp > _tempPrev + TempEps ? 1 : t.TrackTemp < _tempPrev - TempEps ? -1 : 0;
+        {
+            if (t.TrackTemp > _tempPrev + TempEps) TempTrend = 1;
+            else if (t.TrackTemp < _tempPrev - TempEps) TempTrend = -1;
+        }
         if (!float.IsNaN(t.Precipitation) && !float.IsNaN(_precipPrev))
-            PrecipTrend = t.Precipitation > _precipPrev + PrecipEps ? 1
-                        : t.Precipitation < _precipPrev - PrecipEps ? -1 : 0;
+        {
+            if (t.Precipitation > _precipPrev + PrecipEps) PrecipTrend = 1;
+            else if (t.Precipitation < _precipPrev - PrecipEps) PrecipTrend = -1;
+        }
 
         _tempPrev = t.TrackTemp;
         _precipPrev = t.Precipitation;

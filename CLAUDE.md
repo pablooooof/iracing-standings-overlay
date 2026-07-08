@@ -6,6 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 A lightweight, standings-only overlay for iRacing (MIT, single WPF exe). Headline feature: gap delta over a configurable N laps (iOverlay pro-gates this at 1 lap). Efficiency is a hard requirement: the overlay must never affect sim frame times — repaint only on change, no busy polling, no browser engine.
 
+**Working style**: this is a fast do-try-do-try project. Commit and test freely — small, frequent commits with a quick `--demo` verification are expected and encouraged; don't agonize over a change before shipping it, and don't fear breaking things (everything is reversible, the overlay never touches the sim). Experimental features land behind a config toggle (e.g. `ShowRejoinState`) so they can be switched off and iterated. Capture new ideas/decisions in `docs/ROADMAP.md` (live-iteration backlog + status-badge legend + known SDK limits) so nothing is lost between sessions.
+
 ## Commands
 
 ```powershell

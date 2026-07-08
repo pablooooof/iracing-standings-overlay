@@ -144,7 +144,8 @@ public sealed record StandingsRow(
     string StratText,        // expected pit lap / stops to end
     string PaceText,         // ▲ ▼ ► vs the player, plus "S" when fuel-saving
     int PaceSign,
-    bool IsPlayer)
+    bool IsPlayer,
+    bool Offline = false)    // not in the world (disconnected / retired) → dimmed name
 {
     public static readonly StandingsRow Separator = Empty(RowKind.Separator) with { Name = "···" };
 

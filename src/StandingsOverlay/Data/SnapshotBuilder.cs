@@ -286,7 +286,8 @@ public static class SnapshotBuilder
             StratText: stints.StrategyText(idx, t.Lap[idx], lapsRemain),
             PaceText: pace,
             PaceSign: paceSign,
-            IsPlayer: idx == t.PlayerCarIdx);
+            IsPlayer: idx == t.PlayerCarIdx,
+            Offline: idx < t.TrackSurface.Length && t.TrackSurface[idx] == -1 && idx != t.PlayerCarIdx);
     }
 
     /// <summary>Race gap between two cars: laps-down when a lap+ apart, else F2Time difference.</summary>
@@ -311,10 +312,18 @@ public static class SnapshotBuilder
         // A car that dropped offline freezes its telemetry, so the "stationary" timer grows
         // forever — SPUN is only real while the car is still in the world (surface != -1).
         bool inWorld = idx >= t.TrackSurface.Length || t.TrackSurface[idx] != -1;
-        if (inWorld && stints.LooksStopped(idx)) return "SPUN";
+        if (inWorld && stints.LooksStopped(idx)) return StoppedBadge(t, stints, idx);
         if (showRejoin && inWorld && stints.IsRejoining(idx, 6)) return "REJOIN";
         if (idx < t.OnPitRoad.Length && t.OnPitRoad[idx]) return "PIT";
         return "";
+    }
+
+    /// <summary>A stationary car is SPUN (on track, likely to recover) or TOW (off the racing
+    /// surface, or stuck long enough that a tow is coming).</summary>
+    internal static string StoppedBadge(RawTick t, StintTracker stints, int idx)
+    {
+        bool offTrack = idx < t.TrackSurface.Length && t.TrackSurface[idx] == 0;
+        return offTrack || stints.StoppedSeconds(idx) > 15 ? "TOW" : "SPUN";
     }
 
     private static double EstimateLapsRemain(RawTick t, Roster roster)
@@ -383,7 +392,7 @@ public static class SnapshotBuilder
         {
             if (d.IsPaceCar || d.IsSpectator) continue;
             var (ct, dir) = stints.LastCompoundSwitch(d.CarIdx);
-            if (dir != 0 && ct >= 0 && t.SessionTime - ct <= 12 && ct > bestT)
+            if (dir != 0 && ct >= 0 && t.SessionTime - ct <= cfg.TyreSwitchAlertSec && ct > bestT)
                 (bestT, bestDir, bestNum) = (ct, dir, d.CarNumber);
         }
         return bestDir > 0 ? $"⚑ #{bestNum} → WETS"

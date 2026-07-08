@@ -101,6 +101,9 @@ public partial class FuelWindow : Window
         LapsValue.Text = s.LapsText;
         TargetValue.Text = s.TargetText;
         TargetValue.Visibility = s.TargetText.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+        FinishLine.Text = s.FinishText;
+        FinishLine.Visibility = s.FinishText.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+        FinishLine.Foreground = s.FinishEmphasis >= 2 ? SplashBrush : s.FinishEmphasis == 1 ? SaveBrush : PushBrush;
         RaceLine.Text = s.RaceText;
         RaceLine.Visibility = s.RaceText.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
         RaceLine.Foreground = s.RaceEmphasis >= 2 ? SplashBrush : s.RaceEmphasis == 1 ? SaveBrush : TextBrush;
@@ -205,6 +208,8 @@ public partial class FuelWindow : Window
             PlanText: "next stop ~L168 · add 74L · 214 laps to go",
             RaceText: "≈24(+1?) laps · you 12 to go · extra lap likely — fuel for 13",
             RaceEmphasis: 2,
+            FinishText: "finish on 41.8L · carrying 5.6L extra (2.4 laps)",
+            FinishEmphasis: 1,
             NowFrac: 0.75,
             Bars:
             [
