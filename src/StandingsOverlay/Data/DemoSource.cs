@@ -183,6 +183,8 @@ public sealed class DemoSource : ITelemetrySource
                 _lastPitLap[i] = _tick.Lap[i];
                 _pitUntil[i] = _elapsed + PitDuration + _rng.Next(6);
                 _tick.OnPitRoad[i] = true;
+                // Wet enough to warrant a tyre switch → they come out on wets (fires the alert).
+                if (_rain && _tick.TrackWetness >= 4) _tick.TireCompound[i] = 1;
                 continue;
             }
 

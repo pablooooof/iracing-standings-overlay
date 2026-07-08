@@ -25,6 +25,9 @@ public sealed class StintTracker
         public double LastTotalDist = -1;                 // stopped-car detection
         public double LastMoveTime = -1;
         public double LastPitExitTime = -1;               // when the car last rejoined from pit road
+        public int LastCompound = -1;                     // CarIdxTireCompound (0 dry, >=1 wet)
+        public double CompoundSwitchTime = -1;            // when it last crossed dry<->wet
+        public bool SwitchedToWet;                        // direction of that last switch
     }
 
     private const int MaxLapTimes = 30;
@@ -87,6 +90,19 @@ public sealed class StintTracker
                     s.LastTotalDist = total;
                     s.LastMoveTime = _now;
                 }
+            }
+
+            // Dry<->wet tyre change (compound only changes across a pit stop): latch it so the
+            // header can flag "someone committed to slicks/wets" — the practical crossover signal.
+            if (idx < t.TireCompound.Length && t.TireCompound[idx] >= 0)
+            {
+                int comp = t.TireCompound[idx];
+                if (s.LastCompound >= 0 && (comp >= 1) != (s.LastCompound >= 1) && _now >= 0)
+                {
+                    s.CompoundSwitchTime = _now;
+                    s.SwitchedToWet = comp >= 1;
+                }
+                s.LastCompound = comp;
             }
 
             bool onPit = t.OnPitRoad[idx];
@@ -160,6 +176,16 @@ public sealed class StintTracker
     public bool JustExitedPits(int idx, double withinSec) =>
         _now >= 0 && _cars.TryGetValue(idx, out var s) && !s.WasOnPit
         && s.LastPitExitTime >= 0 && _now - s.LastPitExitTime <= withinSec;
+
+    /// <summary>True while the car is on its out-lap (rejoined from pit, hasn't completed a green
+    /// lap yet) — cold tyres for the whole lap, not just the pit exit.</summary>
+    public bool OnOutLap(int idx, int carLap) => LapsSincePit(idx, carLap) is 0;
+
+    /// <summary>The car's last dry↔wet tyre switch as (time, direction: +1 to wet · -1 to dry),
+    /// or (-1, 0) if none. Used both inline (the tyre column) and for the header alert.</summary>
+    public (double Time, int Dir) LastCompoundSwitch(int idx) =>
+        _cars.TryGetValue(idx, out var s) && s.CompoundSwitchTime >= 0
+            ? (s.CompoundSwitchTime, s.SwitchedToWet ? 1 : -1) : (-1, 0);
 
     /// <summary>Laps since the car's last pit stop, or null before its first stop (tyre age
     /// from the race start isn't comparable to a fresh set).</summary>

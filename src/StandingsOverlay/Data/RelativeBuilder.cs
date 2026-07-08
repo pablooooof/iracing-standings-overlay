@@ -7,11 +7,12 @@ public sealed record RelativeRow(
     bool IsPlayer,
     string PosText,          // class position ("P3") or overall, per config
     string ClassColor,
+    int Tyre,                // -1 unknown/hidden · 0 dry · >=1 wet (same as the standings ring)
     string CarNumber,
     string CarBrand,
     string Name,
     int LapParity,           // -1 you lap them (blue) · 0 same lap · +1 they lap you (red)
-    string StatusText,       // "" | "PIT" | "SPUN"
+    string StatusText,       // "" | "PIT" | "OUT" | "SPUN"
     bool Battle,             // same class, same lap, within BattleGapSec → ▸ marker
     string IRatingText,
     string LicText,
@@ -24,7 +25,7 @@ public sealed record RelativeRow(
     string GapText)          // "+2.3" ahead · "-0.8" behind · "—" on the player row
 {
     public static readonly RelativeRow Blank =
-        new(false, "", "", "", "", "", 0, "", false, "", "", "", "", false, "", "", 0, "");
+        new(false, "", "", -1, "", "", "", 0, "", false, "", "", "", "", false, "", "", 0, "");
 
     public bool IsBlank => CarNumber.Length == 0 && !IsPlayer;
 }
@@ -149,12 +150,13 @@ public static class RelativeBuilder
             IsPlayer: isPlayer,
             PosText: pos,
             ClassColor: d.ClassColor,
+            Tyre: rc.ShowTyre && idx < t.TireCompound.Length ? t.TireCompound[idx] : -1,
             CarNumber: "#" + d.CarNumber,
             CarBrand: rc.ShowBrand ? d.CarBrand : "",
             Name: d.Name,
             LapParity: parity,
             StatusText: inPit ? "PIT"
-                : stints.JustExitedPits(idx, 12) ? "OUT"
+                : stints.OnOutLap(idx, t.Lap[idx]) ? "OUT"
                 : (idx >= t.TrackSurface.Length || t.TrackSurface[idx] != -1) && stints.LooksStopped(idx) ? "SPUN"
                 : "",
             Battle: battle,

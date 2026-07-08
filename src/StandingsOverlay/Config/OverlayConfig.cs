@@ -23,6 +23,9 @@ public sealed class OverlayConfig
     public int DriversAhead { get; set; } = 5;
     public int DriversBehind { get; set; } = 3;
     public bool ShowColumnHeader { get; set; } = true;
+    // Driver-name column: fixed width in DIPs so long names don't resize the whole table
+    // (names past this length ellipsize). Tune to taste.
+    public double NameColumnWidth { get; set; } = 150;
 
     // ⭐ Per-lap gap delta columns for the last N laps, oldest left (the reason this project exists).
     public int DeltaLaps { get; set; } = 5;
@@ -41,12 +44,15 @@ public sealed class OverlayConfig
 
     // Header extras
     public bool ShowSof { get; set; } = true;
+    public bool ShowRealClock { get; set; } = true; // real-life wall clock alongside the in-sim clock
     public bool ShowTimeOfDay { get; set; } = true; // in-sim local time of day (iOverlay-style clock)
     public bool ShowTrackTemp { get; set; } = true;
     public int ShowTrackTempDecimals { get; set; } = 1;   // decimals on the track-temp readout (0-2)
     public bool ShowIncidents { get; set; } = true;
     public bool ShowWeather { get; set; } = true;   // track state (Dry/Damp/Wet) + precipitation %
+    public bool AbbreviateWetness { get; set; }     // false = full "Mostly Dry"/"Very Wet" names
     public bool ShowWind { get; set; } = true;      // wind direction arrow + speed
+    public double HeaderFontSize { get; set; } = 13; // standings header pill text size
 
     // Decimal places
     public int GapPrecision { get; set; } = 1;
@@ -145,6 +151,7 @@ public sealed class RelativeConfig
     public double Scale { get; set; } = 1.15;   // reads bigger than the dense standings by default
 
     public bool ShowClassPos { get; set; } = true;
+    public bool ShowTyre { get; set; } = true;       // wet/dry compound ring, like the standings
     public bool ShowBrand { get; set; } = true;
     public bool ShowIRating { get; set; } = true;
     public bool ShowLicense { get; set; }

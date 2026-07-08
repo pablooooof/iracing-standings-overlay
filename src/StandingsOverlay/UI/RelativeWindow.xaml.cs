@@ -11,12 +11,14 @@ namespace StandingsOverlay.UI;
 public sealed record RelativeRowViewModel(
     string Pos, string CarNumber, string Brand, string Name, string Status,
     string License, string IRating, string Stint, string LastLap, string Pace, string Gap,
-    Brush PosBrush, Brush NumBrush, Brush ClassBarBrush, Brush NameBrush, FontWeight NameWeight,
+    Brush PosBrush, Brush NumBrush, Brush ClassBarBrush, Brush TyreBrush, Brush NameBrush, FontWeight NameWeight,
     Brush StatusBrush, Brush LicBrush, Brush LicTextBrush, Brush StintBrush, Brush PaceBrush,
     Brush GapBrush, Brush BattleBrush, Brush RowBackground,
-    Visibility NumVisibility, Visibility LicVisibility, Visibility BattleVisibility)
+    Visibility NumVisibility, Visibility TyreVisibility, Visibility LicVisibility, Visibility BattleVisibility)
 {
     private static readonly Brush White = RowViewModel.Frozen("#E8E9EE");
+    private static readonly Brush DryTyre = RowViewModel.Frozen("#C9C9CF");
+    private static readonly Brush WetTyre = RowViewModel.Frozen("#1E6FFF");
     private static readonly Brush Dim = RowViewModel.Frozen("#9DA0AA");
     private static readonly Brush LapsYouRed = RowViewModel.Frozen("#FF6A6A");
     private static readonly Brush LappedBlue = RowViewModel.Frozen("#63A8FF");
@@ -60,6 +62,7 @@ public sealed record RelativeRowViewModel(
             PosBrush: RowViewModel.TryBrush(r.ClassColor) ?? Dim,
             NumBrush: RowViewModel.TryBrush(r.ClassColor) ?? Dim,
             ClassBarBrush: RowViewModel.TryBrush(r.ClassColor) ?? Brushes.Transparent,
+            TyreBrush: r.Tyre >= 1 ? WetTyre : DryTyre,
             NameBrush: nameBrush,
             NameWeight: r.IsPlayer ? FontWeights.SemiBold : FontWeights.Normal,
             StatusBrush: r.StatusText == "SPUN" ? Danger : r.StatusText == "OUT" ? PitExitCyan : PitAmber,
@@ -72,6 +75,7 @@ public sealed record RelativeRowViewModel(
             BattleBrush: accent,
             RowBackground: r.IsPlayer ? highlight : Brushes.Transparent,
             NumVisibility: r.CarNumber.Length > 1 ? Visibility.Visible : Visibility.Collapsed,
+            TyreVisibility: r.Tyre >= 0 ? Visibility.Visible : Visibility.Collapsed,
             LicVisibility: r.LicText.Length > 0 ? Visibility.Visible : Visibility.Collapsed,
             BattleVisibility: r.Battle ? Visibility.Visible : Visibility.Collapsed);
     }
@@ -194,19 +198,19 @@ public partial class RelativeWindow : Window
     {
         Render(new RelativeSnapshot(
         [
-            new RelativeRow(false, "P2", "#E33241", "#07", "POR", "R. Vergne", 1, "", false,
+            new RelativeRow(false, "P2", "#E33241", 0, "#07", "POR", "R. Vergne", 1, "", false,
                             "4.2k", "", "", "12", false, "1:41.882", "▲", 1, "+3.1"),
-            new RelativeRow(false, "P5", "#FFDA59", "#22", "FER", "S. Okafor", 0, "", false,
-                            "3.1k", "", "", "2", true, "1:42.115", "►", 0, "+1.9"),
-            new RelativeRow(false, "P3", "#FFDA59", "#11", "BMW", "M. Rossi", 0, "", true,
+            new RelativeRow(false, "P5", "#FFDA59", 1, "#22", "FER", "S. Okafor", 0, "OUT", false,
+                            "3.1k", "", "", "0", true, "1:42.115", "►", 0, "+1.9"),
+            new RelativeRow(false, "P3", "#FFDA59", 0, "#11", "BMW", "M. Rossi", 0, "", true,
                             "5.6k", "", "", "9", false, "1:42.301", "►", 0, "+0.6"),
-            new RelativeRow(true, "P4", "#FFDA59", "#31", "FER", "You", 0, "", false,
+            new RelativeRow(true, "P4", "#FFDA59", 0, "#31", "FER", "You", 0, "", false,
                             "2.8k", "", "", "8", false, "1:42.290", "", 0, "—"),
-            new RelativeRow(false, "P6", "#FFDA59", "#44", "AUD", "L. Tanaka", 0, "", true,
+            new RelativeRow(false, "P6", "#FFDA59", 0, "#44", "AUD", "L. Tanaka", 0, "", true,
                             "2.9k", "", "", "3", true, "1:42.198", "▼", -1, "-0.8"),
-            new RelativeRow(false, "P12", "#57C1FF", "#88", "MCL", "A. Novak", -1, "", false,
+            new RelativeRow(false, "P12", "#57C1FF", 1, "#88", "MCL", "A. Novak", -1, "", false,
                             "1.9k", "", "", "15", false, "1:47.554", "▼", -1, "-2.4"),
-            new RelativeRow(false, "", "#FFDA59", "#61", "POR", "K. Svensson", 0, "PIT", false,
+            new RelativeRow(false, "", "#FFDA59", -1, "#61", "POR", "K. Svensson", 0, "PIT", false,
                             "2.2k", "", "", "", false, "", "", 0, "-4.9"),
         ]));
     }

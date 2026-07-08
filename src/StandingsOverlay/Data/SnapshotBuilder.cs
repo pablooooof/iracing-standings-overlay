@@ -119,7 +119,7 @@ public static class SnapshotBuilder
 
         return new StandingsSnapshot(true, kind, isRace ? "RACE" : t.SessionType.ToUpperInvariant(),
             HeaderGroups(t, roster, weather, cfg, playerClassId), cellHeaders, rows,
-            WeatherAlert: cfg.ShowWeather && weather.JustTurnedWet);
+            HeaderAlert: HeaderAlert(t, roster, stints, weather, cfg));
     }
 
     private static List<DriverEntry> OrderClass(List<DriverEntry> cars, RawTick t, Roster roster, bool isRace)
@@ -330,9 +330,10 @@ public static class SnapshotBuilder
     {
         var groups = new List<string>(3);
 
-        // Time: in-sim clock · lap counter · session clock.
-        var time = new List<string>(3);
-        if (cfg.ShowTimeOfDay && t.TimeOfDay >= 0) time.Add(FmtTimeOfDay(t.TimeOfDay));
+        // Time: real-life clock · in-sim track clock · lap counter · session clock.
+        var time = new List<string>(4);
+        if (cfg.ShowRealClock) time.Add(DateTime.Now.ToString("H:mm"));
+        if (cfg.ShowTimeOfDay && t.TimeOfDay >= 0) time.Add("☀ " + FmtTimeOfDay(t.TimeOfDay));
         if (LapCounter(t, roster) is { Length: > 0 } laps) time.Add(laps);
         if (SessionClock(t) is { Length: > 0 } clock) time.Add(clock);
         if (time.Count > 0) groups.Add(string.Join(" · ", time));
@@ -354,7 +355,7 @@ public static class SnapshotBuilder
         var sky = new List<string>(3);
         if (cfg.ShowWeather)
         {
-            var wet = t.DeclaredWet ? "WET declared" : WetnessText(t.TrackWetness);
+            var wet = t.DeclaredWet ? "WET declared" : WetnessText(t.TrackWetness, cfg.AbbreviateWetness);
             if (!string.IsNullOrEmpty(wet)) sky.Add(wet);
             if (!float.IsNaN(t.Precipitation)) sky.Add($"☂ {t.Precipitation * 100:0}%{TrendArrow(weather.PrecipTrend)}");
         }
@@ -366,6 +367,26 @@ public static class SnapshotBuilder
 
     /// <summary>Trend suffix for a header metric: rising ↑, falling ↓, steady (nothing).</summary>
     private static string TrendArrow(int trend) => trend > 0 ? " ↑" : trend < 0 ? " ↓" : "";
+
+    /// <summary>The flashing header banner text (empty = no flash). Dry→wet takes priority, then
+    /// the most recent dry↔wet tyre switch by any car (the crossover "someone committed" signal).</summary>
+    private static string HeaderAlert(RawTick t, Roster roster, StintTracker stints,
+        WeatherTracker weather, OverlayConfig cfg)
+    {
+        if (cfg.ShowWeather && weather.JustTurnedWet) return "⚠ TRACK WENT WET";
+
+        double bestT = -1; int bestDir = 0; string bestNum = "";
+        foreach (var d in roster.Drivers.Values)
+        {
+            if (d.IsPaceCar || d.IsSpectator) continue;
+            var (ct, dir) = stints.LastCompoundSwitch(d.CarIdx);
+            if (dir != 0 && ct >= 0 && t.SessionTime - ct <= 12 && ct > bestT)
+                (bestT, bestDir, bestNum) = (ct, dir, d.CarNumber);
+        }
+        return bestDir > 0 ? $"⚑ #{bestNum} → WETS"
+             : bestDir < 0 ? $"⚑ #{bestNum} → SLICKS"
+             : "";
+    }
 
     /// <summary>"L 3/40" — player lap over the known or estimated total.</summary>
     private static string LapCounter(RawTick t, Roster roster)
@@ -406,13 +427,13 @@ public static class SnapshotBuilder
         return $"{WindArrows[idx]} {velMs * 3.6:0} km/h";
     }
 
-    private static string WetnessText(int w) => w switch
+    private static string WetnessText(int w, bool abbrev) => w switch
     {
         1 => "Dry",
-        2 => "M.Dry",
+        2 => abbrev ? "M.Dry" : "Mostly Dry",
         3 or 4 => "Damp",
         5 => "Wet",
-        6 or 7 => "V.Wet",
+        6 or 7 => abbrev ? "V.Wet" : "Very Wet",
         _ => "",
     };
 

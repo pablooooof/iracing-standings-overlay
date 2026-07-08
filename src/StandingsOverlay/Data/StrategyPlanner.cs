@@ -162,7 +162,11 @@ public sealed class StrategyPlanner
         double fillRate = fc.FillRateLps > 0 ? fc.FillRateLps
                         : fuel.MeasuredFillRate > 0 ? fuel.MeasuredFillRate : FallbackFillRate;
         double maxSave = Math.Clamp(fc.MaxSaveLPerLap, 0.01, perLap * 0.5);
-        double margin = Math.Max(0, fc.MarginLaps);
+        // Rain makes pace and burn uncertain (safety-car interruptions, variable throttle, a
+        // possible tyre stop) — carry an extra lap of fuel while the track is wet.
+        bool wet = t.DeclaredWet || t.TrackWetness >= 5
+                   || (!float.IsNaN(t.Precipitation) && t.Precipitation > 0.15f);
+        double margin = Math.Max(0, fc.MarginLaps) + (wet ? 1.0 : 0);
 
         double Penalty(double s) => s / maxSave * Math.Max(0, fc.MaxSavePenaltySec);
 
@@ -261,9 +265,11 @@ public sealed class StrategyPlanner
         if (plans.Count > keep) plans.RemoveRange(keep, plans.Count - keep);
 
         var best = plans[0];
-        _planText = best.Stops == 0
+        string wetNote = wet ? " · wet +1 margin" : "";
+        _planText = (best.Stops == 0
             ? $"no more stops · {best.Laps} laps to go"
-            : $"next stop ~L{playerLap + best.Stints[0].Laps} · add {best.FirstFill:0}L · {best.Laps} laps to go";
+            : $"next stop ~L{playerLap + best.Stints[0].Laps} · add {best.FirstFill:0}L · {best.Laps} laps to go")
+            + wetNote;
         _targetText = best.Stints[0].Laps > 0
             ? $"tgt {fuelNow / (best.Stints[0].Laps + (best.Stops == 0 ? margin : 0)):0.00}"
             : "";

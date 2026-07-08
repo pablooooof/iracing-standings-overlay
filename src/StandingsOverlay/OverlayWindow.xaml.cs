@@ -15,9 +15,9 @@ public sealed record ColumnVisibility(
     Visibility LapsCount,
     Visibility Gap, Visibility Interval, Visibility BestLap, Visibility LastLap,
     Visibility Delta, Visibility PaceRank, Visibility Strategy, Visibility Pace, Visibility Status,
-    double CellWidth)
+    double CellWidth, double NameWidth)
 {
-    public static ColumnVisibility From(SessionColumns c, SessionKind kind)
+    public static ColumnVisibility From(SessionColumns c, SessionKind kind, double nameWidth)
     {
         static Visibility V(bool b) => b ? Visibility.Visible : Visibility.Collapsed;
         bool race = kind == SessionKind.Race;
@@ -30,7 +30,8 @@ public sealed record ColumnVisibility(
             V(c.ShowPaceRank),
             V(c.ShowStrategy && race), V(c.ShowPace && race), V(c.ShowStatus),
             // Race cells hold "0.4"; quali cells hold "1:43.210".
-            CellWidth: kind == SessionKind.Qualify ? 62 : 34);
+            CellWidth: kind == SessionKind.Qualify ? 62 : 34,
+            NameWidth: Math.Clamp(nameWidth, 60, 400));
     }
 }
 
@@ -70,7 +71,8 @@ public partial class OverlayWindow : Window
         FontFamily = new FontFamily("Segoe UI");
         Foreground = Brushes.White;
         DataContext = ColumnVisibility.From(cfg.ColumnsFor(_visibleKind ?? SessionKind.Race),
-                                            _visibleKind ?? SessionKind.Race);
+                                            _visibleKind ?? SessionKind.Race, cfg.NameColumnWidth);
+        System.Windows.Documents.TextElement.SetFontSize(HeaderBar, cfg.HeaderFontSize);
 
         var bg = RowViewModel.TryBrush(cfg.BackgroundColor) is SolidColorBrush b ? b.Color : Color.FromRgb(0x21, 0x21, 0x29);
         var brush = new SolidColorBrush(bg) { Opacity = Math.Clamp(cfg.Opacity, 0.05, 1.0) };
@@ -97,7 +99,7 @@ public partial class OverlayWindow : Window
     {
         if (b is null) return false;
         if (a.Connected != b.Connected || a.Kind != b.Kind || a.HeaderLeft != b.HeaderLeft ||
-            a.WeatherAlert != b.WeatherAlert || !a.HeaderGroups.SequenceEqual(b.HeaderGroups) ||
+            a.HeaderAlert != b.HeaderAlert || !a.HeaderGroups.SequenceEqual(b.HeaderGroups) ||
             a.Rows.Count != b.Rows.Count || !a.CellHeaders.SequenceEqual(b.CellHeaders)) return false;
         for (int i = 0; i < a.Rows.Count; i++)
         {
@@ -119,7 +121,7 @@ public partial class OverlayWindow : Window
         if (s.Kind != _visibleKind)
         {
             _visibleKind = s.Kind;
-            DataContext = ColumnVisibility.From(cfg.ColumnsFor(s.Kind), s.Kind);
+            DataContext = ColumnVisibility.From(cfg.ColumnsFor(s.Kind), s.Kind, cfg.NameColumnWidth);
         }
         if (_visibleCellHeaders is null || !s.CellHeaders.SequenceEqual(_visibleCellHeaders))
         {
@@ -129,7 +131,7 @@ public partial class OverlayWindow : Window
 
         HeaderLeft.Text = s.HeaderLeft;
         HeaderGroups.ItemsSource = s.HeaderGroups;
-        SetWeatherFlash(s.WeatherAlert);
+        SetHeaderAlert(s.HeaderAlert);
 
         var highlightBase = RowViewModel.TryBrush(cfg.HighlightColor) is SolidColorBrush hb ? hb.Color : Colors.Orange;
         var highlight = new SolidColorBrush(highlightBase) { Opacity = 0.30 };
@@ -139,15 +141,16 @@ public partial class OverlayWindow : Window
         RowsControl.ItemsSource = s.Rows.Select(r => RowViewModel.From(r, highlight, accent)).ToList();
     }
 
-    private bool _weatherFlashing;
+    private string _headerAlert = "";
 
-    /// <summary>Blink the "TRACK WET" pill while the dry→wet window is active, then hide it.</summary>
-    private void SetWeatherFlash(bool on)
+    /// <summary>Blink an alert pill (dry→wet, tyre switch) while its window is active, then hide it.</summary>
+    private void SetHeaderAlert(string text)
     {
-        if (on == _weatherFlashing) return;
-        _weatherFlashing = on;
-        if (on)
+        if (text == _headerAlert) return;
+        _headerAlert = text;
+        if (text.Length > 0)
         {
+            WeatherFlashText.Text = text;
             WeatherFlash.Visibility = Visibility.Visible;
             var blink = new System.Windows.Media.Animation.DoubleAnimation(1.0, 0.25,
                 new Duration(TimeSpan.FromMilliseconds(450)))

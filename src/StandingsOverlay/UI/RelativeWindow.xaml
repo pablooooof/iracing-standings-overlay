@@ -20,6 +20,7 @@
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="Auto" SharedSizeGroup="Pos"/>
                                     <ColumnDefinition Width="Auto" SharedSizeGroup="Bar"/>
+                                    <ColumnDefinition Width="Auto" SharedSizeGroup="Tyre"/>
                                     <ColumnDefinition Width="Auto" SharedSizeGroup="Num"/>
                                     <ColumnDefinition Width="Auto" SharedSizeGroup="Brand"/>
                                     <ColumnDefinition Width="*"/>
@@ -40,17 +41,22 @@
                                 <Rectangle Grid.Column="1" Width="3" Margin="0,1,6,1" RadiusX="1" RadiusY="1"
                                            Fill="{Binding ClassBarBrush}"/>
 
-                                <Border Grid.Column="2" Background="{Binding NumBrush}" CornerRadius="2"
+                                <!-- Tyre compound ring: gray = dry, blue = wet (same as the standings) -->
+                                <Ellipse Grid.Column="2" Width="12" Height="12" StrokeThickness="3" Margin="0,0,6,0"
+                                         VerticalAlignment="Center" Stroke="{Binding TyreBrush}" Fill="#1A1A1E"
+                                         Visibility="{Binding TyreVisibility}"/>
+
+                                <Border Grid.Column="3" Background="{Binding NumBrush}" CornerRadius="2"
                                         Padding="4,0" VerticalAlignment="Center"
                                         Visibility="{Binding NumVisibility}">
                                     <TextBlock Text="{Binding CarNumber}" Foreground="#17171D"
                                                FontFamily="Consolas" FontWeight="Bold" FontSize="11"/>
                                 </Border>
 
-                                <TextBlock Grid.Column="3" Text="{Binding Brand}" Foreground="#9DA0AA"
+                                <TextBlock Grid.Column="4" Text="{Binding Brand}" Foreground="#9DA0AA"
                                            FontSize="10" Margin="5,0,0,0" VerticalAlignment="Center"/>
 
-                                <Grid Grid.Column="4" Margin="6,0,4,0" VerticalAlignment="Center">
+                                <Grid Grid.Column="5" Margin="6,0,4,0" VerticalAlignment="Center">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="Auto"/>
                                         <ColumnDefinition Width="*"/>
@@ -63,34 +69,34 @@
                                                Visibility="{Binding BattleVisibility}"/>
                                 </Grid>
 
-                                <TextBlock Grid.Column="5" Text="{Binding Status}"
+                                <TextBlock Grid.Column="6" Text="{Binding Status}"
                                            Foreground="{Binding StatusBrush}" FontSize="10"
                                            FontWeight="Bold" Margin="0,0,5,0" VerticalAlignment="Center"/>
 
-                                <Border Grid.Column="6" Background="{Binding LicBrush}" CornerRadius="2"
+                                <Border Grid.Column="7" Background="{Binding LicBrush}" CornerRadius="2"
                                         Padding="3,0" Margin="0,1,5,1" VerticalAlignment="Center"
                                         Visibility="{Binding LicVisibility}">
                                     <TextBlock Text="{Binding License}" Foreground="{Binding LicTextBrush}"
                                                FontFamily="Consolas" FontSize="10"/>
                                 </Border>
 
-                                <TextBlock Grid.Column="7" Text="{Binding IRating}" Foreground="#9DA0AA"
+                                <TextBlock Grid.Column="8" Text="{Binding IRating}" Foreground="#9DA0AA"
                                            FontFamily="Consolas" FontSize="11" Margin="0,0,6,0"
                                            VerticalAlignment="Center"/>
 
-                                <TextBlock Grid.Column="8" Text="{Binding Stint}"
+                                <TextBlock Grid.Column="9" Text="{Binding Stint}"
                                            Foreground="{Binding StintBrush}" FontFamily="Consolas"
                                            FontSize="11" Margin="0,0,6,0" VerticalAlignment="Center"/>
 
-                                <TextBlock Grid.Column="9" Text="{Binding LastLap}" Foreground="#C9C9CF"
+                                <TextBlock Grid.Column="10" Text="{Binding LastLap}" Foreground="#C9C9CF"
                                            FontFamily="Consolas" FontSize="11" Margin="0,0,5,0"
                                            VerticalAlignment="Center"/>
 
-                                <TextBlock Grid.Column="10" Text="{Binding Pace}"
+                                <TextBlock Grid.Column="11" Text="{Binding Pace}"
                                            Foreground="{Binding PaceBrush}" FontSize="10"
                                            Margin="0,0,5,0" VerticalAlignment="Center"/>
 
-                                <TextBlock Grid.Column="11" Text="{Binding Gap}"
+                                <TextBlock Grid.Column="12" Text="{Binding Gap}"
                                            Foreground="{Binding GapBrush}" FontFamily="Consolas"
                                            FontWeight="Bold" TextAlignment="Right" MinWidth="34"
                                            VerticalAlignment="Center"/>
