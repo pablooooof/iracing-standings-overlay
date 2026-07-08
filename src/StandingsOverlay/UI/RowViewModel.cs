@@ -67,6 +67,9 @@ public sealed class RowViewModel
     private static readonly Brush FlagYellowStroke = Frozen("#FFD34D");
     private static readonly Brush MeatballOrange = Frozen("#FF8A00");
     private static readonly Brush SamePaceYellow = Frozen("#FFD34D");
+    // Single-class / spec fields have no class color to key off — a warm gold reads far more
+    // like a racing timing screen than a flat white or the teal UI accent.
+    private static readonly Brush NoClassBrush = Frozen("#FFC24D");
 
     public static RowViewModel From(StandingsRow r, Brush highlight, Brush accent)
     {
@@ -123,8 +126,8 @@ public sealed class RowViewModel
             Strat = r.StratText,
             Pace = r.PaceText,
             PosGainedBrush = r.PosGainedSign < 0 ? GainBrush : r.PosGainedSign > 0 ? LossBrush : DimBrush,
-            CarNumberBrush = TryBrush(r.ClassColor) ?? accent,
-            ClassBarBrush = TryBrush(r.ClassColor) ?? accent,
+            CarNumberBrush = TryBrush(r.ClassColor) ?? NoClassBrush,
+            ClassBarBrush = TryBrush(r.ClassColor) ?? NoClassBrush,
             LicenseBrush = licChip,
             LicenseTextBrush = ContrastText(licChip),
             BestLapBrush = r.BestLapSign == 2 ? PurpleBrush : Brushes.White,

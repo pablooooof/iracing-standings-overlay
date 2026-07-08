@@ -118,7 +118,7 @@ public static class SnapshotBuilder
         }
 
         return new StandingsSnapshot(true, kind, isRace ? "RACE" : t.SessionType.ToUpperInvariant(),
-            HeaderMid(t, roster, cfg), HeaderRight(t, roster, cfg), cellHeaders, rows);
+            HeaderGroups(t, roster, cfg, playerClassId), cellHeaders, rows);
     }
 
     private static List<DriverEntry> OrderClass(List<DriverEntry> cars, RawTick t, Roster roster, bool isRace)
@@ -305,7 +305,10 @@ public static class SnapshotBuilder
         if ((flags & CarFlags.Black) != 0) return "BLK";
         if ((flags & CarFlags.Repair) != 0) return "DMG";
         if ((flags & CarFlags.Furled) != 0) return "WRN";
-        if (stints.LooksStopped(idx)) return "SPUN";
+        // A car that dropped offline freezes its telemetry, so the "stationary" timer grows
+        // forever — SPUN is only real while the car is still in the world (surface != -1).
+        bool inWorld = idx >= t.TrackSurface.Length || t.TrackSurface[idx] != -1;
+        if (inWorld && stints.LooksStopped(idx)) return "SPUN";
         if (idx < t.OnPitRoad.Length && t.OnPitRoad[idx]) return "PIT";
         return "";
     }
@@ -319,24 +322,65 @@ public static class SnapshotBuilder
         return -1;
     }
 
-    private static string HeaderMid(RawTick t, Roster roster, OverlayConfig cfg)
+    /// <summary>Header metrics grouped into chips by type: [time] · [track/field] · [weather].
+    /// Each chip is rendered as a rounded pill so related numbers read as a cluster.</summary>
+    private static List<string> HeaderGroups(RawTick t, Roster roster, OverlayConfig cfg, int playerClassId)
     {
-        var parts = new List<string>(6);
-        if (cfg.ShowTimeOfDay && t.TimeOfDay >= 0)
-            parts.Add(FmtTimeOfDay(t.TimeOfDay));
-        if (cfg.ShowSof && roster.StrengthOfField > 25)
-            parts.Add($"SoF {FmtIr((int)roster.StrengthOfField)}");
+        var groups = new List<string>(3);
+
+        // Time: in-sim clock · lap counter · session clock.
+        var time = new List<string>(3);
+        if (cfg.ShowTimeOfDay && t.TimeOfDay >= 0) time.Add(FmtTimeOfDay(t.TimeOfDay));
+        if (LapCounter(t, roster) is { Length: > 0 } laps) time.Add(laps);
+        if (SessionClock(t) is { Length: > 0 } clock) time.Add(clock);
+        if (time.Count > 0) groups.Add(string.Join(" · ", time));
+
+        // Track / field: SoF (player's class) · track temp · incidents.
+        var track = new List<string>(3);
+        if (cfg.ShowSof)
+        {
+            double sof = roster.SofByClass.TryGetValue(playerClassId, out var s) && s > 25
+                ? s : roster.StrengthOfField;
+            if (sof > 25) track.Add($"SoF {FmtIr((int)sof)}");
+        }
         if (cfg.ShowTrackTemp && !float.IsNaN(t.TrackTemp))
-            parts.Add($"{t.TrackTemp:0}°C");
+            track.Add($"{t.TrackTemp.ToString("F" + Math.Clamp(cfg.ShowTrackTempDecimals, 0, 2))}°C");
+        if (cfg.ShowIncidents && t.PlayerIncidents >= 0) track.Add($"{t.PlayerIncidents}x");
+        if (track.Count > 0) groups.Add(string.Join(" · ", track));
+
+        // Weather: wetness · rain % · wind.
+        var sky = new List<string>(3);
         if (cfg.ShowWeather)
         {
             var wet = t.DeclaredWet ? "WET declared" : WetnessText(t.TrackWetness);
-            if (!string.IsNullOrEmpty(wet)) parts.Add(wet);
-            if (!float.IsNaN(t.Precipitation)) parts.Add($"☂ {t.Precipitation * 100:0}%");
+            if (!string.IsNullOrEmpty(wet)) sky.Add(wet);
+            if (!float.IsNaN(t.Precipitation)) sky.Add($"☂ {t.Precipitation * 100:0}%");
         }
-        if (cfg.ShowWind && WindText(t.WindVel, t.WindDir) is { Length: > 0 } wind)
-            parts.Add(wind);
-        return string.Join("  ·  ", parts);
+        if (cfg.ShowWind && WindText(t.WindVel, t.WindDir) is { Length: > 0 } wind) sky.Add(wind);
+        if (sky.Count > 0) groups.Add(string.Join(" · ", sky));
+
+        return groups;
+    }
+
+    /// <summary>"L 3/40" — player lap over the known or estimated total.</summary>
+    private static string LapCounter(RawTick t, Roster roster)
+    {
+        if (t.PlayerCarIdx < 0 || t.PlayerCarIdx >= t.Lap.Length) return "";
+        int cur = Math.Max(0, t.Lap[t.PlayerCarIdx]);
+        double remain = EstimateLapsRemain(t, roster);
+        if (remain < 0) return "";
+        return t.SessionLapsRemain >= 0 ? $"L {cur}/{cur + t.SessionLapsRemain}"
+                                        : $"L {cur}/{cur + remain:0.#}";
+    }
+
+    /// <summary>"15:05/40m" elapsed/total, or the remaining clock when total is unknown.</summary>
+    private static string SessionClock(RawTick t)
+    {
+        if (t.SessionTime >= 0 && t.SessionTimeTotal > 0 && t.SessionTimeTotal < 172800)
+            return $"{FmtClock(t.SessionTime)}/{FmtTotal(t.SessionTimeTotal)}";
+        if (t.SessionTimeRemain >= 0 && t.SessionTimeRemain < 172800)
+            return FmtClock(t.SessionTimeRemain);
+        return "";
     }
 
     /// <summary>In-sim local time of day, "H:mm" (24h), like iOverlay's clock.</summary>
@@ -366,31 +410,6 @@ public static class SnapshotBuilder
         6 or 7 => "V.Wet",
         _ => "",
     };
-
-    private static string HeaderRight(RawTick t, Roster roster, OverlayConfig cfg)
-    {
-        var parts = new List<string>(3);
-
-        // Lap counter like iOverlay's "L 3/42.9": player lap over the known or estimated total.
-        if (t.PlayerCarIdx >= 0 && t.PlayerCarIdx < t.Lap.Length)
-        {
-            int cur = Math.Max(0, t.Lap[t.PlayerCarIdx]);
-            double remain = EstimateLapsRemain(t, roster);
-            if (remain >= 0)
-                parts.Add(t.SessionLapsRemain >= 0
-                    ? $"L {cur}/{cur + t.SessionLapsRemain}"
-                    : $"L {cur}/{cur + remain:0.#}");
-        }
-
-        if (t.SessionTime >= 0 && t.SessionTimeTotal > 0 && t.SessionTimeTotal < 172800)
-            parts.Add($"{FmtClock(t.SessionTime)}/{FmtTotal(t.SessionTimeTotal)}");
-        else if (t.SessionTimeRemain >= 0 && t.SessionTimeRemain < 172800)
-            parts.Add(FmtClock(t.SessionTimeRemain));
-
-        if (cfg.ShowIncidents && t.PlayerIncidents >= 0)
-            parts.Add($"{t.PlayerIncidents}x");
-        return string.Join("  ·  ", parts);
-    }
 
     private static string FmtClock(double s)
     {

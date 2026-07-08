@@ -43,6 +43,7 @@ public sealed class OverlayConfig
     public bool ShowSof { get; set; } = true;
     public bool ShowTimeOfDay { get; set; } = true; // in-sim local time of day (iOverlay-style clock)
     public bool ShowTrackTemp { get; set; } = true;
+    public int ShowTrackTempDecimals { get; set; } = 1;   // decimals on the track-temp readout (0-2)
     public bool ShowIncidents { get; set; } = true;
     public bool ShowWeather { get; set; } = true;   // track state (Dry/Damp/Wet) + precipitation %
     public bool ShowWind { get; set; } = true;      // wind direction arrow + speed

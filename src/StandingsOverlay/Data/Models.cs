@@ -91,17 +91,25 @@ public sealed class Roster
     /// shown before a race has results) — lap counts/last times don't apply then.</summary>
     public bool ResultsFromCurrentSession = true;
     public string TrackName = "";
-    public double StrengthOfField;
+    public double StrengthOfField;                       // whole field
+    public Dictionary<int, double> SofByClass { get; } = new();   // per CarClassId
 
-    /// <summary>iRacing SoF formula over the given field.</summary>
+    /// <summary>iRacing SoF formula, computed for the whole field and per class (multiclass
+    /// SoF is per class/split, so the header shows the player's own class number).</summary>
     public void ComputeSof()
     {
-        var irs = Drivers.Values.Where(d => !d.IsPaceCar && !d.IsSpectator && d.IRating > 1)
-                                .Select(d => (double)d.IRating).ToList();
-        if (irs.Count == 0) { StrengthOfField = 0; return; }
         const double ln2 = 0.6931471805599453;
-        var sum = irs.Sum(ir => Math.Exp(-ir * ln2 / 1600.0));
-        StrengthOfField = 1600.0 / ln2 * Math.Log(irs.Count / sum);
+        static double Sof(List<double> irs)
+        {
+            if (irs.Count == 0) return 0;
+            var sum = irs.Sum(ir => Math.Exp(-ir * ln2 / 1600.0));
+            return 1600.0 / ln2 * Math.Log(irs.Count / sum);
+        }
+        var field = Drivers.Values.Where(d => !d.IsPaceCar && !d.IsSpectator && d.IRating > 1).ToList();
+        StrengthOfField = Sof(field.Select(d => (double)d.IRating).ToList());
+        SofByClass.Clear();
+        foreach (var g in field.GroupBy(d => d.CarClassId))
+            SofByClass[g.Key] = Sof(g.Select(d => (double)d.IRating).ToList());
     }
 }
 
@@ -153,13 +161,12 @@ public sealed record StandingsSnapshot(
     bool Connected,
     SessionKind Kind,
     string HeaderLeft,      // e.g. "RACE"
-    string HeaderMid,       // e.g. "SoF 2.4k · 31°C"
-    string HeaderRight,     // e.g. "12 laps · 3x"
+    IReadOnlyList<string> HeaderGroups,  // grouped metric chips: time · track/field · weather
     IReadOnlyList<string> CellHeaders,   // "Δ-5"…"Δ-1" in race, "L1"…"L4" in quali
     IReadOnlyList<StandingsRow> Rows)
 {
     public static readonly StandingsSnapshot Disconnected =
-        new(false, SessionKind.Practice, "STANDINGS", "", "waiting for iRacing…", [], []);
+        new(false, SessionKind.Practice, "STANDINGS", ["waiting for iRacing…"], [], []);
 
     public static SessionKind KindOf(string sessionType) =>
         sessionType.Contains("Race", StringComparison.OrdinalIgnoreCase) ? SessionKind.Race

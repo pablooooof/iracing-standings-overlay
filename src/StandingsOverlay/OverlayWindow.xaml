@@ -20,17 +20,27 @@
             </Style>
         </Border.Resources>
         <StackPanel>
-            <!-- Session header: RACE · SoF 2.4k · 31°C · Dry · ☂ 0% · L 3/40 · 1:35:22/2h · 3x -->
-            <Grid Margin="2,0,2,5">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
-                <TextBlock x:Name="HeaderLeft" Grid.Column="0" FontWeight="Bold"/>
-                <TextBlock x:Name="HeaderMid" Grid.Column="1" Margin="14,0" Opacity="0.75"/>
-                <TextBlock x:Name="HeaderRight" Grid.Column="2" Opacity="0.75"/>
-            </Grid>
+            <!-- Session header: grouped metric pills — [RACE] [time · laps · clock] [SoF · temp · x]
+                 [wetness · rain% · wind]. Each cluster is its own faintly-tinted rounded box. -->
+            <StackPanel Orientation="Horizontal" Margin="2,0,2,6">
+                <Border x:Name="HeaderLeftPill" CornerRadius="5" Padding="8,2" Margin="0,0,6,0"
+                        Background="#33FFFFFF" VerticalAlignment="Center">
+                    <TextBlock x:Name="HeaderLeft" FontWeight="Bold" FontSize="11.5"/>
+                </Border>
+                <ItemsControl x:Name="HeaderGroups" VerticalAlignment="Center">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border CornerRadius="5" Padding="8,2" Margin="0,0,6,0"
+                                    Background="#1EFFFFFF" VerticalAlignment="Center">
+                                <TextBlock Text="{Binding}" Opacity="0.92" FontSize="11.5"/>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
 
             <!-- Column header -->
             <Grid x:Name="ColumnHeader" Margin="2,0,2,3" Opacity="0.55">
@@ -208,13 +218,13 @@
                                 <StackPanel Grid.Column="18" Orientation="Horizontal"
                                             Visibility="{Binding DataContext.Status, RelativeSource={RelativeSource AncestorType=Window}}">
                                     <Grid VerticalAlignment="Center" Visibility="{Binding FlagVisibility}">
-                                        <Rectangle Width="14" Height="12" RadiusX="3" RadiusY="3" StrokeThickness="1.4"
+                                        <Rectangle Width="18" Height="15" RadiusX="3.5" RadiusY="3.5" StrokeThickness="1.8"
                                                    Fill="{Binding FlagBodyBrush}" Stroke="{Binding FlagStrokeBrush}"/>
-                                        <Ellipse Width="5.5" Height="5.5" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                        <Ellipse Width="7" Height="7" HorizontalAlignment="Center" VerticalAlignment="Center"
                                                  Fill="{Binding FlagDotBrush}" Visibility="{Binding FlagDotVisibility}"/>
                                     </Grid>
                                     <TextBlock Text="{Binding Status}" Foreground="{Binding StatusBrush}"
-                                               FontSize="10" VerticalAlignment="Center" FontWeight="Bold"/>
+                                               FontSize="11" VerticalAlignment="Center" FontWeight="Bold"/>
                                 </StackPanel>
                             </Grid>
                         </Border>
