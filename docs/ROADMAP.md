@@ -66,20 +66,20 @@ strategy phase.
 Ideas and requests captured during rapid iteration so nothing is lost. Roughly ordered.
 
 **Traffic alerter**
-- [ ] **"You're lapping a slower car" alert @ 5s** — mirror of the blue-flag branch: warn when
-  the player is closing on slower/lapped traffic *ahead* they're about to put a lap down. New
-  `IsLapping` row type + rendering. (Chosen semantics: you lapping them, not you un-lapping.)
+- [x] **"You're lapping a slower car" alert @ 5s** — `IsLapping` rows (green), fired on raw gap
+  (`Traffic.LapTrafficGapSec`, default 5s) while closing; toggle `Traffic.WarnLapping`.
 
 **Standings / relative**
 - [ ] **Smooth GAP/INT** — option to compute standings gap/interval from the relative's
   continuous `CarIdxEstTime` method (`RelativeGap`) instead of `CarIdxF2Time`, config-toggled.
-- [ ] **Pit-exit flash (~15s)** — flash the out-lap badge for the first ~15s after pit exit,
-  distinct from the steady whole-out-lap `OUT`.
+- [x] **Pit-exit badge (~15s)** — the first ~15s out of the pits reads a bright `EXIT`, distinct
+  from the steady whole-out-lap `OUT`. (Bright badge, not a per-row blink — an ItemsControl
+  restarts row animations on every repaint.)
 - [ ] **Hide parked / no-driver cars in relative** — config to drop cars parked in the pit stall
   (stationary, likely DNF / no driver) — cuts noise in practice and endurance. iRacing has no
   clean "no driver" var; heuristic = in pit stall + stationary a long time.
-- [ ] **Driver-change alert (endurance teams)** — detect a car's current driver changing on YAML
-  reparse (name / UserID) → a 60s tag/alert. Roster already reparses on `SessionInfoUpdate`.
+- [x] **Driver-change alert (endurance teams)** — `DriverSwapTracker` tags a car `SWAP` (purple)
+  for 60s when its driver name changes across a YAML reparse.
 - [ ] **Class-colour override map** — optional user map (GT3=pink, LMP2=blue, GTP=yellow…) that
   overrides iRacing's own class colours when you prefer a convention.
 
@@ -107,7 +107,9 @@ Ideas and requests captured during rapid iteration so nothing is lost. Roughly o
 | Badge | Meaning |
 |---|---|
 | `PIT` | on pit road |
-| `OUT` | on the out-lap (cold tyres) — the whole lap after a pit exit |
+| `EXIT` | just left the pits (~15s) — bright, to catch the eye |
+| `OUT` | on the out-lap (cold tyres) — the rest of the lap after a pit exit |
+| `SWAP` | team driver change — a new driver just took over (60s) |
 | `SPUN` | stopped on the racing surface (likely to recover) |
 | `TOW` | stopped off-track, or stuck >15s — a tow is coming |
 | `REJOIN` | was stopped, moving again (spin recovery); experimental, `ShowRejoinState` |
