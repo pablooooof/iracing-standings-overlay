@@ -21,9 +21,9 @@ public sealed record TrafficRowViewModel(
     {
         var classBrush = Frozen(r.ClassColor);
         var ttaBrush = r.Phase == TrafficPhase.Imminent ? DangerBrush
-                     : r.IsBlue ? BlueBrush : WarnBrush;
+                     : r.IsBlue ? BlueBrush : r.IsLapping ? GainBrush : WarnBrush;
         return new TrafficRowViewModel(
-            StripeBrush: r.IsBlue ? BlueBrush : classBrush,
+            StripeBrush: r.IsBlue ? BlueBrush : r.IsLapping ? GainBrush : classBrush,
             NumBrush: classBrush,
             TtaBrush: ttaBrush,
             BlueTagBrush: BlueTagStripes,
@@ -197,7 +197,8 @@ public partial class TrafficWindow : Window
         bool imminent = head.Phase == TrafficPhase.Imminent;
         var classBrush = TrafficRowViewModel.Frozen(head.ClassColor);
         var ttaBrush = imminent ? TrafficRowViewModel.DangerBrush
-                     : head.IsBlue ? TrafficRowViewModel.BlueBrush : TrafficRowViewModel.WarnBrush;
+                     : head.IsBlue ? TrafficRowViewModel.BlueBrush
+                     : head.IsLapping ? TrafficRowViewModel.GainBrush : TrafficRowViewModel.WarnBrush;
 
         // Class name comes from SubText's first segment ("GTP · P2 in class" → "GTP").
         string className = head.SubText.Split('·')[0].Trim();
@@ -328,11 +329,13 @@ public partial class TrafficWindow : Window
         Render(new TrafficSnapshot(
             Rows:
             [
-                new TrafficRow(0, TrafficPhase.Imminent, false, "#E33241", "07", "R. Vergne", "4.2k",
+                new TrafficRow(0, TrafficPhase.Imminent, false, false, "#FFD24D", "07", "R. Vergne", "4.2k",
                                "GTP · P2 in class", "3.2", "+7.1s/lap", "▾▾▾", 2, 0.73),
-                new TrafficRow(1, TrafficPhase.Watch, false, "#E33241", "22", "S. Okafor", "3.1k",
+                new TrafficRow(1, TrafficPhase.Watch, false, false, "#FFD24D", "22", "S. Okafor", "3.1k",
                                "GTP · P3 in class", "4.5", "+6.8s/lap", "▾▾▾", 1, 0.62),
-                new TrafficRow(2, TrafficPhase.Watch, true, "#FFDA59", "11", "M. Rossi", "5.6k",
+                new TrafficRow(3, TrafficPhase.Watch, false, true, "#57C1FF", "88", "L. Tanaka", "1.9k",
+                               "GT4 · P4 · lapping", "4.1", "+3.4s/lap", "▾▾", 1, 0.35),
+                new TrafficRow(2, TrafficPhase.Watch, true, false, "#FF5FA8", "11", "M. Rossi", "5.6k",
                                "GT3 · leader · +1 lap", "11.0", "+2.1s/lap", "▾", 1, 0.30),
             ],
             Overflow: 0, Alongside: AlongsideDir.None, ClearFlash: false, Cues: TrafficCues.None));

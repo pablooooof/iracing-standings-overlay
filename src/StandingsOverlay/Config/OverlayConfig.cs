@@ -120,6 +120,8 @@ public sealed class TrafficConfig
     public double AlertLeadTimeSec { get; set; } = 12;  // WATCH threshold (time to arrival) for traffic
     public double BlueLeadTimeSec { get; set; } = 20;   // WATCH threshold when being lapped (planning, not reflexes)
     public double ImminentSec { get; set; } = 4;
+    public bool WarnLapping { get; set; } = true;       // alert on slower/lapped traffic AHEAD you're about to lap
+    public double LapTrafficGapSec { get; set; } = 5;   // gap at which the "lapping" alert fires
     public int MaxRows { get; set; } = 3;
     public double Scale { get; set; } = 1.0;            // widget size multiplier (LayoutTransform)
     public bool ShowIRating { get; set; } = true;

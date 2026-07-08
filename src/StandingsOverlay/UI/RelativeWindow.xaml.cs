@@ -27,6 +27,7 @@ public sealed record RelativeRowViewModel(
     private static readonly Brush SamePaceYellow = RowViewModel.Frozen("#FFD34D");
     private static readonly Brush PitAmber = RowViewModel.Frozen("#FFB84D");
     private static readonly Brush PitExitCyan = RowViewModel.Frozen("#40D8FF");   // cold out-lap car
+    private static readonly Brush ExitBright = RowViewModel.Frozen("#8FF0FF");    // fresh pit exit (~15s)
     private static readonly Brush RejoinGreen = RowViewModel.Frozen("#4CFF6A");
     private static readonly Brush WarnYellow = RowViewModel.Frozen("#FFD34D");
     private static readonly Brush Meatball = RowViewModel.Frozen("#FF8A00");
@@ -73,6 +74,7 @@ public sealed record RelativeRowViewModel(
             {
                 "SPUN" or "DQ" => Danger,
                 "TOW" => Meatball,
+                "EXIT" => ExitBright,
                 "OUT" => PitExitCyan,
                 "REJOIN" => RejoinGreen,
                 "WRN" => WarnYellow,

@@ -184,6 +184,9 @@ public static class RelativeBuilder
         if (inWorld && stints.LooksStopped(idx)) return SnapshotBuilder.StoppedBadge(t, stints, idx);
         if (showRejoin && inWorld && stints.IsRejoining(idx, 6)) return "REJOIN";
         if (inPit) return "PIT";
+        // Fresh out of the pits (~15s) reads EXIT — bright, to catch the eye; the rest of the
+        // out-lap is a steady OUT (cold tyres).
+        if (stints.JustExitedPits(idx, 15)) return "EXIT";
         if (stints.OnOutLap(idx, t.Lap[idx])) return "OUT";
         return "";
     }

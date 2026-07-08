@@ -14,6 +14,7 @@ public sealed record TrafficRow(
     int CarIdx,
     TrafficPhase Phase,
     bool IsBlue,             // being lapped (blue-flag) vs faster-class traffic
+    bool IsLapping,          // slower/lapped traffic AHEAD that you're about to lap
     string ClassColor,
     string CarNumber,
     string Name,
@@ -82,7 +83,18 @@ public sealed class TrafficDetector
         public bool Alerting;
     }
 
+    // "You're lapping them" alerts (slower traffic ahead) keep their own light state so the tuned
+    // behind-approaching machine stays untouched — a car is only ever in one of the two regimes.
+    private sealed class LapState
+    {
+        public readonly List<(double T, float Gap)> Samples = new(8);
+        public bool Alerting;
+        public double AlertSince;
+        public TrafficPhase Phase;
+    }
+
     private readonly Dictionary<int, CarState> _cars = new();
+    private readonly Dictionary<int, LapState> _lapCars = new();
     private readonly HashSet<int> _bluePlayed = new();   // blue cue fires once per lapping car
     private double _lastWatchCue = double.MinValue;
     private double _lastImminentCue = double.MinValue;
@@ -91,6 +103,7 @@ public sealed class TrafficDetector
     public void Reset()
     {
         _cars.Clear();
+        _lapCars.Clear();
         _bluePlayed.Clear();
         _lastWatchCue = _lastImminentCue = double.MinValue;
         _clearFlashUntil = -1;
@@ -130,6 +143,18 @@ public sealed class TrafficDetector
 
             double deltaBehind = t.LapDistPct[t.PlayerCarIdx] - t.LapDistPct[d.CarIdx];
             if (deltaBehind < 0) deltaBehind += 1;
+
+            // "You're lapping them": slower/lapped traffic AHEAD on track that you're at least ~half
+            // a lap up on overall (a lap down). A separate light state handles it; a car is only
+            // ever ahead-being-lapped OR behind-approaching, never both — so skip the rest here.
+            double carTot = t.Lap[d.CarIdx] + t.LapDistPct[d.CarIdx];
+            if (race && lappingOn && tc.WarnLapping && deltaBehind >= 0.5 && playerTotal - carTot >= 0.5)
+            {
+                _cars.Remove(d.CarIdx);
+                HandleLapTarget(d, t, now, playerLapTime, tc, active);
+                continue;
+            }
+            _lapCars.Remove(d.CarIdx);
 
             // Lap counts only mean "lapping you" in a race; practice/qual has no blue flags.
             bool isBlue = race && lappingOn && d.CarClassId == playerClassId &&
@@ -310,6 +335,62 @@ public sealed class TrafficDetector
         return true;
     }
 
+    /// <summary>Slower/lapped traffic ahead you're catching. Simpler than the behind machine:
+    /// fires on raw gap (default 5s) while you're actually closing, with a short dismissal grace.</summary>
+    private void HandleLapTarget(DriverEntry d, RawTick t, double now, float playerLapTime,
+        TrafficConfig tc, List<(TrafficRow Row, float Tta, float Gap, int ClassId)> active)
+    {
+        // They are ahead, so the shared est-time gap is positive = time for us to reach them.
+        float gap = Math.Max(0f, RelativeGap.SignedSeconds(t, d.CarIdx, playerLapTime));
+        if (gap <= 0.01f || gap > WindowSec) { _lapCars.Remove(d.CarIdx); return; }
+
+        var s = _lapCars.TryGetValue(d.CarIdx, out var s0) ? s0 : (_lapCars[d.CarIdx] = new LapState());
+        if (s.Samples.Count > 0 && Math.Abs(gap - s.Samples[^1].Gap) > 3) s.Samples.Clear();
+        s.Samples.Add((now, gap));
+        while (s.Samples.Count > 1 && now - s.Samples[0].T > RateWindowSec) s.Samples.RemoveAt(0);
+
+        double span = s.Samples.Count > 1 ? now - s.Samples[0].T : 0;
+        float rate = span >= MinRateSpanSec ? (float)((s.Samples[0].Gap - gap) / span) : 0f;
+        bool closing = span < MinRateSpanSec || rate > 0.02f;   // benefit of the doubt until known
+        bool inRange = closing && gap <= tc.LapTrafficGapSec;
+
+        if (!s.Alerting)
+        {
+            if (!inRange) { if (gap > tc.LapTrafficGapSec * 1.5) _lapCars.Remove(d.CarIdx); return; }
+            s.Alerting = true;
+            s.Phase = TrafficPhase.Watch;
+            s.AlertSince = now;
+            Log.Write($"traffic: LAPPING #{d.CarNumber} {d.ClassName} gap={gap:0.0}s rate={rate:0.000}s/s");
+        }
+        else if ((!closing || gap > tc.LapTrafficGapSec * 1.4) && now - s.AlertSince > MinDisplaySec)
+        {
+            _lapCars.Remove(d.CarIdx);
+            return;
+        }
+
+        if (gap <= 2.0f) s.Phase = TrafficPhase.Imminent;
+        active.Add((BuildLapRow(d, t, s.Phase, gap, rate, playerLapTime, tc), gap, gap, d.CarClassId));
+    }
+
+    private static TrafficRow BuildLapRow(DriverEntry d, RawTick t, TrafficPhase phase, float gap,
+        float rate, float playerLapTime, TrafficConfig tc)
+    {
+        float ratePerLap = Math.Max(0, rate) * playerLapTime;
+        string chevrons = ratePerLap > 6 ? "▾▾▾" : ratePerLap > 2.5 ? "▾▾" : "▾";
+        int cp = d.CarIdx < t.ClassPosition.Length ? t.ClassPosition[d.CarIdx] : 0;
+        string sub = cp > 0 ? $"{d.ClassName} · P{cp} · lapping" : $"{d.ClassName} · lapping";
+        return new TrafficRow(
+            CarIdx: d.CarIdx, Phase: phase, IsBlue: false, IsLapping: true,
+            ClassColor: string.IsNullOrEmpty(d.ClassColor) ? "#9DA0AA" : d.ClassColor,
+            CarNumber: d.CarNumber, Name: d.Name,
+            IRatingText: tc.ShowIRating && d.IRating > 0 ? $"{d.IRating / 1000.0:0.0}k" : "",
+            SubText: sub,
+            TtaText: Math.Clamp(gap, 0.1, 99.9).ToString("0.0"),
+            RateText: ratePerLap > 0.05 ? $"+{ratePerLap:0.0}s/lap" : "",
+            Chevrons: chevrons, TrainCount: 1,
+            BarPct: Math.Round(Math.Clamp(1 - gap / tc.LapTrafficGapSec, 0.03, 1), 2));
+    }
+
     private static TrafficRow BuildRow(DriverEntry d, RawTick t, TrafficPhase phase, bool isBlue,
                                        float tta, float rate, float playerLapTime,
                                        double playerTotal, double lead, TrafficConfig tc)
@@ -335,6 +416,7 @@ public sealed class TrafficDetector
             CarIdx: d.CarIdx,
             Phase: phase,
             IsBlue: isBlue,
+            IsLapping: false,
             ClassColor: string.IsNullOrEmpty(d.ClassColor) ? "#9DA0AA" : d.ClassColor,
             CarNumber: d.CarNumber,
             Name: d.Name,
