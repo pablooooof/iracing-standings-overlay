@@ -32,12 +32,7 @@ public static class RelativeGap
         {
             float pe = t.EstTime[t.PlayerCarIdx], ce = t.EstTime[carIdx];
             if (pe > 0.5f && ce > 0.5f)
-            {
-                float est = ce - pe;
-                if (est - gap > 0.5f * refLap) est -= refLap;
-                else if (gap - est > 0.5f * refLap) est += refLap;
-                if (Math.Abs(est - gap) < 0.35f * refLap) gap = est;
-            }
+                gap = Refine(ce - pe, gap, refLap);
         }
         return gap;
     }
@@ -62,14 +57,29 @@ public static class RelativeGap
         {
             float ae = t.EstTime[aIdx], be = t.EstTime[bIdx];
             if (ae > 0.5f && be > 0.5f)
-            {
-                float est = ae - be;
-                if (est - gap > 0.5f * refLap) est -= refLap;
-                else if (gap - est > 0.5f * refLap) est += refLap;
-                if (Math.Abs(est - gap) < 0.35f * refLap) gap = est;
-            }
+                gap = Refine(ae - be, gap, refLap);
         }
         return gap;
+    }
+
+    /// <summary>
+    /// Blend the CarIdxEstTime difference (<paramref name="est"/>) with the uniform-speed distance
+    /// estimate (<paramref name="dist"/>). Est-time knows a straight from a hairpin, so it should
+    /// *shrink* the distance estimate (which over-reads on the straights) — but it must never
+    /// *inflate* a close gap: iRacing's CarIdxEstTime can be scaled by a car's own (slower) lap,
+    /// which would otherwise turn a 0.2s gap into 2s. So accept est only on the same side and when
+    /// it doesn't grow the gap by more than a hair. Away from that, the distance estimate wins.
+    /// </summary>
+    private static float Refine(float est, float dist, float refLap)
+    {
+        // Unwrap the est difference across the start/finish line toward the distance estimate.
+        if (est - dist > 0.5f * refLap) est -= refLap;
+        else if (dist - est > 0.5f * refLap) est += refLap;
+
+        if (Math.Sign(est) == Math.Sign(dist) &&
+            Math.Abs(est) < 1.3f * Math.Abs(dist) + 0.3f)
+            return est;
+        return dist;
     }
 
     /// <summary>The player's reference lap: class est lap, else own best, else a safe default.</summary>
