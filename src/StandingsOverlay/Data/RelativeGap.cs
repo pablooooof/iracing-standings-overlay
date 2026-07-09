@@ -20,8 +20,9 @@ public static class RelativeGap
     }
 
     /// <summary>
-    /// Signed gap in seconds over <paramref name="refLap"/> (the traffic alerter passes the
-    /// chaser's class lap, the relative box the player's). The est-time refinement is shifted
+    /// Signed gap in seconds over <paramref name="refLap"/> — callers pass the pace of whichever
+    /// car is closing (the chaser's class lap for a car behind, the player's for a car ahead), so
+    /// the relative box and the traffic alerter agree. The est-time refinement is shifted
     /// by ±refLap to land nearest the distance-based gap (S/F line between the cars) and only
     /// accepted within 0.35 laps of it — est time reads 0 in the pits and can tear mid-crossing.
     /// </summary>
