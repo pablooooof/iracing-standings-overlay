@@ -307,7 +307,7 @@ public static class SnapshotBuilder
             BestLapSign: bestLap > 0 && classBest > 0 && Math.Abs(bestLap - classBest) < 0.0005f ? 2 : 0,
             LastLapText: last > 0 ? FmtLap(last, cfg.LapTimePrecision) : "",
             DeltaCells: deltaCells,
-            StatusText: Status(t, stints, idx, cfg.ShowRejoinState, swap.JustSwapped(idx, 60)),
+            StatusText: Status(t, stints, idx, cfg.ShowRejoinState, swap.JustSwapped(idx, 60), d.ClassEstLap),
             RankText: paceRank.TryGetValue(idx, out var rank) ? rank.ToString() : "",
             RankSign: paceRank.TryGetValue(idx, out var rk) ? (rk == 1 ? 2 : rk <= 3 ? -1 : 0) : 0,
             StratText: stints.StrategyText(idx, t.Lap[idx], lapsRemain),
@@ -334,7 +334,8 @@ public static class SnapshotBuilder
         LapsDownText(t, refIdx, idx) ?? FmtGap(Math.Max(0, t.F2Time[idx] - t.F2Time[refIdx]), precision);
 
     /// <summary>Highest-priority per-car status badge.</summary>
-    private static string Status(RawTick t, StintTracker stints, int idx, bool showRejoin, bool swapped)
+    private static string Status(RawTick t, StintTracker stints, int idx, bool showRejoin,
+        bool swapped, float refLap)
     {
         int flags = idx < t.SessionFlags.Length ? t.SessionFlags[idx] : 0;
         if ((flags & CarFlags.Disqualify) != 0) return "DQ";
@@ -347,6 +348,7 @@ public static class SnapshotBuilder
         if (inWorld && stints.LooksStopped(idx)) return StoppedBadge(t, stints, idx);
         if (swapped) return "SWAP";   // new driver just took over (team endurance)
         if (showRejoin && inWorld && stints.IsRejoining(idx, 6)) return "REJOIN";
+        if (showRejoin && inWorld && stints.LooksSlow(idx, refLap)) return "SLOW";   // limping round
         if (idx < t.OnPitRoad.Length && t.OnPitRoad[idx]) return "PIT";
         return "";
     }

@@ -167,7 +167,7 @@ public static class RelativeBuilder
             CarBrand: rc.ShowBrand ? d.CarBrand : "",
             Name: d.Name,
             LapParity: parity,
-            StatusText: RelativeStatus(t, stints, idx, inPit, cfg.ShowRejoinState, swap.JustSwapped(idx, 60)),
+            StatusText: RelativeStatus(t, stints, idx, inPit, cfg.ShowRejoinState, swap.JustSwapped(idx, 60), d.ClassEstLap),
             Battle: battle,
             IRatingText: rc.ShowIRating ? SnapshotBuilder.FmtIr(d.IRating) : "",
             LicText: rc.ShowLicense ? d.LicString : "",
@@ -185,7 +185,7 @@ public static class RelativeBuilder
     /// <summary>Relative status badge, sharing the standings' penalty flags plus the relative-only
     /// PIT / OUT (out-lap) / REJOIN / SPUN states.</summary>
     private static string RelativeStatus(RawTick t, StintTracker stints, int idx, bool inPit,
-        bool showRejoin, bool swapped)
+        bool showRejoin, bool swapped, float refLap)
     {
         int flags = idx < t.SessionFlags.Length ? t.SessionFlags[idx] : 0;
         if ((flags & CarFlags.Disqualify) != 0) return "DQ";
@@ -196,6 +196,7 @@ public static class RelativeBuilder
         if (inWorld && stints.LooksStopped(idx)) return SnapshotBuilder.StoppedBadge(t, stints, idx);
         if (swapped) return "SWAP";
         if (showRejoin && inWorld && stints.IsRejoining(idx, 6)) return "REJOIN";
+        if (showRejoin && inWorld && stints.LooksSlow(idx, refLap)) return "SLOW";
         if (inPit) return "PIT";
         // Fresh out of the pits (~15s) reads EXIT — bright, to catch the eye; the rest of the
         // out-lap is a steady OUT (cold tyres).

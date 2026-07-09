@@ -74,9 +74,11 @@
                                                Visibility="{Binding BattleVisibility}"/>
                                 </Grid>
 
-                                <TextBlock Grid.Column="6" Text="{Binding Status}"
-                                           Foreground="{Binding StatusBrush}" FontSize="10"
-                                           FontWeight="Bold" Margin="0,0,5,0" VerticalAlignment="Center"/>
+                                <Border Grid.Column="6" Background="{Binding StatusBg}" CornerRadius="3"
+                                        Padding="4,0" Margin="0,0,5,1" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding Status}" Foreground="{Binding StatusBrush}"
+                                               FontSize="10" FontWeight="Bold"/>
+                                </Border>
 
                                 <Border Grid.Column="7" Background="{Binding LicBrush}" CornerRadius="2"
                                         Padding="3,0" Margin="0,1,5,1" VerticalAlignment="Center"
@@ -85,9 +87,13 @@
                                                FontFamily="Consolas" FontSize="10"/>
                                 </Border>
 
-                                <TextBlock Grid.Column="8" Text="{Binding IRating}" Foreground="#9DA0AA"
-                                           FontFamily="Consolas" FontSize="11" Margin="0,0,6,0"
-                                           VerticalAlignment="Center"/>
+                                <!-- iRating chip: light pill, dark text (same as the standings) -->
+                                <Border Grid.Column="8" Background="#E9E9EC" CornerRadius="4" Padding="4,0"
+                                        Margin="0,0,6,1" VerticalAlignment="Center"
+                                        Visibility="{Binding IrVisibility}">
+                                    <TextBlock Text="{Binding IRating}" Foreground="#17171D"
+                                               FontFamily="Consolas" FontWeight="Bold" FontSize="10.5"/>
+                                </Border>
 
                                 <TextBlock Grid.Column="9" Text="{Binding Stint}"
                                            Foreground="{Binding StintBrush}" FontFamily="Consolas"

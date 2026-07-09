@@ -220,9 +220,11 @@ public sealed class TrafficDetector
                 // A player accelerating out of a corner briefly "holds off" a faster car in
                 // the numbers, which used to blow the countdown up to 99 s. They are still
                 // coming — never let a faster car's rate fall below a third of class pace.
-                if (isFaster) rate = Math.Max(rate, classPace * 0.3f);
+                // Race only: in practice/qual cars run their own programs (out-laps, cool-downs),
+                // so a faster car ahead isn't necessarily catching you — require *measured* closing.
+                if (isFaster && race) rate = Math.Max(rate, classPace * 0.3f);
             }
-            else if (isFaster)
+            else if (isFaster && race)
             {
                 rate = classPace;
             }

@@ -13,10 +13,10 @@ public sealed record RelativeRowViewModel(
     string License, string IRating, string Stint, string LastLap, string Pace, string Gap,
     Brush PosBrush, Brush NumBrush, Brush ClassBarBrush, Brush TyreBrush, Brush TyreOldBrush,
     Brush NameBrush, FontWeight NameWeight,
-    Brush StatusBrush, Brush LicBrush, Brush LicTextBrush, Brush StintBrush, Brush PaceBrush,
+    Brush StatusBrush, Brush StatusBg, Brush LicBrush, Brush LicTextBrush, Brush StintBrush, Brush PaceBrush,
     Brush GapBrush, Brush BattleBrush, Brush RowBackground,
     Visibility NumVisibility, Visibility TyreVisibility, Visibility TyreSwitchVisibility,
-    Visibility LicVisibility, Visibility BattleVisibility)
+    Visibility IrVisibility, Visibility LicVisibility, Visibility BattleVisibility)
 {
     private static readonly Brush White = RowViewModel.Frozen("#E8E9EE");
     private static readonly Brush DryTyre = RowViewModel.Frozen("#C9C9CF");
@@ -29,7 +29,9 @@ public sealed record RelativeRowViewModel(
     private static readonly Brush SamePaceYellow = RowViewModel.Frozen("#FFD34D");
     private static readonly Brush PitAmber = RowViewModel.Frozen("#FFB84D");
     private static readonly Brush PitExitCyan = RowViewModel.Frozen("#40D8FF");   // cold out-lap car
-    private static readonly Brush ExitBright = RowViewModel.Frozen("#8FF0FF");    // fresh pit exit (~15s)
+    private static readonly Brush ExitChip = RowViewModel.Frozen("#FF8A00");      // fresh pit exit — bright chip
+    private static readonly Brush StintAmber = RowViewModel.Frozen("#FFCA5C");    // stint number, always amber
+    private static readonly Brush Ink = RowViewModel.Frozen("#17171D");           // dark text on a bright chip
     private static readonly Brush SwapPurple = RowViewModel.Frozen("#C77DFF");    // team driver change
     private static readonly Brush RejoinGreen = RowViewModel.Frozen("#4CFF6A");
     private static readonly Brush WarnYellow = RowViewModel.Frozen("#FFD34D");
@@ -40,16 +42,16 @@ public sealed record RelativeRowViewModel(
 
     public static RelativeRowViewModel From(RelativeRow r, Brush highlight, Brush accent)
     {
-        bool parked = r.StatusText.Length > 0;
+        // Only PIT dims the name/gap (a stationary car you can ignore); SPUN/TOW/REJOIN/OUT/EXIT/
+        // SWAP are all still cars on track, so they keep their normal lap-parity colour.
+        bool dimForPit = r.StatusText == "PIT";
         var nameBrush = r.IsPlayer ? White
-                      : parked ? Dim
+                      : dimForPit ? Dim
                       : r.LapParity > 0 ? LapsYouRed
                       : r.LapParity < 0 ? LappedBlue
                       : White;
-        // The gap column carries the same lap-parity language as the sim colors names with;
-        // battle-relevant cars get the accent instead so the actual fight pops.
         var gapBrush = r.Battle ? accent
-                     : parked || r.IsPlayer ? Dim
+                     : dimForPit || r.IsPlayer ? Dim
                      : r.LapParity > 0 ? LapsYouRed
                      : r.LapParity < 0 ? LappedBlue
                      : White;
@@ -79,17 +81,20 @@ public sealed record RelativeRowViewModel(
                 "SPUN" or "DQ" => Danger,
                 "TOW" => Meatball,
                 "SWAP" => SwapPurple,
-                "EXIT" => ExitBright,
+                "EXIT" => Ink,          // dark text on the bright chip
                 "OUT" => PitExitCyan,
                 "REJOIN" => RejoinGreen,
+                "SLOW" => WarnYellow,
                 "WRN" => WarnYellow,
                 "DMG" => Meatball,
                 "BLK" => White,
                 _ => PitAmber,   // PIT
             },
+            // A fresh pit exit gets a filled chip so it pops (Spa-24h "who just left the pits").
+            StatusBg: r.StatusText == "EXIT" ? ExitChip : Brushes.Transparent,
             LicBrush: licChip,
             LicTextBrush: Brushes.White,
-            StintBrush: r.StintFresh ? FreshGreen : Dim,
+            StintBrush: StintAmber,
             PaceBrush: r.PaceSign > 0 ? LossRed : r.PaceSign < 0 ? FreshGreen
                        : r.PaceText.Length > 0 ? SamePaceYellow : Dim,
             GapBrush: gapBrush,
@@ -98,6 +103,7 @@ public sealed record RelativeRowViewModel(
             NumVisibility: r.CarNumber.Length > 1 ? Visibility.Visible : Visibility.Collapsed,
             TyreVisibility: r.Tyre >= 0 && r.TyreSwitch == 0 ? Visibility.Visible : Visibility.Collapsed,
             TyreSwitchVisibility: r.Tyre >= 0 && r.TyreSwitch != 0 ? Visibility.Visible : Visibility.Collapsed,
+            IrVisibility: r.IRatingText.Length > 0 ? Visibility.Visible : Visibility.Collapsed,
             LicVisibility: r.LicText.Length > 0 ? Visibility.Visible : Visibility.Collapsed,
             BattleVisibility: r.Battle ? Visibility.Visible : Visibility.Collapsed);
     }

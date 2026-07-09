@@ -118,6 +118,7 @@ Ideas and requests captured during rapid iteration so nothing is lost. Roughly o
 | `SPUN` | stopped on the racing surface (likely to recover) |
 | `TOW` | stopped off-track, or stuck >15s — a tow is coming |
 | `REJOIN` | was stopped, moving again (spin recovery); experimental, `ShowRejoinState` |
+| `SLOW` | moving but crawling well below class pace (limping/damaged); experimental, `ShowRejoinState` |
 | `DQ` / `BLK` | disqualified / black flag |
 | `DMG` | meatball — car damaged, must pit for repair |
 | `WRN` | furled black flag — a warning (repair/behaviour) before a full black flag |

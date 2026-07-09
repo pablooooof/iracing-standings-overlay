@@ -29,6 +29,8 @@ public sealed class StintTracker
         public double LastTotalDist = -1;                 // stopped-car detection
         public double LastMoveTime = -1;
         public double RejoinTime = -1;                    // when it started moving again after a stop
+        public double RateSampleTime = -1, RateSampleDist;
+        public double LapsPerSec = -1;                    // smoothed track progress (laps/sec)
         public double LastPitExitTime = -1;               // when the car last rejoined from pit road
         public int LastCompound = -1;                     // CarIdxTireCompound (0 dry, >=1 wet)
         public double CompoundSwitchTime = -1;            // when it last crossed dry<->wet
@@ -103,6 +105,16 @@ public sealed class StintTracker
                         s.RejoinTime = _now;
                     s.LastTotalDist = total;
                     s.LastMoveTime = _now;
+                }
+
+                // Smoothed progress rate over a 3s window → detect a car limping round well off pace.
+                if (s.RateSampleTime < 0) { s.RateSampleTime = _now; s.RateSampleDist = total; }
+                else if (_now - s.RateSampleTime >= 3.0)
+                {
+                    double dl = total - s.RateSampleDist;
+                    if (dl >= 0 && dl < 0.6) s.LapsPerSec = dl / (_now - s.RateSampleTime);
+                    s.RateSampleTime = _now;
+                    s.RateSampleDist = total;
                 }
             }
 
@@ -281,6 +293,12 @@ public sealed class StintTracker
     public bool IsRejoining(int idx, double withinSec) =>
         _now >= 0 && _cars.TryGetValue(idx, out var s)
         && s.RejoinTime >= 0 && _now - s.RejoinTime <= withinSec && !LooksStopped(idx);
+
+    /// <summary>True when the car is moving but crawling — well below its class pace (a limping,
+    /// damaged car). <paramref name="refLap"/> = class ref-lap seconds. Not for stopped cars.</summary>
+    public bool LooksSlow(int idx, float refLap) =>
+        refLap > 10 && _cars.TryGetValue(idx, out var s) && s.LapsPerSec >= 0 && s.LastLapSeen >= 1
+        && s.LapsPerSec * refLap is > 0.05 and < 0.35 && !LooksStopped(idx);
 
     /// <summary>
     /// True when the car looks like it's fuel-saving: consistent laps well off its own best.

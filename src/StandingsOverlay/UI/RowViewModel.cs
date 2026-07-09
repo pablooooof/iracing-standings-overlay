@@ -126,7 +126,7 @@ public sealed class RowViewModel
                     > 0 => LossBrush,
                     _ => (c.Text?.Length ?? 0) > 4 ? Brushes.White : DimBrush, // quali laps white, neutral deltas dim
                 })).ToList(),
-            Status = r.StatusText is "PIT" or "SPUN" or "REJOIN" or "TOW" or "SWAP" ? r.StatusText : "",
+            Status = r.StatusText is "PIT" or "SPUN" or "REJOIN" or "TOW" or "SWAP" or "SLOW" ? r.StatusText : "",
             CarBrand = r.CarBrand,
             Rank = r.RankText,
             Strat = r.StratText,
@@ -142,7 +142,7 @@ public sealed class RowViewModel
             LicenseTextBrush = ContrastText(licChip),
             BestLapBrush = r.BestLapSign == 2 ? PurpleBrush : Brushes.White,
             StatusBrush = r.StatusText == "SPUN" ? DangerBrush
-                        : r.StatusText == "TOW" ? WarnBrush
+                        : r.StatusText is "TOW" or "SLOW" ? WarnBrush
                         : r.StatusText == "SWAP" ? PurpleBrush
                         : r.StatusText == "REJOIN" ? GainBrush : PitBrush,
             PaceBrush = r.PaceSign < 0 ? GainBrush : r.PaceSign > 0 ? LossBrush
