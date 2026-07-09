@@ -149,16 +149,29 @@ public partial class SettingsWindow : Window
             () => c.OtherClassesDriversAtTop, v => c.OtherClassesDriversAtTop = (int)v, v => $"{v:0}"));
         PageBody.Children.Add(Slider("Delta laps", "Per-lap gap-change columns — the reason this overlay exists.", 1, 10, 1,
             () => c.DeltaLaps, v => c.DeltaLaps = (int)v, v => $"{v:0}"));
+        PageBody.Children.Add(Slider("Name column width", "Fixed width so long names don't resize the table.", 60, 400, 10,
+            () => c.NameColumnWidth, v => c.NameColumnWidth = v, v => $"{v:0}px"));
+        PageBody.Children.Add(Slider("Header text size", "Standings header pill text.", 10, 20, 0.5,
+            () => c.HeaderFontSize, v => c.HeaderFontSize = v, v => $"{v:0.#}"));
         PageBody.Children.Add(Toggle("Column header row", null, () => c.ShowColumnHeader, v => c.ShowColumnHeader = v));
         PageBody.Children.Add(Toggle("List full class in qualifying", "Instead of the top-N + window layout.",
             () => c.QualifyShowFullClass, v => c.QualifyShowFullClass = v));
+        PageBody.Children.Add(Toggle("Smooth gaps", "Continuous gap/interval (like the relative) instead of stepping at timing lines.",
+            () => c.SmoothGaps, v => c.SmoothGaps = v));
+        PageBody.Children.Add(Toggle("Rejoin badge", "Show REJOIN when a stopped car starts moving again (experimental).",
+            () => c.ShowRejoinState, v => c.ShowRejoinState = v));
 
         PageBody.Children.Add(Subhead("Header extras"));
+        PageBody.Children.Add(Toggle("Real-life clock", "Your wall-clock time next to the in-sim clock.", () => c.ShowRealClock, v => c.ShowRealClock = v));
         PageBody.Children.Add(Toggle("Local time of day", "In-sim track clock.", () => c.ShowTimeOfDay, v => c.ShowTimeOfDay = v));
         PageBody.Children.Add(Toggle("Strength of Field", null, () => c.ShowSof, v => c.ShowSof = v));
         PageBody.Children.Add(Toggle("Track temperature", null, () => c.ShowTrackTemp, v => c.ShowTrackTemp = v));
+        PageBody.Children.Add(Slider("Track temp decimals", null, 0, 2, 1, () => c.ShowTrackTempDecimals, v => c.ShowTrackTempDecimals = (int)v, v => $"{v:0}"));
         PageBody.Children.Add(Toggle("Incident count", null, () => c.ShowIncidents, v => c.ShowIncidents = v));
         PageBody.Children.Add(Toggle("Weather / track state", null, () => c.ShowWeather, v => c.ShowWeather = v));
+        PageBody.Children.Add(Toggle("Abbreviate track state", "“M.Dry” / “V.Wet” instead of the full words.", () => c.AbbreviateWetness, v => c.AbbreviateWetness = v));
+        PageBody.Children.Add(Slider("Tyre-switch alert", "How long the dry↔wet tyre-switch flash lasts.", 5, 60, 5,
+            () => c.TyreSwitchAlertSec, v => c.TyreSwitchAlertSec = (int)v, v => $"{v:0}s"));
         PageBody.Children.Add(Toggle("Wind direction & speed", null, () => c.ShowWind, v => c.ShowWind = v));
 
         PageBody.Children.Add(Subhead("Precision (decimals)"));
@@ -205,6 +218,10 @@ public partial class SettingsWindow : Window
         T("Status", "PIT / off-track / penalties.", () => s.ShowStatus, v => s.ShowStatus = v);
         T("Strategy", "Race only.", () => s.ShowStrategy, v => s.ShowStrategy = v);
         T("Pace arrow", "Race only.", () => s.ShowPace, v => s.ShowPace = v);
+        T("Pit lap", "Race only. Lap of their last stop.", () => s.ShowPitLap, v => s.ShowPitLap = v);
+        T("Pit time — total", "Race only. Time on pit road.", () => s.ShowPitTotal, v => s.ShowPitTotal = v);
+        T("Pit time — drive-through", "Race only. Pit-lane transit.", () => s.ShowPitDrive, v => s.ShowPitDrive = v);
+        T("Pit time — in box", "Race only. Time sat stationary.", () => s.ShowPitStall, v => s.ShowPitStall = v);
     }
 
     private void BuildRelative()
@@ -220,6 +237,7 @@ public partial class SettingsWindow : Window
 
         body.Children.Add(Subhead("Columns"));
         body.Children.Add(Toggle("Class position", null, () => r.ShowClassPos, v => r.ShowClassPos = v));
+        body.Children.Add(Toggle("Tyre compound", "Dry/wet ring, like the standings.", () => r.ShowTyre, v => r.ShowTyre = v));
         body.Children.Add(Toggle("Car brand", null, () => r.ShowBrand, v => r.ShowBrand = v));
         body.Children.Add(Toggle("iRating", null, () => r.ShowIRating, v => r.ShowIRating = v));
         body.Children.Add(Toggle("License", null, () => r.ShowLicense, v => r.ShowLicense = v));
@@ -228,6 +246,8 @@ public partial class SettingsWindow : Window
         body.Children.Add(Toggle("Pace arrow", "Their recent pace vs yours.", () => r.ShowPace, v => r.ShowPace = v));
 
         body.Children.Add(Subhead("Behavior"));
+        body.Children.Add(Toggle("Hide parked cars", "Drop cars sat in the pits (DNF / no driver) — cuts endurance noise.",
+            () => r.HideParkedCars, v => r.HideParkedCars = v));
         body.Children.Add(Slider("Battle threshold", "Same-lap cars within this gap get the battle marker.", 0.5, 5, 0.5,
             () => r.BattleGapSec, v => r.BattleGapSec = v, v => $"{v:0.0}s"));
         body.Children.Add(Slider("Gap precision", null, 0, 2, 1, () => r.GapPrecision, v => r.GapPrecision = (int)v, v => $"{v:0}"));
@@ -257,6 +277,10 @@ public partial class SettingsWindow : Window
         body.Children.Add(Slider("Imminent", "Escalate to the urgent cue inside this window.", 1, 10, 1,
             () => t.ImminentSec, v => t.ImminentSec = v, v => $"{v:0}s"));
         body.Children.Add(Slider("Max rows", null, 1, 6, 1, () => t.MaxRows, v => t.MaxRows = (int)v, v => $"{v:0}"));
+        body.Children.Add(Toggle("Warn when lapping traffic", "Alert on slower/lapped cars ahead you're about to lap.",
+            () => t.WarnLapping, v => t.WarnLapping = v));
+        body.Children.Add(Slider("Lapping gap", "Gap at which the lapping alert fires.", 2, 10, 1,
+            () => t.LapTrafficGapSec, v => t.LapTrafficGapSec = v, v => $"{v:0}s"));
         body.Children.Add(Toggle("Show iRating", null, () => t.ShowIRating, v => t.ShowIRating = v));
         body.Children.Add(Toggle("Alongside banner", "Left/right marker when alerted traffic is beside you.",
             () => t.AlongsideBanner, v => t.AlongsideBanner = v));
@@ -475,12 +499,15 @@ public partial class SettingsWindow : Window
                 break;
             case "Standings":
                 var s = new OverlayConfig();
-                c.Scale = s.Scale;
+                c.Scale = s.Scale; c.NameColumnWidth = s.NameColumnWidth; c.HeaderFontSize = s.HeaderFontSize;
+                c.SmoothGaps = s.SmoothGaps; c.ShowRejoinState = s.ShowRejoinState;
                 c.DriversAtTop = s.DriversAtTop; c.DriversAhead = s.DriversAhead; c.DriversBehind = s.DriversBehind;
                 c.OtherClassesDriversAtTop = s.OtherClassesDriversAtTop; c.DeltaLaps = s.DeltaLaps;
                 c.ShowColumnHeader = s.ShowColumnHeader; c.QualifyShowFullClass = s.QualifyShowFullClass;
-                c.ShowSof = s.ShowSof; c.ShowTimeOfDay = s.ShowTimeOfDay; c.ShowTrackTemp = s.ShowTrackTemp;
-                c.ShowIncidents = s.ShowIncidents; c.ShowWeather = s.ShowWeather; c.ShowWind = s.ShowWind;
+                c.ShowSof = s.ShowSof; c.ShowRealClock = s.ShowRealClock; c.ShowTimeOfDay = s.ShowTimeOfDay;
+                c.ShowTrackTemp = s.ShowTrackTemp; c.ShowTrackTempDecimals = s.ShowTrackTempDecimals;
+                c.ShowIncidents = s.ShowIncidents; c.ShowWeather = s.ShowWeather; c.AbbreviateWetness = s.AbbreviateWetness;
+                c.TyreSwitchAlertSec = s.TyreSwitchAlertSec; c.ShowWind = s.ShowWind;
                 c.GapPrecision = s.GapPrecision; c.IntervalPrecision = s.IntervalPrecision; c.LapTimePrecision = s.LapTimePrecision;
                 c.DeltaPrecision = s.DeltaPrecision; c.QualifyGapPrecision = s.QualifyGapPrecision;
                 c.Race = SessionColumns.RaceDefaults(); c.Qualify = SessionColumns.QualifyDefaults(); c.Practice = SessionColumns.PracticeDefaults();

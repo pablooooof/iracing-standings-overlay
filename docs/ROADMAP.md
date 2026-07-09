@@ -70,14 +70,13 @@ Ideas and requests captured during rapid iteration so nothing is lost. Roughly o
   (`Traffic.LapTrafficGapSec`, default 5s) while closing; toggle `Traffic.WarnLapping`.
 
 **Standings / relative**
-- [ ] **Smooth GAP/INT** — option to compute standings gap/interval from the relative's
-  continuous `CarIdxEstTime` method (`RelativeGap`) instead of `CarIdxF2Time`, config-toggled.
+- [x] **Smooth GAP/INT** (`SmoothGaps`, default on) — gap-to-leader is the cumulative sum of
+  adjacent `CarIdxEstTime` intervals (continuous like the relative); laps-down still "NL".
 - [x] **Pit-exit badge (~15s)** — the first ~15s out of the pits reads a bright `EXIT`, distinct
   from the steady whole-out-lap `OUT`. (Bright badge, not a per-row blink — an ItemsControl
   restarts row animations on every repaint.)
-- [ ] **Hide parked / no-driver cars in relative** — config to drop cars parked in the pit stall
-  (stationary, likely DNF / no driver) — cuts noise in practice and endurance. iRacing has no
-  clean "no driver" var; heuristic = in pit stall + stationary a long time.
+- [x] **Hide parked / no-driver cars in relative** (`Relative.HideParkedCars`) — drops cars sat
+  in the pits >60s (heuristic; iRacing has no "no driver" var).
 - [x] **Driver-change alert (endurance teams)** — `DriverSwapTracker` tags a car `SWAP` (purple)
   for 60s when its driver name changes across a YAML reparse.
 - [ ] **Class-colour override map** — optional user map (GT3=pink, LMP2=blue, GTP=yellow…) that
@@ -96,11 +95,12 @@ Ideas and requests captured during rapid iteration so nothing is lost. Roughly o
 **Status states** — [x] TOW (heuristic), [x] REJOIN (experimental toggle), [x] offline dim name.
 
 **Settings window**
-- [ ] Expose the newer options in the GUI: real clock, name-column width, header font size,
-  rejoin toggle, tyre-switch duration, abbreviate-wetness, relative tyre ring, etc.
+- [x] Expose the newer options in the GUI: real clock, name-column width, header font size,
+  smooth gaps, rejoin toggle, tyre-switch duration, track-temp decimals, abbreviate-wetness,
+  relative tyre ring + hide-parked, traffic lapping alert, and the pit-time columns.
 
 **Pit-time columns** (see also "Pit stop duration tracking" above)
-- [ ] Toggleable race columns: pit lap + total / drive-through / stationary pit time.
+- [x] Toggleable race columns: pit lap + total / drive-through / stationary pit time.
 
 ## Status badge legend
 
