@@ -59,6 +59,7 @@ public sealed class OverlayConfig
     public bool ShowIncidents { get; set; } = true;
     public bool ShowWeather { get; set; } = true;   // track state (Dry/Damp/Wet) + precipitation %
     public bool AbbreviateWetness { get; set; }     // false = full "Mostly Dry"/"Very Wet" names
+    public int WeatherAlertSec { get; set; } = 180;     // how long the dry↔wet track-state banner stays
     public int TyreSwitchAlertSec { get; set; } = 30;   // how long a dry↔wet tyre switch is shown
     public string TyreSwitchDisplay { get; set; } = "Both";   // Flash (header) | Inline (o→o in the row) | Both
     public bool ShowWind { get; set; } = true;      // wind direction arrow + speed

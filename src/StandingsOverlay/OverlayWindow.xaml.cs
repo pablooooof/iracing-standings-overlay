@@ -146,23 +146,38 @@ public partial class OverlayWindow : Window
     }
 
     private string _headerAlert = "";
+    private System.Windows.Threading.DispatcherTimer? _flashStop;
 
-    /// <summary>Blink an alert pill (dry→wet, tyre switch) while its window is active, then hide it.</summary>
+    /// <summary>Show an alert pill (dry↔wet, tyre switch): blink ~8 s to catch the eye, then hold
+    /// steady (the banner can stay up for minutes — WeatherAlertSec — so it must not blink forever).</summary>
     private void SetHeaderAlert(string text)
     {
         if (text == _headerAlert) return;
         _headerAlert = text;
+        _flashStop?.Stop();
         if (text.Length > 0)
         {
             WeatherFlashText.Text = text;
             WeatherFlash.Visibility = Visibility.Visible;
-            var blink = new System.Windows.Media.Animation.DoubleAnimation(1.0, 0.25,
-                new Duration(TimeSpan.FromMilliseconds(450)))
+            var blink = new System.Windows.Media.Animation.DoubleAnimation(1.0, 0.3,
+                new Duration(TimeSpan.FromMilliseconds(500)))
             {
                 AutoReverse = true,
                 RepeatBehavior = System.Windows.Media.Animation.RepeatBehavior.Forever,
             };
             WeatherFlash.BeginAnimation(OpacityProperty, blink);
+            if (_flashStop is null)
+            {
+                _flashStop = new System.Windows.Threading.DispatcherTimer
+                    { Interval = TimeSpan.FromSeconds(8) };
+                _flashStop.Tick += (_, _) =>
+                {
+                    _flashStop!.Stop();
+                    WeatherFlash.BeginAnimation(OpacityProperty, null);
+                    WeatherFlash.Opacity = 1.0;   // steady, still visible
+                };
+            }
+            _flashStop.Start();
         }
         else
         {

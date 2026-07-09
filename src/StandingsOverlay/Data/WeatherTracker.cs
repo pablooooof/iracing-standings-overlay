@@ -12,19 +12,20 @@ public sealed class WeatherTracker
     private const double SampleSec = 20;    // temp/precip drift slowly; compare against ~20 s ago
     private const float TempEps = 0.15f;    // °C move below this reads as "steady"
     private const float PrecipEps = 0.01f;  // 1 %-point move below this reads as "steady"
-    private const int WetThreshold = 3;     // TrackWetness >= 3 (damp) counts as "wet enough to flag"
-    private const double FlashSec = 10;     // dry→wet flash stays lit this long
+    private const int WetThreshold = 3;     // TrackWetness >= 3 (damp) counts as "wet"
 
     private double _lastSample = -1;
     private float _tempPrev = float.NaN, _precipPrev = float.NaN;
     private int _prevWetness = -1;
-    private double _turnedWetAt = -1;
     private double _now = -1;
 
     public int TempTrend { get; private set; }      // -1 falling · 0 steady · +1 rising
     public int PrecipTrend { get; private set; }
-    /// <summary>True for a short window right after the track crossed dry→wet (or was declared wet).</summary>
-    public bool JustTurnedWet => _turnedWetAt >= 0 && _now >= 0 && _now - _turnedWetAt <= FlashSec;
+    /// <summary>Session time of the last dry↔wet transition (-1 = none). The alert duration is the
+    /// caller's config, so it can outlive the tracker's own sampling.</summary>
+    public double TransitionTime { get; private set; } = -1;
+    /// <summary>Direction of that last transition: true = went wet, false = dried out.</summary>
+    public bool TransitionToWet { get; private set; }
 
     public void Update(RawTick t)
     {
@@ -32,10 +33,14 @@ public sealed class WeatherTracker
         if (now < 0) return;
         _now = now;
 
-        // Dry→wet edge: wetness crossing the damp threshold upward, or the marshal declaring wet.
+        // Dry↔wet edge: wetness crossing the "damp" threshold either way (or the marshal declaring
+        // wet forces the wet side). Record the time + direction; the header decides how long to show it.
         int wetness = t.DeclaredWet ? Math.Max(WetThreshold, t.TrackWetness) : t.TrackWetness;
-        if (_prevWetness >= 0 && wetness >= WetThreshold && _prevWetness < WetThreshold)
-            _turnedWetAt = now;
+        if (_prevWetness >= 0 && wetness >= 0)
+        {
+            bool wasWet = _prevWetness >= WetThreshold, isWet = wetness >= WetThreshold;
+            if (isWet != wasWet) { TransitionTime = now; TransitionToWet = isWet; }
+        }
         if (wetness >= 0) _prevWetness = wetness;
 
         if (_lastSample < 0)
@@ -67,9 +72,10 @@ public sealed class WeatherTracker
 
     public void Reset()
     {
-        _lastSample = _turnedWetAt = _now = -1;
+        _lastSample = _now = TransitionTime = -1;
         _tempPrev = _precipPrev = float.NaN;
         _prevWetness = -1;
         TempTrend = PrecipTrend = 0;
+        TransitionToWet = false;
     }
 }

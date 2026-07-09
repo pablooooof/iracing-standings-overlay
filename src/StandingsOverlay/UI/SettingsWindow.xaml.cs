@@ -172,6 +172,8 @@ public partial class SettingsWindow : Window
         PageBody.Children.Add(Toggle("Incident count", null, () => c.ShowIncidents, v => c.ShowIncidents = v));
         PageBody.Children.Add(Toggle("Weather / track state", null, () => c.ShowWeather, v => c.ShowWeather = v));
         PageBody.Children.Add(Toggle("Abbreviate track state", "“M.Dry” / “V.Wet” instead of the full words.", () => c.AbbreviateWetness, v => c.AbbreviateWetness = v));
+        PageBody.Children.Add(Slider("Wet↔dry alert", "How long the track-state change banner stays.", 10, 300, 10,
+            () => c.WeatherAlertSec, v => c.WeatherAlertSec = (int)v, v => $"{v:0}s"));
         PageBody.Children.Add(Slider("Tyre-switch alert", "How long a dry↔wet tyre switch is shown.", 5, 60, 5,
             () => c.TyreSwitchAlertSec, v => c.TyreSwitchAlertSec = (int)v, v => $"{v:0}s"));
         PageBody.Children.Add(Segmented("Tyre-switch display", "Header flash, an inline o→o in the row, or both.",
@@ -513,7 +515,7 @@ public partial class SettingsWindow : Window
                 c.ShowSof = s.ShowSof; c.ShowRealClock = s.ShowRealClock; c.ShowTimeOfDay = s.ShowTimeOfDay;
                 c.ShowTrackTemp = s.ShowTrackTemp; c.ShowTrackTempDecimals = s.ShowTrackTempDecimals;
                 c.ShowIncidents = s.ShowIncidents; c.ShowWeather = s.ShowWeather; c.AbbreviateWetness = s.AbbreviateWetness;
-                c.TyreSwitchAlertSec = s.TyreSwitchAlertSec; c.ShowWind = s.ShowWind;
+                c.WeatherAlertSec = s.WeatherAlertSec; c.TyreSwitchAlertSec = s.TyreSwitchAlertSec; c.ShowWind = s.ShowWind;
                 c.GapPrecision = s.GapPrecision; c.IntervalPrecision = s.IntervalPrecision; c.LapTimePrecision = s.LapTimePrecision;
                 c.DeltaPrecision = s.DeltaPrecision; c.QualifyGapPrecision = s.QualifyGapPrecision;
                 c.Race = SessionColumns.RaceDefaults(); c.Qualify = SessionColumns.QualifyDefaults(); c.Practice = SessionColumns.PracticeDefaults();

@@ -430,21 +430,31 @@ public static class SnapshotBuilder
     private static string HeaderAlert(RawTick t, Roster roster, StintTracker stints,
         WeatherTracker weather, OverlayConfig cfg)
     {
-        if (cfg.ShowWeather && weather.JustTurnedWet) return "⚠ TRACK WENT WET";
-        // The tyre-switch banner is suppressed when the user wants the inline o→o marker only.
-        if (cfg.TyreSwitchDisplay.Equals("Inline", StringComparison.OrdinalIgnoreCase)) return "";
+        double now = t.SessionTime;
 
-        double bestT = -1; int bestDir = 0; string bestNum = "";
-        foreach (var d in roster.Drivers.Values)
-        {
-            if (d.IsPaceCar || d.IsSpectator) continue;
-            var (ct, dir) = stints.LastCompoundSwitch(d.CarIdx);
-            if (dir != 0 && ct >= 0 && t.SessionTime - ct <= cfg.TyreSwitchAlertSec && ct > bestT)
-                (bestT, bestDir, bestNum) = (ct, dir, d.CarNumber);
-        }
-        return bestDir > 0 ? $"⚑ #{bestNum} → WETS"
-             : bestDir < 0 ? $"⚑ #{bestNum} → SLICKS"
-             : "";
+        // Track dry↔wet transition banner (its own configurable duration).
+        double weatherAt = cfg.ShowWeather && weather.TransitionTime >= 0
+                           && now - weather.TransitionTime <= cfg.WeatherAlertSec
+            ? weather.TransitionTime : -1;
+
+        // Most recent dry↔wet tyre switch by any car (suppressed in the inline-only display mode).
+        double switchAt = -1; int switchDir = 0; string switchNum = "";
+        if (!cfg.TyreSwitchDisplay.Equals("Inline", StringComparison.OrdinalIgnoreCase))
+            foreach (var d in roster.Drivers.Values)
+            {
+                if (d.IsPaceCar || d.IsSpectator) continue;
+                var (ct, dir) = stints.LastCompoundSwitch(d.CarIdx);
+                if (dir != 0 && ct >= 0 && now - ct <= cfg.TyreSwitchAlertSec && ct > switchAt)
+                    (switchAt, switchDir, switchNum) = (ct, dir, d.CarNumber);
+            }
+
+        // One banner slot: the most recent event wins, so a tyre switch during a long wet-transition
+        // window still gets seen.
+        if (switchDir != 0 && switchAt >= weatherAt)
+            return switchDir > 0 ? $"⚑ #{switchNum} → WETS" : $"⚑ #{switchNum} → SLICKS";
+        if (weatherAt >= 0)
+            return weather.TransitionToWet ? "⚠ TRACK WENT WET" : "☀ TRACK DRYING OUT";
+        return "";
     }
 
     /// <summary>"L 3/40" — player lap over the known or estimated total.</summary>
