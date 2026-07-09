@@ -22,6 +22,9 @@ public sealed class OverlayConfig
     public int DriversAtTop { get; set; } = 3;
     public int DriversAhead { get; set; } = 5;
     public int DriversBehind { get; set; } = 3;
+    // When you're running near the front (position <= this), show at least this many from the top
+    // instead of a tiny window — you want to see the whole leading group. 0 = off.
+    public int MinLeadingCars { get; set; } = 10;
     public bool ShowColumnHeader { get; set; } = true;
     public bool ShowRejoinState { get; set; } = true;   // "REJOIN" badge when a stopped car moves again (experimental)
     // Driver-name column: fixed width in DIPs so long names don't resize the whole table
@@ -56,7 +59,8 @@ public sealed class OverlayConfig
     public bool ShowIncidents { get; set; } = true;
     public bool ShowWeather { get; set; } = true;   // track state (Dry/Damp/Wet) + precipitation %
     public bool AbbreviateWetness { get; set; }     // false = full "Mostly Dry"/"Very Wet" names
-    public int TyreSwitchAlertSec { get; set; } = 30;   // how long the dry↔wet tyre-switch flash lasts
+    public int TyreSwitchAlertSec { get; set; } = 30;   // how long a dry↔wet tyre switch is shown
+    public string TyreSwitchDisplay { get; set; } = "Both";   // Flash (header) | Inline (o→o in the row) | Both
     public bool ShowWind { get; set; } = true;      // wind direction arrow + speed
     public double HeaderFontSize { get; set; } = 13; // standings header pill text size
 

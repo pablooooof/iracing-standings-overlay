@@ -11,10 +11,12 @@ namespace StandingsOverlay.UI;
 public sealed record RelativeRowViewModel(
     string Pos, string CarNumber, string Brand, string Name, string Status,
     string License, string IRating, string Stint, string LastLap, string Pace, string Gap,
-    Brush PosBrush, Brush NumBrush, Brush ClassBarBrush, Brush TyreBrush, Brush NameBrush, FontWeight NameWeight,
+    Brush PosBrush, Brush NumBrush, Brush ClassBarBrush, Brush TyreBrush, Brush TyreOldBrush,
+    Brush NameBrush, FontWeight NameWeight,
     Brush StatusBrush, Brush LicBrush, Brush LicTextBrush, Brush StintBrush, Brush PaceBrush,
     Brush GapBrush, Brush BattleBrush, Brush RowBackground,
-    Visibility NumVisibility, Visibility TyreVisibility, Visibility LicVisibility, Visibility BattleVisibility)
+    Visibility NumVisibility, Visibility TyreVisibility, Visibility TyreSwitchVisibility,
+    Visibility LicVisibility, Visibility BattleVisibility)
 {
     private static readonly Brush White = RowViewModel.Frozen("#E8E9EE");
     private static readonly Brush DryTyre = RowViewModel.Frozen("#C9C9CF");
@@ -69,6 +71,7 @@ public sealed record RelativeRowViewModel(
             NumBrush: RowViewModel.TryBrush(r.ClassColor) ?? NoClass,
             ClassBarBrush: RowViewModel.TryBrush(r.ClassColor) ?? Brushes.Transparent,
             TyreBrush: r.Tyre >= 1 ? WetTyre : DryTyre,
+            TyreOldBrush: r.TyreSwitch > 0 ? DryTyre : WetTyre,
             NameBrush: nameBrush,
             NameWeight: r.IsPlayer ? FontWeights.SemiBold : FontWeights.Normal,
             StatusBrush: r.StatusText switch
@@ -93,7 +96,8 @@ public sealed record RelativeRowViewModel(
             BattleBrush: accent,
             RowBackground: r.IsPlayer ? highlight : Brushes.Transparent,
             NumVisibility: r.CarNumber.Length > 1 ? Visibility.Visible : Visibility.Collapsed,
-            TyreVisibility: r.Tyre >= 0 ? Visibility.Visible : Visibility.Collapsed,
+            TyreVisibility: r.Tyre >= 0 && r.TyreSwitch == 0 ? Visibility.Visible : Visibility.Collapsed,
+            TyreSwitchVisibility: r.Tyre >= 0 && r.TyreSwitch != 0 ? Visibility.Visible : Visibility.Collapsed,
             LicVisibility: r.LicText.Length > 0 ? Visibility.Visible : Visibility.Collapsed,
             BattleVisibility: r.Battle ? Visibility.Visible : Visibility.Collapsed);
     }

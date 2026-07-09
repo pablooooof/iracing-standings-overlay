@@ -41,10 +41,16 @@
                                 <Rectangle Grid.Column="1" Width="3" Margin="0,1,6,1" RadiusX="1" RadiusY="1"
                                            Fill="{Binding ClassBarBrush}"/>
 
-                                <!-- Tyre compound ring: gray = dry, blue = wet (same as the standings) -->
+                                <!-- Tyre compound ring: gray = dry, blue = wet. Dry↔wet switch shows old→new. -->
                                 <Ellipse Grid.Column="2" Width="12" Height="12" StrokeThickness="3" Margin="0,0,6,0"
                                          VerticalAlignment="Center" Stroke="{Binding TyreBrush}" Fill="#1A1A1E"
                                          Visibility="{Binding TyreVisibility}"/>
+                                <StackPanel Grid.Column="2" Orientation="Horizontal" Margin="0,0,6,0"
+                                            VerticalAlignment="Center" Visibility="{Binding TyreSwitchVisibility}">
+                                    <Ellipse Width="10" Height="10" StrokeThickness="2.5" Stroke="{Binding TyreOldBrush}" Fill="#1A1A1E"/>
+                                    <TextBlock Text="→" FontSize="9" Foreground="#C9C9CF" Margin="1,0" VerticalAlignment="Center"/>
+                                    <Ellipse Width="10" Height="10" StrokeThickness="2.5" Stroke="{Binding TyreBrush}" Fill="#1A1A1E"/>
+                                </StackPanel>
 
                                 <!-- Car number: coloured text like the standings, not a filled box -->
                                 <TextBlock Grid.Column="3" Text="{Binding CarNumber}" Foreground="{Binding NumBrush}"

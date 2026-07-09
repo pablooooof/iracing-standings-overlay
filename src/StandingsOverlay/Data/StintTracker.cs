@@ -264,6 +264,9 @@ public sealed class StintTracker
         && !s.WasOnPit && s.LastLapSeen >= 1 && s.LastMoveTime >= 0
         && _now - s.LastMoveTime > 4.0;
 
+    /// <summary>Completed pit stops for the car (0 before its first stop). Stint number = this + 1.</summary>
+    public int PitStops(int idx) => _cars.TryGetValue(idx, out var s) ? s.PitCount : 0;
+
     /// <summary>The car's last completed pit visit (lap + total/stationary/drive-through seconds),
     /// or null before its first stop.</summary>
     public PitInfo? LastPit(int idx) => _cars.TryGetValue(idx, out var s) ? s.LastPit : null;

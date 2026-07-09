@@ -164,12 +164,19 @@
                                 <!-- Class color bar (the iOverlay-style separator) -->
                                 <Rectangle Grid.Column="1" Width="3" Margin="0,1,7,1" RadiusX="1" RadiusY="1"
                                            Fill="{Binding ClassBarBrush}"/>
-                                <!-- Tyre compound ring: gray = dry, blue = wet -->
+                                <!-- Tyre compound ring: gray = dry, blue = wet. On a dry↔wet switch,
+                                     briefly show old→new rings instead. -->
                                 <Grid Grid.Column="2" Margin="0,0,8,0"
                                       Visibility="{Binding DataContext.Tyre, RelativeSource={RelativeSource AncestorType=Window}}">
                                     <Ellipse Width="13" Height="13" StrokeThickness="3.5" VerticalAlignment="Center"
                                              Stroke="{Binding TyreBrush}" Fill="#1A1A1E"
                                              Visibility="{Binding TyreVisibility}"/>
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center"
+                                                Visibility="{Binding TyreSwitchVisibility}">
+                                        <Ellipse Width="10" Height="10" StrokeThickness="2.5" Stroke="{Binding TyreOldBrush}" Fill="#1A1A1E"/>
+                                        <TextBlock Text="→" FontSize="9" Foreground="#C9C9CF" Margin="1,0" VerticalAlignment="Center"/>
+                                        <Ellipse Width="10" Height="10" StrokeThickness="2.5" Stroke="{Binding TyreBrush}" Fill="#1A1A1E"/>
+                                    </StackPanel>
                                 </Grid>
                                 <TextBlock Grid.Column="3" Text="{Binding PosGained}" Style="{StaticResource Num}"
                                            Foreground="{Binding PosGainedBrush}" FontSize="11" VerticalAlignment="Center"

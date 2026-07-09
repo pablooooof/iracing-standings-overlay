@@ -22,7 +22,8 @@ public sealed record RelativeRow(
     string LastLapText,
     string PaceText,         // ▲ ▼ ► vs the player (same convention as the standings)
     int PaceSign,
-    string GapText)          // "+2.3" ahead · "-0.8" behind · "—" on the player row
+    string GapText,          // "+2.3" ahead · "-0.8" behind · "—" on the player row
+    int TyreSwitch = 0)      // 0 none · +1 just switched to wets · -1 to slicks (inline o→o)
 {
     public static readonly RelativeRow Blank =
         new(false, "", "", -1, "", "", "", 0, "", false, "", "", "", "", false, "", "", 0, "");
@@ -134,12 +135,14 @@ public static class RelativeBuilder
         if (rc.ShowClassPos && cp > 0) pos = cp.ToString();
         else if (op > 0) pos = op.ToString();
 
+        // Stint number (ST1 = opening stint, ST2 = after one stop, …); still green while the tyres
+        // are fresh out of a stop.
         string stint = "";
         bool fresh = false;
-        if (rc.ShowStintAge && stints.LapsSincePit(idx, t.Lap[idx]) is int age)
+        if (rc.ShowStintAge)
         {
-            stint = age.ToString();
-            fresh = age <= FreshTyreLaps;
+            stint = "ST" + (stints.PitStops(idx) + 1);
+            if (stints.LapsSincePit(idx, t.Lap[idx]) is int age) fresh = age <= FreshTyreLaps;
         }
 
         string pace = "";
@@ -159,6 +162,7 @@ public static class RelativeBuilder
             PosText: pos,
             ClassColor: d.ClassColor,
             Tyre: rc.ShowTyre && idx < t.TireCompound.Length ? t.TireCompound[idx] : -1,
+            TyreSwitch: rc.ShowTyre ? SnapshotBuilder.InlineTyreSwitch(t, stints, idx, cfg) : 0,
             CarNumber: "#" + d.CarNumber,
             CarBrand: rc.ShowBrand ? d.CarBrand : "",
             Name: d.Name,

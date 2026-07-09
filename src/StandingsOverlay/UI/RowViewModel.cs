@@ -46,8 +46,10 @@ public sealed class RowViewModel
 
     public Visibility IrChipVisibility { get; init; } = Visibility.Collapsed;
     public Visibility LicChipVisibility { get; init; } = Visibility.Collapsed;
-    public Visibility TyreVisibility { get; init; } = Visibility.Collapsed;
-    public Brush TyreBrush { get; init; } = Brushes.Gray;
+    public Visibility TyreVisibility { get; init; } = Visibility.Collapsed;      // single ring
+    public Visibility TyreSwitchVisibility { get; init; } = Visibility.Collapsed; // inline o→o
+    public Brush TyreBrush { get; init; } = Brushes.Gray;                        // current compound
+    public Brush TyreOldBrush { get; init; } = Brushes.Gray;                     // pre-switch compound
 
     public Visibility FlagVisibility { get; init; } = Visibility.Collapsed;
     public Brush FlagBodyBrush { get; init; } = Brushes.Black;
@@ -150,8 +152,11 @@ public sealed class RowViewModel
             NameBrush = r.Offline || r.StatusText == "PIT" ? DimBrush : Brushes.White,
             IrChipVisibility = string.IsNullOrEmpty(r.IRatingText) ? Visibility.Collapsed : Visibility.Visible,
             LicChipVisibility = string.IsNullOrEmpty(r.LicText) ? Visibility.Collapsed : Visibility.Visible,
-            TyreVisibility = r.Tyre >= 0 ? Visibility.Visible : Visibility.Collapsed,
+            TyreVisibility = r.Tyre >= 0 && r.TyreSwitch == 0 ? Visibility.Visible : Visibility.Collapsed,
+            TyreSwitchVisibility = r.Tyre >= 0 && r.TyreSwitch != 0 ? Visibility.Visible : Visibility.Collapsed,
             TyreBrush = r.Tyre >= 1 ? WetTyreBrush : DryTyreBrush,
+            TyreOldBrush = r.TyreSwitch > 0 ? DryTyreBrush : WetTyreBrush,   // switched TO wet ⇒ was dry
+
             FlagVisibility = flagVis,
             FlagBodyBrush = flagBody,
             FlagStrokeBrush = flagStroke,

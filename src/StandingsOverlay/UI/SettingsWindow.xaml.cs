@@ -145,6 +145,8 @@ public partial class SettingsWindow : Window
             () => c.DriversAhead, v => c.DriversAhead = (int)v, v => $"{v:0}"));
         PageBody.Children.Add(Slider("Cars behind you", null, 0, 15, 1,
             () => c.DriversBehind, v => c.DriversBehind = (int)v, v => $"{v:0}"));
+        PageBody.Children.Add(Slider("Show leaders when near front", "When your position is within this, show at least this many from the top. 0 = off.",
+            0, 20, 1, () => c.MinLeadingCars, v => c.MinLeadingCars = (int)v, v => v <= 0 ? "off" : $"{v:0}"));
         PageBody.Children.Add(Slider("Other-class leaders", "Top cars of each other class in a multiclass field.", 0, 6, 1,
             () => c.OtherClassesDriversAtTop, v => c.OtherClassesDriversAtTop = (int)v, v => $"{v:0}"));
         PageBody.Children.Add(Slider("Delta laps", "Per-lap gap-change columns — the reason this overlay exists.", 1, 10, 1,
@@ -170,8 +172,11 @@ public partial class SettingsWindow : Window
         PageBody.Children.Add(Toggle("Incident count", null, () => c.ShowIncidents, v => c.ShowIncidents = v));
         PageBody.Children.Add(Toggle("Weather / track state", null, () => c.ShowWeather, v => c.ShowWeather = v));
         PageBody.Children.Add(Toggle("Abbreviate track state", "“M.Dry” / “V.Wet” instead of the full words.", () => c.AbbreviateWetness, v => c.AbbreviateWetness = v));
-        PageBody.Children.Add(Slider("Tyre-switch alert", "How long the dry↔wet tyre-switch flash lasts.", 5, 60, 5,
+        PageBody.Children.Add(Slider("Tyre-switch alert", "How long a dry↔wet tyre switch is shown.", 5, 60, 5,
             () => c.TyreSwitchAlertSec, v => c.TyreSwitchAlertSec = (int)v, v => $"{v:0}s"));
+        PageBody.Children.Add(Segmented("Tyre-switch display", "Header flash, an inline o→o in the row, or both.",
+            new[] { ("Flash", "Flash"), ("Inline", "Inline"), ("Both", "Both") },
+            () => c.TyreSwitchDisplay, v => Apply(() => c.TyreSwitchDisplay = v)));
         PageBody.Children.Add(Toggle("Wind direction & speed", null, () => c.ShowWind, v => c.ShowWind = v));
 
         PageBody.Children.Add(Subhead("Precision (decimals)"));
@@ -502,6 +507,7 @@ public partial class SettingsWindow : Window
                 c.Scale = s.Scale; c.NameColumnWidth = s.NameColumnWidth; c.HeaderFontSize = s.HeaderFontSize;
                 c.SmoothGaps = s.SmoothGaps; c.ShowRejoinState = s.ShowRejoinState;
                 c.DriversAtTop = s.DriversAtTop; c.DriversAhead = s.DriversAhead; c.DriversBehind = s.DriversBehind;
+                c.MinLeadingCars = s.MinLeadingCars; c.TyreSwitchDisplay = s.TyreSwitchDisplay;
                 c.OtherClassesDriversAtTop = s.OtherClassesDriversAtTop; c.DeltaLaps = s.DeltaLaps;
                 c.ShowColumnHeader = s.ShowColumnHeader; c.QualifyShowFullClass = s.QualifyShowFullClass;
                 c.ShowSof = s.ShowSof; c.ShowRealClock = s.ShowRealClock; c.ShowTimeOfDay = s.ShowTimeOfDay;

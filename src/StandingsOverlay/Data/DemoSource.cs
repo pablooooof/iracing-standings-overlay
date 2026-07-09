@@ -275,6 +275,8 @@ public sealed class DemoSource : ITelemetrySource
             var old = _roster.Drivers[6];
             _roster.Drivers[6] = old with { Name = "F. Alesi" };
         }
+        // ~18s in, one car switches to wets so the inline o→o tyre-switch marker is exercisable.
+        if (_elapsed > 18 && _tick.TireCompound[8] == 0) _tick.TireCompound[8] = 1;
 
         _history.Update(_tick, _roster);
         _stints.Update(_tick);

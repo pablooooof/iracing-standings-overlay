@@ -132,6 +132,7 @@ public sealed record StandingsRow(
     string CarBrand,
     string ClassColor,
     int Tyre,                // -1 unknown/hidden, 0 dry, >=1 wet
+    int TyreSwitch,          // 0 none · +1 just switched to wets · -1 just switched to slicks (inline o→o)
     string GapText,
     string IntervalText,
     string BestLapText,
@@ -157,7 +158,7 @@ public sealed record StandingsRow(
         Empty(RowKind.ClassHeader) with { Name = className, ClassColor = classColor };
 
     public static StandingsRow Empty(RowKind kind) =>
-        new(kind, "", "", "", 0, "", "", "", "", "", "", "", -1, "", "", "", 0, "", [], "", "", 0, "", "", 0, false);
+        new(kind, "", "", "", 0, "", "", "", "", "", "", "", -1, 0, "", "", "", 0, "", [], "", "", 0, "", "", 0, false);
 }
 
 public enum SessionKind { Practice, Qualify, Race }

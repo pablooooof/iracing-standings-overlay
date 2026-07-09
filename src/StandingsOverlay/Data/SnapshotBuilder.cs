@@ -73,8 +73,12 @@ public static class SnapshotBuilder
                     for (int i = 0; i < ordered.Count; i++) picked.Add(i);
                 else
                 {
-                    for (int i = 0; i < Math.Min(cfg.DriversAtTop, ordered.Count); i++) picked.Add(i);
                     int playerPos = ordered.FindIndex(d => d.CarIdx == t.PlayerCarIdx);
+                    // Running near the front: show the whole leading group, not a tiny window.
+                    int atTop = cfg.DriversAtTop;
+                    if (cfg.MinLeadingCars > 0 && playerPos >= 0 && playerPos < cfg.MinLeadingCars)
+                        atTop = Math.Max(atTop, cfg.MinLeadingCars);
+                    for (int i = 0; i < Math.Min(atTop, ordered.Count); i++) picked.Add(i);
                     if (playerPos >= 0)
                         for (int i = Math.Max(0, playerPos - cfg.DriversAhead);
                              i <= Math.Min(ordered.Count - 1, playerPos + cfg.DriversBehind); i++)
@@ -296,6 +300,7 @@ public static class SnapshotBuilder
             ClassColor: d.ClassColor,
             // NOTE: some dry series use compound 1 for an alternate dry tyre; we render >=1 as wet.
             Tyre: idx < t.TireCompound.Length ? t.TireCompound[idx] : -1,
+            TyreSwitch: InlineTyreSwitch(t, stints, idx, cfg),
             GapText: gap,
             IntervalText: interval,
             BestLapText: bestLap > 0 ? FmtLap(bestLap, cfg.LapTimePrecision) : "",
@@ -408,12 +413,23 @@ public static class SnapshotBuilder
     /// <summary>Trend suffix for a header metric: rising ↑, falling ↓, steady (nothing).</summary>
     private static string TrendArrow(int trend) => trend > 0 ? " ↑" : trend < 0 ? " ↓" : "";
 
+    /// <summary>Recent dry↔wet tyre switch for the inline o→o marker (0 none), gated by the display
+    /// mode: the row marker shows in Inline/Both, not in Flash-only.</summary>
+    internal static int InlineTyreSwitch(RawTick t, StintTracker stints, int idx, OverlayConfig cfg)
+    {
+        if (cfg.TyreSwitchDisplay.Equals("Flash", StringComparison.OrdinalIgnoreCase)) return 0;
+        var (ct, dir) = stints.LastCompoundSwitch(idx);
+        return dir != 0 && ct >= 0 && t.SessionTime - ct <= cfg.TyreSwitchAlertSec ? dir : 0;
+    }
+
     /// <summary>The flashing header banner text (empty = no flash). Dry→wet takes priority, then
     /// the most recent dry↔wet tyre switch by any car (the crossover "someone committed" signal).</summary>
     private static string HeaderAlert(RawTick t, Roster roster, StintTracker stints,
         WeatherTracker weather, OverlayConfig cfg)
     {
         if (cfg.ShowWeather && weather.JustTurnedWet) return "⚠ TRACK WENT WET";
+        // The tyre-switch banner is suppressed when the user wants the inline o→o marker only.
+        if (cfg.TyreSwitchDisplay.Equals("Inline", StringComparison.OrdinalIgnoreCase)) return "";
 
         double bestT = -1; int bestDir = 0; string bestNum = "";
         foreach (var d in roster.Drivers.Values)
