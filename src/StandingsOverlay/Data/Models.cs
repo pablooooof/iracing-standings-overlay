@@ -145,7 +145,11 @@ public sealed record StandingsRow(
     string PaceText,         // ▲ ▼ ► vs the player, plus "S" when fuel-saving
     int PaceSign,
     bool IsPlayer,
-    bool Offline = false)    // not in the world (disconnected / retired) → dimmed name
+    bool Offline = false,    // not in the world (disconnected / retired) → dimmed name
+    string PitLapText = "",   // last pit stop: lap number
+    string PitTotalText = "", // last pit: total time on pit road (s)
+    string PitDriveText = "", // last pit: pit-lane transit time (s)
+    string PitStallText = "") // last pit: time sat stationary in the box (s)
 {
     public static readonly StandingsRow Separator = Empty(RowKind.Separator) with { Name = "···" };
 

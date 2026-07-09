@@ -69,6 +69,10 @@
                     <ColumnDefinition SharedSizeGroup="cStrat" Width="Auto"/>
                     <ColumnDefinition SharedSizeGroup="cPace"  Width="Auto"/>
                     <ColumnDefinition SharedSizeGroup="cStat"  Width="Auto"/>
+                    <ColumnDefinition SharedSizeGroup="cPitL"  Width="Auto"/>
+                    <ColumnDefinition SharedSizeGroup="cPitT"  Width="Auto"/>
+                    <ColumnDefinition SharedSizeGroup="cPitD"  Width="Auto"/>
+                    <ColumnDefinition SharedSizeGroup="cPitS"  Width="Auto"/>
                 </Grid.ColumnDefinitions>
                 <TextBlock Grid.Column="0"  Text="P"      Margin="0,0,8,0" MinWidth="18"/>
                 <TextBlock Grid.Column="1"  Text=""       Margin="0,0,7,0"/>
@@ -115,6 +119,14 @@
                            Visibility="{Binding Pace}"/>
                 <TextBlock Grid.Column="18" Text=""      MinWidth="30"
                            Visibility="{Binding Status}"/>
+                <TextBlock Grid.Column="19" Text="P·LAP" Style="{StaticResource Num}" MinWidth="34"
+                           Visibility="{Binding PitLap}"/>
+                <TextBlock Grid.Column="20" Text="P·TOT" Style="{StaticResource Num}" MinWidth="40"
+                           Visibility="{Binding PitTotal}"/>
+                <TextBlock Grid.Column="21" Text="P·DRV" Style="{StaticResource Num}" MinWidth="40"
+                           Visibility="{Binding PitDrive}"/>
+                <TextBlock Grid.Column="22" Text="P·BOX" Style="{StaticResource Num}" MinWidth="40"
+                           Visibility="{Binding PitStall}"/>
             </Grid>
 
             <!-- Rows -->
@@ -143,6 +155,10 @@
                                     <ColumnDefinition SharedSizeGroup="cStrat" Width="Auto"/>
                                     <ColumnDefinition SharedSizeGroup="cPace"  Width="Auto"/>
                                     <ColumnDefinition SharedSizeGroup="cStat"  Width="Auto"/>
+                                    <ColumnDefinition SharedSizeGroup="cPitL"  Width="Auto"/>
+                                    <ColumnDefinition SharedSizeGroup="cPitT"  Width="Auto"/>
+                                    <ColumnDefinition SharedSizeGroup="cPitD"  Width="Auto"/>
+                                    <ColumnDefinition SharedSizeGroup="cPitS"  Width="Auto"/>
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="{Binding PosText}" Margin="0,0,8,0" Opacity="0.9"/>
                                 <!-- Class color bar (the iOverlay-style separator) -->
@@ -234,6 +250,18 @@
                                     <TextBlock Text="{Binding Status}" Foreground="{Binding StatusBrush}"
                                                FontSize="11" VerticalAlignment="Center" FontWeight="Bold"/>
                                 </StackPanel>
+                                <TextBlock Grid.Column="19" Text="{Binding PitLap}" Style="{StaticResource Num}"
+                                           Opacity="0.85" FontFamily="Consolas" FontSize="11" VerticalAlignment="Center"
+                                           Visibility="{Binding DataContext.PitLap, RelativeSource={RelativeSource AncestorType=Window}}"/>
+                                <TextBlock Grid.Column="20" Text="{Binding PitTotal}" Style="{StaticResource Num}"
+                                           Opacity="0.9" FontFamily="Consolas" FontSize="11" VerticalAlignment="Center"
+                                           Visibility="{Binding DataContext.PitTotal, RelativeSource={RelativeSource AncestorType=Window}}"/>
+                                <TextBlock Grid.Column="21" Text="{Binding PitDrive}" Style="{StaticResource Num}"
+                                           Opacity="0.75" FontFamily="Consolas" FontSize="11" VerticalAlignment="Center"
+                                           Visibility="{Binding DataContext.PitDrive, RelativeSource={RelativeSource AncestorType=Window}}"/>
+                                <TextBlock Grid.Column="22" Text="{Binding PitStall}" Style="{StaticResource Num}"
+                                           Opacity="0.9" FontFamily="Consolas" FontSize="11" VerticalAlignment="Center"
+                                           Visibility="{Binding DataContext.PitStall, RelativeSource={RelativeSource AncestorType=Window}}"/>
                             </Grid>
                         </Border>
                     </DataTemplate>

@@ -42,6 +42,36 @@ public static class RelativeGap
         return gap;
     }
 
+    /// <summary>Wrapped track-position delta in laps between any two cars, in (-0.5, +0.5].
+    /// Positive = <paramref name="aIdx"/> is ahead of <paramref name="bIdx"/>.</summary>
+    public static float SignedLaps(RawTick t, int aIdx, int bIdx)
+    {
+        float d = t.LapDistPct[aIdx] - t.LapDistPct[bIdx];
+        if (d > 0.5f) d -= 1f;
+        else if (d <= -0.5f) d += 1f;
+        return d;
+    }
+
+    /// <summary>On-track gap in seconds between two arbitrary cars (same est-time refinement as the
+    /// player version). Positive = <paramref name="aIdx"/> is ahead. Only valid within a lap — the
+    /// caller handles laps-down separately.</summary>
+    public static float SignedSecondsBetween(RawTick t, int aIdx, int bIdx, float refLap)
+    {
+        float gap = SignedLaps(t, aIdx, bIdx) * refLap;
+        if (aIdx < t.EstTime.Length && bIdx < t.EstTime.Length)
+        {
+            float ae = t.EstTime[aIdx], be = t.EstTime[bIdx];
+            if (ae > 0.5f && be > 0.5f)
+            {
+                float est = ae - be;
+                if (est - gap > 0.5f * refLap) est -= refLap;
+                else if (gap - est > 0.5f * refLap) est += refLap;
+                if (Math.Abs(est - gap) < 0.35f * refLap) gap = est;
+            }
+        }
+        return gap;
+    }
+
     /// <summary>The player's reference lap: class est lap, else own best, else a safe default.</summary>
     public static float PlayerRefLap(RawTick t, Roster roster)
     {

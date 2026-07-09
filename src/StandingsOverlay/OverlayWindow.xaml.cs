@@ -15,6 +15,7 @@ public sealed record ColumnVisibility(
     Visibility LapsCount,
     Visibility Gap, Visibility Interval, Visibility BestLap, Visibility LastLap,
     Visibility Delta, Visibility PaceRank, Visibility Strategy, Visibility Pace, Visibility Status,
+    Visibility PitLap, Visibility PitTotal, Visibility PitDrive, Visibility PitStall,
     double CellWidth, double NameWidth)
 {
     public static ColumnVisibility From(SessionColumns c, SessionKind kind, double nameWidth)
@@ -29,6 +30,7 @@ public sealed record ColumnVisibility(
             V(c.ShowCells && kind != SessionKind.Practice),
             V(c.ShowPaceRank),
             V(c.ShowStrategy && race), V(c.ShowPace && race), V(c.ShowStatus),
+            V(c.ShowPitLap && race), V(c.ShowPitTotal && race), V(c.ShowPitDrive && race), V(c.ShowPitStall && race),
             // Race cells hold "0.4"; quali cells hold "1:43.210".
             CellWidth: kind == SessionKind.Qualify ? 62 : 34,
             NameWidth: Math.Clamp(nameWidth, 60, 400));

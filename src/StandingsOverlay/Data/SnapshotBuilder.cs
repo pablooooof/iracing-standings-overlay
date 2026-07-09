@@ -99,6 +99,18 @@ public static class SnapshotBuilder
                                      .Where(b => b > 0)
                                      .DefaultIfEmpty(0).Min();
 
+            // Smooth gaps (config): cumulative est-time interval down the running order, so every
+            // car's gap-to-leader is continuous like the relative rather than stepping at the line.
+            double[]? smoothCum = null;
+            if (isRace && cfg.SmoothGaps)
+            {
+                float rl = ordered[0].ClassEstLap > 10 ? ordered[0].ClassEstLap : 90f;
+                smoothCum = new double[ordered.Count];
+                for (int j = 1; j < ordered.Count; j++)
+                    smoothCum[j] = smoothCum[j - 1]
+                        + Math.Max(0, RelativeGap.SignedSecondsBetween(t, ordered[j - 1].CarIdx, ordered[j].CarIdx, rl));
+            }
+
             // Who's actually fastest ON TRACK right now: rank the class by average of the
             // last 5 clean laps (timed, no pit lane). Rank 1 = fastest.
             var paceRank = new Dictionary<int, int>();
@@ -113,7 +125,7 @@ public static class SnapshotBuilder
                 if (prev >= 0 && i != prev + 1) rows.Add(StandingsRow.Separator);
                 prev = i;
                 rows.Add(BuildRow(i, ordered, t, roster, history, stints, swap, cfg, kind, cellCount,
-                                  classBest, playerPace, paceRank, lapsRemain));
+                                  classBest, playerPace, paceRank, lapsRemain, smoothCum));
             }
         }
 
@@ -173,7 +185,8 @@ public static class SnapshotBuilder
     private static StandingsRow BuildRow(int i, List<DriverEntry> ordered, RawTick t, Roster roster,
         GapHistory history, StintTracker stints, DriverSwapTracker swap, OverlayConfig cfg,
         SessionKind kind, int cellCount,
-        float classBest, float? playerPace, Dictionary<int, int> paceRank, double lapsRemain)
+        float classBest, float? playerPace, Dictionary<int, int> paceRank, double lapsRemain,
+        double[]? smoothCum)
     {
         bool isRace = kind == SessionKind.Race;
         var d = ordered[i];
@@ -183,7 +196,15 @@ public static class SnapshotBuilder
         string gap = "", interval = "";
         if (isRace)
         {
-            if (i > 0)
+            if (i > 0 && smoothCum != null)
+            {
+                // Smooth: gap-to-leader is the cumulative sum of adjacent est-time intervals
+                // (each short, so the ±0.5-lap est-time method stays valid); laps-down still "NL".
+                gap = LapsDownText(t, leader.CarIdx, idx) ?? FmtGap(smoothCum[i], cfg.GapPrecision);
+                interval = LapsDownText(t, ordered[i - 1].CarIdx, idx)
+                           ?? FmtGap(Math.Max(0, smoothCum[i] - smoothCum[i - 1]), cfg.IntervalPrecision);
+            }
+            else if (i > 0)
             {
                 gap = GapToCar(t, idx, leader.CarIdx, cfg.GapPrecision);
                 interval = GapToCar(t, idx, ordered[i - 1].CarIdx, cfg.IntervalPrecision);
@@ -288,19 +309,24 @@ public static class SnapshotBuilder
             PaceText: pace,
             PaceSign: paceSign,
             IsPlayer: idx == t.PlayerCarIdx,
-            Offline: idx < t.TrackSurface.Length && t.TrackSurface[idx] == -1 && idx != t.PlayerCarIdx);
+            Offline: idx < t.TrackSurface.Length && t.TrackSurface[idx] == -1 && idx != t.PlayerCarIdx,
+            PitLapText: isRace && stints.LastPit(idx) is { } pl ? pl.Lap.ToString() : "",
+            PitTotalText: isRace && stints.LastPit(idx) is { } pt ? pt.Total.ToString("0.0") : "",
+            PitDriveText: isRace && stints.LastPit(idx) is { } pd ? pd.DriveThrough.ToString("0.0") : "",
+            PitStallText: isRace && stints.LastPit(idx) is { } ps ? ps.Stationary.ToString("0.0") : "");
     }
 
-    /// <summary>Race gap between two cars: laps-down when a lap+ apart, else F2Time difference.</summary>
-    private static string GapToCar(RawTick t, int idx, int refIdx, int precision)
+    /// <summary>"NL" when the car is a lap or more down on the reference, else null.</summary>
+    private static string? LapsDownText(RawTick t, int refIdx, int idx)
     {
-        double refTotal = t.Lap[refIdx] + t.LapDistPct[refIdx];
-        double carTotal = t.Lap[idx] + t.LapDistPct[idx];
-        if (refTotal - carTotal >= 1.0)
-            return $"{(int)(refTotal - carTotal)}L";
-        // Positive by construction (gap to a car ahead) — no leading "+" clutter.
-        return FmtGap(Math.Max(0, t.F2Time[idx] - t.F2Time[refIdx]), precision);
+        double d = (t.Lap[refIdx] + t.LapDistPct[refIdx]) - (t.Lap[idx] + t.LapDistPct[idx]);
+        return d >= 1.0 ? $"{(int)d}L" : null;
     }
+
+    /// <summary>Race gap between two cars via CarIdxF2Time (iRacing's own behind-leader time),
+    /// laps-down aware. Positive by construction, so no leading "+".</summary>
+    private static string GapToCar(RawTick t, int idx, int refIdx, int precision) =>
+        LapsDownText(t, refIdx, idx) ?? FmtGap(Math.Max(0, t.F2Time[idx] - t.F2Time[refIdx]), precision);
 
     /// <summary>Highest-priority per-car status badge.</summary>
     private static string Status(RawTick t, StintTracker stints, int idx, bool showRejoin, bool swapped)

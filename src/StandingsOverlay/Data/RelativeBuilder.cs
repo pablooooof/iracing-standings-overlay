@@ -77,6 +77,9 @@ public static class RelativeBuilder
             if (d.CarIdx == t.PlayerCarIdx || d.IsPaceCar || d.IsSpectator || !t.Has(d.CarIdx)) continue;
             if (d.CarIdx < t.TrackSurface.Length && t.TrackSurface[d.CarIdx] == -1) continue;
             if (t.Lap[d.CarIdx] < 0) continue;
+            // A car sat in the pits for a long time is parked (DNF / no driver) — noise, not traffic.
+            if (rc.HideParkedCars && d.CarIdx < t.OnPitRoad.Length && t.OnPitRoad[d.CarIdx]
+                && stints.StoppedSeconds(d.CarIdx) > 60) continue;
 
             float gap = RelativeGap.SignedSeconds(t, d.CarIdx, refLap);
             (gap >= 0 ? ahead : behind).Add((gap, d));

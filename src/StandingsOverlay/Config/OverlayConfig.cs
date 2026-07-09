@@ -31,6 +31,10 @@ public sealed class OverlayConfig
     // ⭐ Per-lap gap delta columns for the last N laps, oldest left (the reason this project exists).
     public int DeltaLaps { get; set; } = 5;
 
+    // Smooth GAP/INT: compute standings gaps from CarIdxEstTime (continuous, like the relative)
+    // instead of CarIdxF2Time (steps at timing lines). Laps-down is still shown as "NL".
+    public bool SmoothGaps { get; set; } = true;
+
     // Data refresh rate (snapshots per second, 1-10). Rendering only happens on change.
     public int UpdateHz { get; set; } = 4;
 
@@ -156,6 +160,7 @@ public sealed class RelativeConfig
 
     public bool ShowClassPos { get; set; } = true;
     public bool ShowTyre { get; set; } = true;       // wet/dry compound ring, like the standings
+    public bool HideParkedCars { get; set; }         // drop cars sat in the pits >~60s (DNF / no driver)
     public bool ShowBrand { get; set; } = true;
     public bool ShowIRating { get; set; } = true;
     public bool ShowLicense { get; set; }
@@ -215,6 +220,11 @@ public sealed class SessionColumns
     public bool ShowStatus { get; set; } = true;
     public bool ShowStrategy { get; set; }
     public bool ShowPace { get; set; }
+    // Last pit stop, race-only. Lap + total on by default; the drive-through/box split is opt-in.
+    public bool ShowPitLap { get; set; }
+    public bool ShowPitTotal { get; set; }
+    public bool ShowPitDrive { get; set; }
+    public bool ShowPitStall { get; set; }
 
     public static SessionColumns RaceDefaults() => new()
     {
@@ -223,6 +233,8 @@ public sealed class SessionColumns
         ShowPaceRank = true,
         ShowStrategy = true,
         ShowPace = true,
+        ShowPitLap = true,
+        ShowPitTotal = true,
     };
 
     public static SessionColumns QualifyDefaults() => new()

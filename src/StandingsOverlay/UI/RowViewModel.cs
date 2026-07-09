@@ -26,6 +26,10 @@ public sealed class RowViewModel
     public string Rank { get; init; } = "";
     public string Strat { get; init; } = "";
     public string Pace { get; init; } = "";
+    public string PitLap { get; init; } = "";
+    public string PitTotal { get; init; } = "";
+    public string PitDrive { get; init; } = "";
+    public string PitStall { get; init; } = "";
 
     public Brush PosGainedBrush { get; init; } = Brushes.White;
     public Brush CarNumberBrush { get; init; } = Brushes.White;
@@ -125,6 +129,10 @@ public sealed class RowViewModel
             Rank = r.RankText,
             Strat = r.StratText,
             Pace = r.PaceText,
+            PitLap = r.PitLapText,
+            PitTotal = r.PitTotalText,
+            PitDrive = r.PitDriveText,
+            PitStall = r.PitStallText,
             PosGainedBrush = r.PosGainedSign < 0 ? GainBrush : r.PosGainedSign > 0 ? LossBrush : DimBrush,
             CarNumberBrush = TryBrush(r.ClassColor) ?? NoClassBrush,
             ClassBarBrush = TryBrush(r.ClassColor) ?? NoClassBrush,

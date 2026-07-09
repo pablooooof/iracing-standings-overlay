@@ -1,5 +1,9 @@
 namespace StandingsOverlay.Data;
 
+/// <summary>A completed pit visit's timing (seconds), plus the lap it happened on. Stationary =
+/// time sat still (≈ in the box); DriveThrough = the rest (pit-lane transit).</summary>
+public readonly record struct PitInfo(int Lap, double Total, double Stationary, double DriveThrough);
+
 /// <summary>
 /// Per-car race-craft state built from cheap observations: lap times (sampled at each car's own
 /// lap crossing), pit road transitions, and the first position seen (the grid). Everything the
@@ -29,6 +33,12 @@ public sealed class StintTracker
         public int LastCompound = -1;                     // CarIdxTireCompound (0 dry, >=1 wet)
         public double CompoundSwitchTime = -1;            // when it last crossed dry<->wet
         public bool SwitchedToWet;                        // direction of that last switch
+        // Pit-visit timing.
+        public double PitEntryTime = -1;
+        public int PitEntryLap;
+        public double PitPrevNow = -1, PitPrevDist;
+        public double PitStationaryAccum;
+        public PitInfo? LastPit;
     }
 
     private const int MaxLapTimes = 30;
@@ -115,11 +125,32 @@ public sealed class StintTracker
                 int stintLen = t.Lap[idx] - s.CurrentStintStartLap;
                 if (stintLen >= 3) s.StintLengths.Add(stintLen);   // ignore drive-throughs/early tows
                 s.PitCount++;
+                s.PitEntryTime = _now;
+                s.PitEntryLap = t.Lap[idx];
+                s.PitStationaryAccum = 0;
+                s.PitPrevNow = _now;
+                s.PitPrevDist = t.Lap[idx] + t.LapDistPct[idx];
             }
             else if (!onPit && s.WasOnPit)
             {
                 s.CurrentStintStartLap = t.Lap[idx];
                 if (_now >= 0) s.LastPitExitTime = _now;
+                if (s.PitEntryTime >= 0 && _now > s.PitEntryTime)
+                {
+                    double total = _now - s.PitEntryTime;
+                    double stat = Math.Min(total, s.PitStationaryAccum);
+                    s.LastPit = new PitInfo(s.PitEntryLap, total, stat, Math.Max(0, total - stat));
+                    s.PitEntryTime = -1;
+                }
+            }
+            // Accumulate time sat still in the pit lane (≈ the stop itself) across the visit.
+            if (onPit && s.PitEntryTime >= 0 && s.PitPrevNow >= 0 && _now >= 0)
+            {
+                double dt = _now - s.PitPrevNow;
+                double dist = t.Lap[idx] + t.LapDistPct[idx];
+                if (dt > 0 && dt < 2 && Math.Abs(dist - s.PitPrevDist) < 0.0004) s.PitStationaryAccum += dt;
+                s.PitPrevNow = _now;
+                s.PitPrevDist = dist;
             }
             s.WasOnPit = onPit;
         }
@@ -232,6 +263,10 @@ public sealed class StintTracker
         _now >= 0 && _cars.TryGetValue(idx, out var s)
         && !s.WasOnPit && s.LastLapSeen >= 1 && s.LastMoveTime >= 0
         && _now - s.LastMoveTime > 4.0;
+
+    /// <summary>The car's last completed pit visit (lap + total/stationary/drive-through seconds),
+    /// or null before its first stop.</summary>
+    public PitInfo? LastPit(int idx) => _cars.TryGetValue(idx, out var s) ? s.LastPit : null;
 
     /// <summary>Seconds the car has been sitting still (0 if moving / unknown).</summary>
     public double StoppedSeconds(int idx) =>
