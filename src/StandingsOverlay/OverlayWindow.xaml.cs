@@ -101,7 +101,8 @@ public partial class OverlayWindow : Window
     {
         if (b is null) return false;
         if (a.Connected != b.Connected || a.Kind != b.Kind || a.HeaderLeft != b.HeaderLeft ||
-            a.HeaderAlert != b.HeaderAlert || !a.HeaderGroups.SequenceEqual(b.HeaderGroups) ||
+            a.HeaderAlert != b.HeaderAlert || a.WetDeclared != b.WetDeclared ||
+            !a.HeaderGroups.SequenceEqual(b.HeaderGroups) ||
             a.Rows.Count != b.Rows.Count || !a.CellHeaders.SequenceEqual(b.CellHeaders)) return false;
         for (int i = 0; i < a.Rows.Count; i++)
         {
@@ -133,6 +134,7 @@ public partial class OverlayWindow : Window
 
         HeaderLeft.Text = s.HeaderLeft;
         HeaderGroups.ItemsSource = s.HeaderGroups;
+        WetPill.Visibility = s.WetDeclared ? Visibility.Visible : Visibility.Collapsed;
         SetHeaderAlert(s.HeaderAlert);
 
         var highlightBase = RowViewModel.TryBrush(cfg.HighlightColor) is SolidColorBrush hb ? hb.Color : Colors.Orange;

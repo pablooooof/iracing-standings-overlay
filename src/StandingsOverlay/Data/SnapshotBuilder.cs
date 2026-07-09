@@ -135,7 +135,8 @@ public static class SnapshotBuilder
 
         return new StandingsSnapshot(true, kind, isRace ? "RACE" : t.SessionType.ToUpperInvariant(),
             HeaderGroups(t, roster, weather, cfg, playerClassId), cellHeaders, rows,
-            HeaderAlert: HeaderAlert(t, roster, stints, weather, cfg));
+            HeaderAlert: HeaderAlert(t, roster, stints, weather, cfg),
+            WetDeclared: cfg.ShowWeather && t.DeclaredWet);
     }
 
     private static List<DriverEntry> OrderClass(List<DriverEntry> cars, RawTick t, Roster roster, bool isRace)
@@ -398,12 +399,12 @@ public static class SnapshotBuilder
         if (cfg.ShowIncidents && t.PlayerIncidents >= 0) track.Add($"{t.PlayerIncidents}x");
         if (track.Count > 0) groups.Add(string.Join(" · ", track));
 
-        // Weather: wetness · rain % · wind.
+        // Weather: track surface wetness · rain %. (The marshal's WeatherDeclaredWet flag is a
+        // separate box indicator, not a wetness level — it rides on the snapshot, not here.)
         var sky = new List<string>(3);
         if (cfg.ShowWeather)
         {
-            var wet = t.DeclaredWet ? "WET declared" : WetnessText(t.TrackWetness, cfg.AbbreviateWetness);
-            if (!string.IsNullOrEmpty(wet)) sky.Add(wet);
+            if (WetnessText(t.TrackWetness, cfg.AbbreviateWetness) is { Length: > 0 } wet) sky.Add(wet);
             if (!float.IsNaN(t.Precipitation)) sky.Add($"☂ {t.Precipitation * 100:0}%{TrendArrow(weather.PrecipTrend)}");
         }
         if (cfg.ShowWind && WindText(t.WindVel, t.WindDir) is { Length: > 0 } wind) sky.Add(wind);
@@ -485,13 +486,17 @@ public static class SnapshotBuilder
         return $"{WindArrows[idx]} {velMs * 3.6:0} km/h";
     }
 
+    /// <summary>irsdk_TrackWetness levels — how wet the surface actually is (distinct from the
+    /// marshal's WeatherDeclaredWet flag).</summary>
     private static string WetnessText(int w, bool abbrev) => w switch
     {
         1 => "Dry",
         2 => abbrev ? "M.Dry" : "Mostly Dry",
-        3 or 4 => "Damp",
-        5 => "Wet",
-        6 or 7 => abbrev ? "V.Wet" : "Very Wet",
+        3 => abbrev ? "V.Lgt Wet" : "Very Lightly Wet",
+        4 => abbrev ? "Lgt Wet" : "Lightly Wet",
+        5 => abbrev ? "Mod Wet" : "Moderately Wet",
+        6 => abbrev ? "V.Wet" : "Very Wet",
+        7 => abbrev ? "X.Wet" : "Extremely Wet",
         _ => "",
     };
 

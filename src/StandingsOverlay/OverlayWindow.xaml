@@ -45,6 +45,11 @@
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
+                <!-- Marshal declared wet (wet tyres allowed) — a separate flag from the surface wetness. -->
+                <Border x:Name="WetPill" CornerRadius="5" Padding="7,2" Margin="0,0,6,0"
+                        Background="#1E6FFF" VerticalAlignment="Center" Visibility="Collapsed">
+                    <TextBlock Text="WET" FontWeight="Bold" Foreground="White"/>
+                </Border>
             </StackPanel>
 
             <!-- Column header -->
