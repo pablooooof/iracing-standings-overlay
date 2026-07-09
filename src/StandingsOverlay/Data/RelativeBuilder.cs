@@ -60,6 +60,9 @@ public static class RelativeBuilder
     {
         var rc = cfg.Relative;
         if (!rc.Enabled || !t.Has(t.PlayerCarIdx)) return RelativeSnapshot.Empty;
+        // Lone qualifying: every driver runs alone, so any "cars around you" are ghosts from other
+        // drivers' separate runs — the relative (and traffic) are meaningless.
+        if (t.SessionType.Contains("Lone", StringComparison.OrdinalIgnoreCase)) return RelativeSnapshot.Empty;
         // In the garage / on the flatbed there is no meaningful "around me".
         if (t.PlayerCarIdx < t.TrackSurface.Length && t.TrackSurface[t.PlayerCarIdx] == -1)
             return RelativeSnapshot.Empty;

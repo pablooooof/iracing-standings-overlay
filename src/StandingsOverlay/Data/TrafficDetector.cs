@@ -115,6 +115,8 @@ public sealed class TrafficDetector
         bool race = StandingsSnapshot.KindOf(t.SessionType) == SessionKind.Race;
         if (!tc.Enabled || (tc.RacesOnly && !race) ||
             !t.Has(t.PlayerCarIdx) || t.SessionTime < 0 ||
+            // Lone qualifying: other cars are ghosts from separate runs, never really near you.
+            t.SessionType.Contains("Lone", StringComparison.OrdinalIgnoreCase) ||
             // No traffic warnings while the player is in the pit lane — everyone "closes"
             // at full speed on a stationary car and none of it is actionable.
             t.OnPitRoad[t.PlayerCarIdx])
