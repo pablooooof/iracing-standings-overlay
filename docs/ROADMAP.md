@@ -20,7 +20,8 @@ lap times, positions gained vs grid, **PIT column** (`~34` expected pit lap · `
 median over last 5 laps, `S` = fuel-saving: consistent laps ≥1.5% off own best with <1% spread).
 
 Still open:
-- **Pit stop duration tracking** → distinguish splash vs full stop vs repair from time stationary.
+- **Pit stop duration tracking** → [x] shipped as `PitInfo` (total / stationary / drive-through)
+  and the pit-time columns; still todo: *classify* splash vs full stop vs repair from those times.
 - **Stint pace decay** → tire deg estimate per car; who's managing, who's dying at stint end.
 - **Confidence display** — strategy guesses from 1 stint are weak; dim until 2+ stints observed.
 - **Endurance mode**: auto-widen strategy columns when session length > ~40 min; driver-swap
@@ -41,6 +42,8 @@ Follow-ups:
 - **Unit display** — gallons / kWh label from the session (math already unit-agnostic).
 - **Save-level calibration** — learn MaxSave/penalty from the player's own observed saving
   laps instead of config constants.
+- **Fuel-saving strategy surfacing** — make the save-to-skip-a-stop fork explicit even in short
+  sprints (target lift-and-coast number to skip a stop, live "save X/lap and you make it").
 
 ## Sector mini-bar (idea, evaluated 2026-07)
 
@@ -79,12 +82,14 @@ Ideas and requests captured during rapid iteration so nothing is lost. Roughly o
   in the pits >60s (heuristic; iRacing has no "no driver" var).
 - [x] **Driver-change alert (endurance teams)** — `DriverSwapTracker` tags a car `SWAP` (purple)
   for 60s when its driver name changes across a YAML reparse.
-- [ ] **Class-colour override map** — optional user map (GT3=pink, LMP2=blue, GTP=yellow…) that
-  overrides iRacing's own class colours when you prefer a convention.
+- [x] **Show top-N when leading** (`MinLeadingCars`, default 10) — near the front, show at least
+  the top N instead of a tiny window around you.
+- [x] **Stint number** in the relative (`ST1`/`ST2`/…) instead of raw laps-since-pit.
+- ~~Class-colour override map~~ — dropped (live sessions use iRacing's own class colours).
 
 **Tyres / weather**
-- [ ] **Inline `o→o` tyre-switch marker** in the row (both widgets) + Settings toggle
-  (flash / inline / both) + configurable lifetime (until next stop / one lap / N sec).
+- [x] **Inline `o→o` tyre-switch marker** (both widgets) + `TyreSwitchDisplay` toggle
+  (Flash / Inline / Both), gated on `TyreSwitchAlertSec`.
 - [x] Tyre-switch flash duration configurable (`TyreSwitchAlertSec`, default 30s).
 - [x] Trend arrows latch until the trend reverses (not per-sample blink).
 
