@@ -31,6 +31,10 @@
                 <TextBlock x:Name="FinishLine" Foreground="#E8E9EE" FontFamily="Consolas" FontSize="13"
                            FontWeight="Bold" Margin="0,4,0,0"/>
 
+                <!-- Fuel-save fork: the exact lift-and-coast number to skip a stop. -->
+                <TextBlock x:Name="SaveLine" Foreground="#35A653" FontFamily="Consolas" FontSize="12"
+                           FontWeight="Bold" Margin="0,3,0,0"/>
+
                 <!-- Timed-race distance: projected laps, your laps to go, extra-lap knife-edge. -->
                 <TextBlock x:Name="RaceLine" Foreground="#E8E9EE" FontFamily="Consolas" FontSize="12"
                            FontWeight="Bold" Margin="0,3,0,0"/>

@@ -104,6 +104,8 @@ public partial class FuelWindow : Window
         FinishLine.Text = s.FinishText;
         FinishLine.Visibility = s.FinishText.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
         FinishLine.Foreground = s.FinishEmphasis >= 2 ? SplashBrush : s.FinishEmphasis == 1 ? SaveBrush : PushBrush;
+        SaveLine.Text = s.SaveText;
+        SaveLine.Visibility = s.SaveText.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
         RaceLine.Text = s.RaceText;
         RaceLine.Visibility = s.RaceText.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
         RaceLine.Foreground = s.RaceEmphasis >= 2 ? SplashBrush : s.RaceEmphasis == 1 ? SaveBrush : TextBrush;
@@ -210,6 +212,7 @@ public partial class FuelWindow : Window
             RaceEmphasis: 2,
             FinishText: "finish on 41.8L · carrying 5.6L extra (2.4 laps)",
             FinishEmphasis: 1,
+            SaveText: "save 0.09/lap to skip the stop (12s faster)",
             NowFrac: 0.75,
             Bars:
             [

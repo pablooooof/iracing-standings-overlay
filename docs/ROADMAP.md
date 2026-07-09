@@ -42,8 +42,8 @@ Follow-ups:
 - **Unit display** — gallons / kWh label from the session (math already unit-agnostic).
 - **Save-level calibration** — learn MaxSave/penalty from the player's own observed saving
   laps instead of config constants.
-- **Fuel-saving strategy surfacing** — make the save-to-skip-a-stop fork explicit even in short
-  sprints (target lift-and-coast number to skip a stop, live "save X/lap and you make it").
+- [x] **Fuel-saving strategy surfacing** — the fuel widget shows the fork's exact per-lap save as
+  an action: "save 0.14/lap → 2 stops (38s faster)" / "save X/lap to skip the stop" in a sprint.
 
 ## Sector mini-bar (idea, evaluated 2026-07)
 

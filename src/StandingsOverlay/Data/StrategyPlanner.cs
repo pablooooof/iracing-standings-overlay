@@ -26,10 +26,11 @@ public sealed record FuelSnapshot(
     int RaceEmphasis,        // 0 normal · 1 borderline · 2 extra-lap likely (colors RaceText)
     string FinishText,       // "finish on 41.8L · 2.4L in hand" — the exact fuel-to-the-flag number
     int FinishEmphasis,      // 0 ok (green) · 1 over-fuelled (amber) · 2 short (red)
+    string SaveText,         // "save 0.09/lap to skip the stop (12s faster)" — the fuel-save fork
     double NowFrac,          // 0..1 position of the now marker on the bars
     IReadOnlyList<FuelStrategyBar> Bars)
 {
-    public static readonly FuelSnapshot Empty = new(false, "", "", "", "", "", "", 0, "", 0, 0, []);
+    public static readonly FuelSnapshot Empty = new(false, "", "", "", "", "", "", 0, "", 0, "", 0, []);
 
     public bool VisuallyEquals(FuelSnapshot? o)
     {
@@ -37,7 +38,7 @@ public sealed record FuelSnapshot(
         if (Show != o.Show || FuelText != o.FuelText || PerLapText != o.PerLapText ||
             LapsText != o.LapsText || TargetText != o.TargetText || PlanText != o.PlanText ||
             RaceText != o.RaceText || RaceEmphasis != o.RaceEmphasis ||
-            FinishText != o.FinishText || FinishEmphasis != o.FinishEmphasis ||
+            FinishText != o.FinishText || FinishEmphasis != o.FinishEmphasis || SaveText != o.SaveText ||
             Math.Abs(NowFrac - o.NowFrac) > 0.004 || Bars.Count != o.Bars.Count) return false;
         for (int i = 0; i < Bars.Count; i++)
             if (!Bars[i].VisuallyEquals(o.Bars[i])) return false;
@@ -67,7 +68,7 @@ public sealed class StrategyPlanner
     private int _planGreenLaps = -1;
     private OverlayConfig? _planCfg;
 
-    private string _targetText = "", _planText = "";
+    private string _targetText = "", _planText = "", _saveText = "";
     private double _nowFrac;
     private IReadOnlyList<FuelStrategyBar> _bars = [];
 
@@ -77,7 +78,7 @@ public sealed class StrategyPlanner
         _planOnPit = false;
         _planGreenLaps = -1;
         _planCfg = null;
-        _targetText = _planText = "";
+        _targetText = _planText = _saveText = "";
         _nowFrac = 0;
         _bars = [];
     }
@@ -141,7 +142,7 @@ public sealed class StrategyPlanner
         }
 
         FuelSnapshot Numbers() => new(true, fuelText, perLapText, lapsText, "", "",
-                                      raceText, raceEmphasis, finishText, finishEmphasis, 0, []);
+                                      raceText, raceEmphasis, finishText, finishEmphasis, "", 0, []);
 
         // Bars need confidence + a race that is actually running toward an end.
         if (!isRace || t.SessionState >= 5 || fuel.GreenLaps < 3 || perLap <= 0.01 ||
@@ -169,7 +170,7 @@ public sealed class StrategyPlanner
 
         return new FuelSnapshot(true, fuelText, perLapText, lapsText,
                                 _targetText, _planText, raceText, raceEmphasis,
-                                finishText, finishEmphasis, _nowFrac, _bars);
+                                finishText, finishEmphasis, _saveText, _nowFrac, _bars);
     }
 
     /// <summary>One glanceable line: projected race length, the player's laps to go, and whether
@@ -274,7 +275,7 @@ public sealed class StrategyPlanner
             if (kMin < 0 && Feasible(k, maxSave)) kMin = k;
             if (kPush < 0 && Feasible(k, 0)) kPush = k;
         }
-        if (kMin < 0) { _targetText = _planText = ""; _bars = []; return; }
+        if (kMin < 0) { _targetText = _planText = _saveText = ""; _bars = []; return; }
         if (kPush < 0) kPush = kMin;
 
         var plans = new List<Plan>();
@@ -288,6 +289,20 @@ public sealed class StrategyPlanner
                     if (Feasible(k, s)) { sk = s; break; }
             }
             plans.Add(Simulate(k, sk));
+        }
+
+        // Fuel-save fork: the fewest-stops plan (kMin, highest save, built first) vs pushing
+        // (kPush, s=0, built last). When saving skips a stop, surface the exact per-lap save so
+        // "lift 0.09/lap and you make it" is an action, not a guess. Captured before truncation.
+        _saveText = "";
+        if (kMin < kPush && plans.Count >= 2 && plans[0].Save > 0.005)
+        {
+            var savePlan = plans[0];
+            double dt = savePlan.TotalSec - plans[^1].TotalSec;
+            string cost = dt <= -1 ? $"{-dt:0}s faster" : dt >= 1 ? $"+{dt:0}s slower" : "~even";
+            _saveText = savePlan.Stops == 0
+                ? $"save {savePlan.Save:0.00}/lap to skip the stop ({cost})"
+                : $"save {savePlan.Save:0.00}/lap → {StopsText(savePlan.Stops)} ({cost})";
         }
 
         plans.Sort((a, b) => a.TotalSec.CompareTo(b.TotalSec));
