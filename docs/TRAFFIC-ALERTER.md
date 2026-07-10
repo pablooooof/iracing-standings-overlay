@@ -40,24 +40,32 @@ Add to `ReadTick()` (same 4 Hz tick, three extra `GetData` calls):
 ## Detection (pure function, testable in `--demo`)
 
 1. **Gap behind (seconds).** `deltaPct = (playerPct − carPct + 1) % 1`; candidate when
-   `deltaPct < 0.5`. Primary gap = `CarIdxEstTime` delta (wrap: `+chaserLap` when negative;
-   trusted only when > 0, both ests > 0.5 s, and within 35 % of a lap of the distance
-   estimate — est reads 0 in pits and tears mid-crossing). Fallback/bound:
-   `deltaPct × car.ClassEstLap`. Distance-only math made the TTA blow up to 99 s on corner
-   exit (Pablo, live, 2026-07-05) because pct-gap stops closing when the player accelerates
-   first; est time knows a hairpin from a straight. Faster-class closing rate is also floored
-   at 30 % of the class-pace difference for the same reason. Window: `gapSec < 30`.
+   `deltaPct < 0.5`. Gap = the shared phase model (`RelativeGap.SignedPhase` × the chaser's
+   class lap, see docs/RELATIVE.md) — the same number the relative box shows, by construction.
+   History: distance-only math blew the TTA up to 99 s on corner exit (Pablo, live,
+   2026-07-05); the est/dist blend that replaced it breathed with track section and fired
+   phantom 0.7 s/s "closing" alerts on stable gaps (Pablo, live, 2026-07-08/10) — both fixed
+   by the phase model. Faster-class closing rate stays floored at 30 % of the class-pace
+   difference in races (a player accelerating first still "holds off" the numbers briefly).
+   Window: `gapSec < 30`.
 2. **Qualification.**
    - *Faster class:* `car.ClassEstLap < player.ClassEstLap − 1.0s` — alert regardless of laps.
    - *Being lapped (blue):* same class, `carTotal − playerTotal ≥ ~0.9` laps
      (`total = Lap + LapDistPct`); the player's flag bit `0x0020` (blue) is a cross-check,
      not the trigger (fires too late).
    - Skip pace car, spectators, `OnPitRoad`, `TrackSurface == NotInWorld`.
-3. **Closing rate / TTA.** Per candidate, ring buffer of `(sessionTime, gapSec)` — ~12
-   samples ≈ 3 s at 4 Hz. `rate = (oldest − newest) / windowSec`; `tta = gapSec / rate`
-   when `rate > 0.2`. Gap jump > 3 s between ticks ⇒ tow/reset ⇒ flush that car's buffer.
+3. **Closing rate / TTA.** Per candidate, ring buffer of `(sessionTime, gapSec)` — ~13
+   samples ≈ 3.2 s at 4 Hz. Rate = **least-squares slope** over the buffer (an endpoint
+   difference let one noisy sample invent a rate), capped at 0.6 s/s (faster is an artifact,
+   not a car); `tta = gapSec / rate` when `rate > 0.05`. Gap jump > 3 s between ticks ⇒
+   tow/reset ⇒ flush that car's buffer. When the rate collapses mid-alert (player accelerating)
+   the displayed countdown holds its last finite value, capped at `lead × 1.3` — never "99.9".
+   A dismissed car can't re-WATCH for 15 s (flap damping).
 4. **State machine (per car), with hysteresis.**
-   - HIDDEN → **WATCH** when `tta ≤ AlertLeadTimeSec` (12)
+   - HIDDEN → **WATCH** when `tta ≤ AlertLeadTimeSec` (12). Blue additionally fires on raw
+     proximity (`gap ≤ 2.5 s`): a leader grinding up at 1–3 s/lap has a rate too small for a
+     meaningful countdown — TTA-only blue would only alert with them on the bumper. Blue rows
+     display the **gap**, not a countdown ("leader is N seconds behind you", spotter-style).
    - → **IMMINENT** when `tta ≤ ImminentSec` (4) or `gapSec ≤ 1.5`. The gap shortcut is
      for traffic only — a blue car closing at 2 s/lap *lives* under 1.5 s of gap, so blue
      escalates on TTA alone (found live in demo: blue went red instantly otherwise)

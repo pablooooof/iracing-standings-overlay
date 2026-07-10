@@ -40,7 +40,8 @@ public sealed class DemoSource : ITelemetrySource
     private bool _swapDone;
     private double _playerFuel = PlayerTank;
     private readonly RawTick _tick = new();
-    private readonly double[] _totalDist = new double[Cars];
+    // Laps completed + time-fraction of the current lap (time domain; TrackPct maps to distance).
+    private readonly double[] _progress = new double[Cars];
     private readonly float[] _pace = new float[Cars];       // seconds per lap
     private readonly int[] _stintLaps = new int[Cars];      // laps between stops
     private readonly int[] _lastPitLap = new int[Cars];
@@ -109,7 +110,7 @@ public sealed class DemoSource : ITelemetrySource
 
             int classSlot = i < GtpCars ? i : i < Gt3End ? i - GtpCars : i - Gt3End;
             // Staggered rolling start: GTP half a lap up the road, GT4 half a lap back.
-            _totalDist[i] = 1.0 - classSlot * 0.02 + (classId == 1 ? 0.5 : classId == 3 ? -0.5 : 0);
+            _progress[i] = 1.0 - classSlot * 0.02 + (classId == 1 ? 0.5 : classId == 3 ? -0.5 : 0);
             // GTP paces spread wider so they sometimes arrive as a train, sometimes solo.
             _pace[i] = classId == 1
                 ? classLap + classSlot * 0.35f
@@ -156,6 +157,14 @@ public sealed class DemoSource : ITelemetrySource
         _tick.TireCompound[14] = 1;
     }
 
+    /// <summary>Demo track speed profile: distance fraction covered as a function of the lap's
+    /// time-fraction. Fast down the S/F straight, a slow mid-lap hairpin complex (speed swings
+    /// 0.55×–1.45× of average), so LapDistPct and EstTime diverge like on a real road course —
+    /// a regression toward distance-based gap math shows up in the demo as breathing gaps and
+    /// phantom closing rates instead of hiding behind a uniform-speed track.</summary>
+    internal static float TrackPct(float tf)
+        => tf + 0.45f / (2 * MathF.PI) * MathF.Sin(2 * MathF.PI * tf);
+
     public void Start()
     {
         var cfg = _cfg();
@@ -196,30 +205,31 @@ public sealed class DemoSource : ITelemetrySource
             // fuel-save (steady but slow) so the pace tags have something to find.
             double jitter = 1.0 + 0.02 * Math.Sin(_elapsed / 7.0 + i * 1.7);
             if (i is 14 or 17) jitter = 1.022; // fuel saving: consistent +2.2%
-            _totalDist[i] += dt / (_pace[i] * jitter);
+            _progress[i] += dt / (_pace[i] * jitter);
             if (i == PlayerIdx)
                 _playerFuel = Math.Max(0, _playerFuel - PlayerBurnPerLap * dt / (_pace[i] * jitter));
-            int newLap = (int)_totalDist[i];
+            int newLap = (int)_progress[i];
             bool crossed = newLap != _tick.Lap[i];
             _tick.Lap[i] = newLap;
-            _tick.LapDistPct[i] = (float)(_totalDist[i] - newLap);
-            // Demo track has uniform speed, so est time is just pct × class lap.
-            _tick.EstTime[i] = _tick.LapDistPct[i] * _roster.Drivers[i].ClassEstLap;
+            float tf = (float)(_progress[i] - newLap);          // time-fraction of the lap
+            _tick.LapDistPct[i] = TrackPct(tf);
+            // The sim's positional est curve: time-fraction × class lap, exact by construction.
+            _tick.EstTime[i] = tf * _roster.Drivers[i].ClassEstLap;
             _tick.LastLap[i] = _pace[i] * (float)jitter + (i is 14 or 17 ? 0f : (float)Math.Sin(_elapsed / 5.0 + i) * 0.15f);
             // Best = fastest recorded lap, latched at the crossing like iRacing does.
             if (crossed && (_tick.BestLap[i] <= 0 || _tick.LastLap[i] < _tick.BestLap[i]))
                 _tick.BestLap[i] = _tick.LastLap[i];
         }
 
-        // Positions + gaps from total distance: overall and per class.
-        var order = Enumerable.Range(0, Cars).OrderByDescending(i => _totalDist[i]).ToArray();
-        double leaderDist = _totalDist[order[0]];
+        // Positions + gaps from total lap progress (time domain): overall and per class.
+        var order = Enumerable.Range(0, Cars).OrderByDescending(i => _progress[i]).ToArray();
+        double leaderDist = _progress[order[0]];
         var classCounters = new Dictionary<int, int>();
         for (int p = 0; p < order.Length; p++)
         {
             int i = order[p];
             _tick.Position[i] = p + 1;
-            _tick.F2Time[i] = (float)((leaderDist - _totalDist[i]) * Gt3LapSeconds);
+            _tick.F2Time[i] = (float)((leaderDist - _progress[i]) * Gt3LapSeconds);
             int clsId = _roster.Drivers[i].CarClassId;
             classCounters[clsId] = classCounters.GetValueOrDefault(clsId) + 1;
             _tick.ClassPosition[i] = classCounters[clsId];
@@ -259,7 +269,7 @@ public sealed class DemoSource : ITelemetrySource
         {
             _tick.TrackSurface[i] = _tick.OnPitRoad[i] ? 1 : 3;
             if (i == PlayerIdx || _tick.OnPitRoad[i]) continue;
-            double d = Math.Abs(_totalDist[i] - _totalDist[PlayerIdx]) % 1.0;
+            double d = Math.Abs(_progress[i] - _progress[PlayerIdx]) % 1.0;
             if (Math.Min(d, 1.0 - d) < 0.006) _tick.CarLeftRight = 2; // car left
         }
 

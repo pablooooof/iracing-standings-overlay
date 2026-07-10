@@ -85,11 +85,12 @@ public static class RelativeBuilder
             if (rc.HideParkedCars && d.CarIdx < t.OnPitRoad.Length && t.OnPitRoad[d.CarIdx]
                 && stints.StoppedSeconds(d.CarIdx) > 60) continue;
 
-            // Same convention as the traffic alerter so both show the *same* gap: a car behind
-            // closes at its own pace (use its class lap), a car ahead you close on at yours.
-            float side = RelativeGap.SignedLaps(t, d.CarIdx);   // + = ahead on track
-            float carRef = side < 0 && d.ClassEstLap > 10 ? d.ClassEstLap : refLap;
-            float gap = RelativeGap.SignedSeconds(t, d.CarIdx, carRef);
+            // Same convention as the traffic alerter so both show the *same* gap: one shared
+            // phase delta decides ahead/behind AND the magnitude; a car behind closes at its
+            // own pace (its class lap as the ruler), a car ahead you close on at yours.
+            float ph = RelativeGap.SignedPhase(t, roster, d.CarIdx, t.PlayerCarIdx);  // + = ahead on track
+            float carRef = ph < 0 && d.ClassEstLap > 10 ? d.ClassEstLap : refLap;
+            float gap = ph * carRef;
             (gap >= 0 ? ahead : behind).Add((gap, d));
         }
         ahead.Sort((a, b) => a.Gap.CompareTo(b.Gap));    // nearest first

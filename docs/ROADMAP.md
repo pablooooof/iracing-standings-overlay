@@ -11,6 +11,14 @@ Working v0.1 exists (live + demo). This is the improvement queue, roughly ordere
 - [x] ~~Per-car flag column~~ (v0.3 — STATUS badge: DQ/BLK/DMG/WRN/PIT from `CarIdxSessionFlags`)
 - **Live validation polish** — offline testing shows iRating 1 / license R 0.01 (iRacing reports those values in test sessions); IR/SoF now hidden when ≤1 but verify in an online race.
 - **Online race validation** — gaps, laps-down, positions gained, strategy column against a real field.
+- [x] ~~Relative/traffic gap accuracy~~ (2026-07-10 — `RelativeGap` rewritten as a lap-phase
+  model: `CarIdxEstTime / CarClassEstLapTime` per car, wrapped delta × chaser's lap, skew-gated
+  pct fallback; the old est/dist blend breathed with track section → phantom 0.7 s/s closing
+  rates → random traffic pop-ups + 99.9 countdowns, seen live 07-08/07-10. Both boxes now share
+  one phase number; first unit-test project added (`src/StandingsOverlay.Tests`, 12 tests) and
+  the demo track got a non-uniform speed profile so est≠pct divergence is exercised offline.
+  **Validate next live session**: relative should track the sim's F3 box within ~0.1 s for
+  same-class cars; traffic rates in the log should read 0.05–0.25 s/s, not 0.7+.)
 
 ## ⭐ Strategy inference per car (the "data project" phase)
 

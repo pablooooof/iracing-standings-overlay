@@ -112,7 +112,7 @@ public static class SnapshotBuilder
                 smoothCum = new double[ordered.Count];
                 for (int j = 1; j < ordered.Count; j++)
                     smoothCum[j] = smoothCum[j - 1]
-                        + Math.Max(0, RelativeGap.SignedSecondsBetween(t, ordered[j - 1].CarIdx, ordered[j].CarIdx, rl));
+                        + Math.Max(0, RelativeGap.SignedSecondsBetween(t, roster, ordered[j - 1].CarIdx, ordered[j].CarIdx, rl));
             }
 
             // Who's actually fastest ON TRACK right now: rank the class by average of the

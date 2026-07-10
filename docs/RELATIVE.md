@@ -26,21 +26,35 @@ Kept from the sim because they work (users already speak this language):
 
 ## Gap math (shared with the traffic alerter)
 
-`Data/RelativeGap.SignedSeconds(t, carIdx, refLap)` — positive = car is physically ahead:
+`Data/RelativeGap` — one phase model feeds the relative box, the traffic alerter and the
+smoothed standings gaps, so they agree by construction (rewritten 2026-07-10 after the live
+est/dist blend "breathed" with track section and fired phantom traffic alerts):
 
-1. `d = LapDistPct[car] − LapDistPct[player]`, wrapped to (−0.5, +0.5]. Base gap = `d × refLap`.
-2. Refine with `CarIdxEstTime` (time to reach the current spot on the class reference lap —
-   knows a hairpin from a straight): `est = EstTime[car] − EstTime[player]`, shifted by ±refLap
-   to land nearest the base gap (S/F wrap), accepted only within `0.35 × refLap` of it
-   (est time reads 0 in the pits and can tear mid-crossing).
+1. Each car reduces to a **lap phase** in [0,1): `CarIdxEstTime / CarClassEstLapTime` — how far
+   around the lap it is in *time* terms. EstTime is the sim's own position→time curve for the
+   class (knows a hairpin from a straight); dividing by the class lap removes the class scale so
+   phases compare across classes. Same normalization irdashies uses; iRon's raw est delta is the
+   single-class special case.
+2. `SignedPhase(t, roster, a, b)` = wrapped phase delta in (−0.5, +0.5], positive = `a` ahead.
+   This one signed number decides ahead/behind AND the magnitude for every widget.
+3. Gap seconds = phase delta × **refLap of whichever car is closing**: the chaser's class lap
+   for a car behind, the player's for a car ahead (both widgets use this same ruler rule).
+4. `LapDistPct` is the per-car fallback, gated by *skew*: if a car's est phase strays more than
+   0.12 laps from its distance pct, the est value is broken (pit/tow zeros read as ~half-lap
+   skews) and pct wins; if either car of a pair falls back, both do, so a pair always lives in
+   one domain. The two domains agree exactly at S/F, so fallbacks never tear the gap there —
+   and a zero est *at the line* is correct data, deliberately not special-cased (demoting it
+   to pct for a tick made the gap jump by the other car's skew and poisoned the closing rate).
 
-The traffic detector calls the same helper with the **chaser's** class lap and negates
-(its gaps are "behind" positive); the relative uses the **player's** class lap. One implementation,
-two sign conventions — a fix in the gap math now improves both widgets.
+Why not blend est with the distance estimate (the previous design)? The acceptance band
+rejected the correct est gap whenever a slow section sat between the cars (est legitimately
+exceeds the distance gap there), so the reported gap flip-flopped between domains as the pair
+moved through the lap — breathing by ±2s and inventing 0.7+ s/s closing rates on stable gaps
+(live, 2026-07-08/10). `SignedLaps` (pct domain) survives only for lap parity and coarse
+windowing, where consistency with `Lap + LapDistPct` totals matters more than time accuracy.
 
-Mixed-class caveat: `EstTime` is on each car's own class reference lap, so cross-class est
-deltas carry a small systematic error; the 0.35-lap acceptance bound keeps it harmless (same
-tradeoff the sim itself makes).
+Unit tests: `src/StandingsOverlay.Tests/RelativeGapTests.cs` (exactness across track sections,
+cross-class normalization, S/F wrap, pit-zero fallback, skew gate).
 
 ## Data flow
 
