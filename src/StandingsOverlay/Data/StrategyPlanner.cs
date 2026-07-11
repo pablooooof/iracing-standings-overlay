@@ -311,10 +311,15 @@ public sealed class StrategyPlanner
 
         var best = plans[0];
         string wetNote = wet ? " · wet +1 margin" : "";
+        // Wall-clock stint end in GMT (endurance teams coordinate in GMT): the plan is anchored
+        // at a lap crossing, so an absolute UTC timestamp taken here stays valid all lap.
+        string boxAt = best.Stops == 0
+            ? $" · flag {DateTime.UtcNow.AddSeconds(best.TotalSec):HH:mm:ss} GMT"
+            : $" · box {DateTime.UtcNow.AddSeconds(best.Stints[0].Seconds):HH:mm:ss} GMT";
         _planText = (best.Stops == 0
             ? $"no more stops · {best.Laps} laps to go"
             : $"next stop ~L{playerLap + best.Stints[0].Laps} · add {best.FirstFill:0}L · {best.Laps} laps to go")
-            + wetNote;
+            + wetNote + boxAt;
         _targetText = best.Stints[0].Laps > 0
             ? $"tgt {fuelNow / (best.Stints[0].Laps + (best.Stops == 0 ? margin : 0)):0.00}"
             : "";

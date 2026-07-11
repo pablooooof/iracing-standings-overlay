@@ -326,7 +326,7 @@ public sealed class DemoSource : ITelemetrySource
         // flag the pit visit so the swap overhead isn't read as a tire change).
         foreach (int idx in _driverSwap.Update(_tick, _roster)) _stints.NoteDriverSwap(idx);
         SnapshotReady?.Invoke(SnapshotBuilder.Build(_tick, _roster, _history, _stints, _weather, _driverSwap, cfg));
-        TrafficReady?.Invoke(_traffic.Update(_tick, _roster, _history, cfg));
+        TrafficReady?.Invoke(_traffic.Update(_tick, _roster, _history, _stints, cfg));
         RelativeReady?.Invoke(RelativeBuilder.Build(_tick, _roster, _stints, _driverSwap, cfg));
         FuelReady?.Invoke(_planner.Build(_tick, _fuel, cfg));
     }

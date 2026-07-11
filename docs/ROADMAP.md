@@ -132,8 +132,17 @@ Ideas and requests captured during rapid iteration so nothing is lost. Roughly o
 - [x] **Pit-area status fixes (2026-07-11)** — SPUN/REJOIN/SLOW suppressed in the pit area
   (stall + entry/exit lanes; the pit limiter used to read SLOW); traffic alerts suppressed on
   the pit entry/exit roads, not just between the cones; driver-change blink no longer reads TOW
-  nor splits the pit visit; traffic rows show "#72"; positions gained shows +N/−N; relative
+  nor splits the pit visit; positions gained shows +N/−N; relative
   stint column reads `ST17`.
+- [x] **Traffic row UX v2 (2026-07-11)** — headline chip is the class position ("P4"), car
+  number rides in the subtext ("GTP · #07"); the s/lap number is replaced by the relative's
+  ▲/►/▼ pace arrow (same thresholds/colors, chevrons keep encoding catch intensity); the
+  imminent pulse is subtler (0.15→0.6) and typed — blue rows pulse BLUE, so the pulse never
+  hides which alert it is. Meatball (repair) stops excluded from tire inference — the jack
+  lift itself is not in the SDK, so repair time would read as tires.
+- [x] **Fuel plan wall clock (2026-07-11)** — the plan line ends with "box HH:mm:ss GMT"
+  (or "flag … GMT" when no stops remain): the projected current-stint end from pace +
+  strategy, anchored at the lap-crossing replan.
 - ~~Class-colour override map~~ — dropped (live sessions use iRacing's own class colours).
 
 **Tyres / weather**

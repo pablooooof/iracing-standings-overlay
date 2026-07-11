@@ -12,6 +12,7 @@ public class TrafficDetectorTests
         Func<double, double[]> paceAt, double seconds)
     {
         var history = new GapHistory();
+        var stints = new StintTracker();
         var snaps = new List<TrafficSnapshot>();
         for (double t = 0.25; t <= seconds; t += 0.25)
         {
@@ -23,7 +24,8 @@ public class TrafficDetectorTests
             }
             r.Tick.SessionTime = 100 + t;
             history.Update(r.Tick, r.Roster);
-            snaps.Add(det.Update(r.Tick, r.Roster, history, r.Cfg));
+            stints.Update(r.Tick);
+            snaps.Add(det.Update(r.Tick, r.Roster, history, stints, r.Cfg));
         }
         return snaps;
     }

@@ -12,8 +12,9 @@ namespace StandingsOverlay.UI;
 /// <summary>Display-ready row for the Row style's ItemsControl template.</summary>
 public sealed record TrafficRowViewModel(
     Brush StripeBrush, Brush NumBrush, Brush TtaBrush, Brush BlueTagBrush,
+    Brush PaceBrush, Brush PulseBrush,
     string CarNumber, string Name, string IRatingText, string SubText,
-    string TtaText, string RateText, string Chevrons, string TrainText,
+    string TtaText, string PaceText, string Chevrons, string TrainText,
     Visibility BlueTagVisibility, Visibility TrainVisibility,
     bool IsImminent, GridLength BarStar, GridLength BarRestStar)
 {
@@ -27,12 +28,16 @@ public sealed record TrafficRowViewModel(
             NumBrush: classBrush,
             TtaBrush: ttaBrush,
             BlueTagBrush: BlueTagStripes,
+            PaceBrush: PaceBrushFor(r.PaceSign),
+            // Blue rows pulse BLUE at imminence — an all-red pulse used to hide what kind of
+            // alert was underneath.
+            PulseBrush: r.IsBlue ? BlueBrush : DangerBrush,
             CarNumber: r.CarNumber,
             Name: r.Name,
             IRatingText: r.IRatingText,
             SubText: r.SubText,
             TtaText: r.TtaText,
-            RateText: r.RateText,
+            PaceText: r.PaceText,
             Chevrons: r.Chevrons,
             TrainText: $"×{r.TrainCount}",
             BlueTagVisibility: r.IsBlue ? Visibility.Visible : Visibility.Collapsed,
@@ -42,11 +47,17 @@ public sealed record TrafficRowViewModel(
             BarRestStar: new GridLength(Math.Max(0.001, 1 - r.BarPct), GridUnitType.Star));
     }
 
+    /// <summary>Same colors as the relative's pace arrows so the widgets agree.</summary>
+    internal static Brush PaceBrushFor(int sign) =>
+        sign > 0 ? LossRed : sign < 0 ? GainBrush : SamePaceYellow;
+
     internal static readonly Brush WarnBrush = Frozen("#FFB84D");
     internal static readonly Brush DangerBrush = Frozen("#FF4040");
     internal static readonly Brush BlueBrush = Frozen("#2F7BFF");
     internal static readonly Brush GainBrush = Frozen("#4CFF6A");
     internal static readonly Brush DimBrush = Frozen("#9DA0AA");
+    internal static readonly Brush LossRed = Frozen("#FF5C5C");
+    internal static readonly Brush SamePaceYellow = Frozen("#FFD34D");
 
     /// <summary>The actual blue flag: blue with diagonal yellow stripes.</summary>
     internal static readonly Brush BlueTagStripes = MakeStripes();
@@ -219,7 +230,10 @@ public partial class TrafficWindow : Window
 
         BeaconTta.Text = head.TtaText;
         BeaconTta.Foreground = ttaBrush;
-        BeaconRate.Text = string.IsNullOrEmpty(head.RateText) ? head.Chevrons : $"{head.Chevrons} {head.RateText}";
+        BeaconRate.Text = string.IsNullOrEmpty(head.PaceText) ? head.Chevrons : $"{head.Chevrons} {head.PaceText}";
+        BeaconRate.Foreground = string.IsNullOrEmpty(head.PaceText)
+            ? TrafficRowViewModel.DimBrush : TrafficRowViewModel.PaceBrushFor(head.PaceSign);
+        BeaconPulse.BorderBrush = head.IsBlue ? TrafficRowViewModel.BlueBrush : TrafficRowViewModel.DangerBrush;
 
         // Queue strip: everything behind the headline as class-colored chips with their TTA.
         BeaconQueue.Children.Clear();
@@ -329,14 +343,14 @@ public partial class TrafficWindow : Window
         Render(new TrafficSnapshot(
             Rows:
             [
-                new TrafficRow(0, TrafficPhase.Imminent, false, false, "#FFD24D", "07", "R. Vergne", "4.2k",
-                               "GTP · P2 in class", "3.2", "+7.1s/lap", "▾▾▾", 2, 0.73),
-                new TrafficRow(1, TrafficPhase.Watch, false, false, "#FFD24D", "22", "S. Okafor", "3.1k",
-                               "GTP · P3 in class", "4.5", "+6.8s/lap", "▾▾▾", 1, 0.62),
-                new TrafficRow(3, TrafficPhase.Watch, false, true, "#57C1FF", "88", "L. Tanaka", "1.9k",
-                               "GT4 · P4 · lapping", "4.1", "+3.4s/lap", "▾▾", 1, 0.35),
-                new TrafficRow(2, TrafficPhase.Watch, true, false, "#FF5FA8", "11", "M. Rossi", "5.6k",
-                               "GT3 · leader · +1 lap", "11.0", "+2.1s/lap", "▾", 1, 0.30),
+                new TrafficRow(0, TrafficPhase.Imminent, false, false, "#FFD24D", "P2", "R. Vergne", "4.2k",
+                               "GTP · #07", "3.2", "▲", 1, "▾▾▾", 2, 0.73),
+                new TrafficRow(1, TrafficPhase.Watch, false, false, "#FFD24D", "P3", "S. Okafor", "3.1k",
+                               "GTP · #22", "4.5", "▲", 1, "▾▾▾", 1, 0.62),
+                new TrafficRow(3, TrafficPhase.Watch, false, true, "#57C1FF", "P4", "L. Tanaka", "1.9k",
+                               "GT4 · #88 · lapping", "4.1", "▼", -1, "▾▾", 1, 0.35),
+                new TrafficRow(2, TrafficPhase.Watch, true, false, "#FF5FA8", "P1", "M. Rossi", "5.6k",
+                               "GT3 · #11 · +1 lap", "11.0", "►", 0, "▾", 1, 0.30),
             ],
             Overflow: 0, Alongside: AlongsideDir.None, ClearFlash: false, Cues: TrafficCues.None));
     }

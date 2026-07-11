@@ -56,6 +56,7 @@ public sealed class StintTracker
         public double MinFillSecPerLap = double.MaxValue;
         public int PendingStintLen = -1;                  // stint length latched at pit entry
         public bool SwapThisVisit;                        // driver changed → stop time is meaningless
+        public bool DmgThisVisit;                         // meatball → repairs pad the stop, not tires
         public int TireStartLap;                          // lap the current tires were (likely) fitted
     }
 
@@ -186,6 +187,7 @@ public sealed class StintTracker
                 s.PitCount++;
                 s.PendingStintLen = droveIn && knownStart && stintLen >= 3 ? stintLen : -1;
                 s.SwapThisVisit = false;
+                s.DmgThisVisit = false;
                 if (droveIn)
                 {
                     s.PitEntryTime = _now;
@@ -208,8 +210,9 @@ public sealed class StintTracker
 
                     // Tire inference: fuel time scales with the laps burned, tires add a fixed
                     // ~10s+ on top (service is sequential under fuel-and-tires-separate rules).
-                    // Swap stops are excluded — driver-change overhead looks like tire time.
-                    if (!s.SwapThisVisit && s.PendingStintLen > 0 && stat > 2)
+                    // Swap and repair (meatball) stops are excluded — their overhead looks
+                    // exactly like tire time. (The jack lift itself isn't in the SDK.)
+                    if (!s.SwapThisVisit && !s.DmgThisVisit && s.PendingStintLen > 0 && stat > 2)
                     {
                         double perLap = stat / s.PendingStintLen;
                         if (s.MinFillSecPerLap < double.MaxValue)
@@ -221,6 +224,9 @@ public sealed class StintTracker
                 s.PendingStintLen = -1;
                 s.CurrentStintStartLap = t.Lap[idx];
             }
+            // A meatball at any point during the visit means the stop time includes repairs.
+            if (onPit && idx < t.SessionFlags.Length && (t.SessionFlags[idx] & CarFlags.Repair) != 0)
+                s.DmgThisVisit = true;
             // Accumulate time sat still in the pit lane (≈ the stop itself) across the visit.
             if (onPit && s.PitEntryTime >= 0 && s.PitPrevNow >= 0 && _now >= 0)
             {

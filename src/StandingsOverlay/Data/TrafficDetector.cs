@@ -16,12 +16,13 @@ public sealed record TrafficRow(
     bool IsBlue,             // being lapped (blue-flag) vs faster-class traffic
     bool IsLapping,          // slower/lapped traffic AHEAD that you're about to lap
     string ClassColor,
-    string CarNumber,
+    string CarNumber,        // headline chip: "P4" (class position), or "#72" when unscored
     string Name,
     string IRatingText,      // "4.2k" or ""
-    string SubText,          // "GTP · P2 in class" / "GT3 · leader · +1 lap"
+    string SubText,          // "GTP · #72" / "GT3 · #72 · +1 lap"
     string TtaText,          // "6.8"
-    string RateText,         // "+7.2s/lap"
+    string PaceText,         // ▲ they're quicker · ► similar · ▼ you're quicker (recent clean laps)
+    int PaceSign,            // +1 ▲ · 0 ► · -1 ▼
     string Chevrons,         // "▾" | "▾▾" | "▾▾▾"
     int TrainCount,          // >1 on the lead car of a same-class train
     double BarPct);          // 0..1 proximity bar fill
@@ -114,7 +115,8 @@ public sealed class TrafficDetector
         _clearFlashUntil = -1;
     }
 
-    public TrafficSnapshot Update(RawTick t, Roster roster, GapHistory history, OverlayConfig cfg)
+    public TrafficSnapshot Update(RawTick t, Roster roster, GapHistory history, StintTracker stints,
+                                  OverlayConfig cfg)
     {
         var tc = cfg.Traffic;
         bool race = StandingsSnapshot.KindOf(t.SessionType) == SessionKind.Race;
@@ -134,6 +136,7 @@ public sealed class TrafficDetector
 
         double now = t.SessionTime;
         float playerLapTime = RelativeGap.PlayerRefLap(t, roster);
+        float? playerPace = stints.RecentPace(t.PlayerCarIdx);
         double playerTotal = t.Lap[t.PlayerCarIdx] + t.LapDistPct[t.PlayerCarIdx];
         bool lappingOn = !tc.Mode.Equals("FasterClassOnly", StringComparison.OrdinalIgnoreCase);
         bool allClosing = tc.Mode.Equals("AllClosing", StringComparison.OrdinalIgnoreCase);
@@ -160,7 +163,7 @@ public sealed class TrafficDetector
             if (race && lappingOn && tc.WarnLapping && deltaBehind >= 0.5 && playerTotal - carTot >= 0.5)
             {
                 _cars.Remove(d.CarIdx);
-                HandleLapTarget(d, t, roster, history, now, playerLapTime, tc, active);
+                HandleLapTarget(d, t, roster, history, stints, playerPace, now, playerLapTime, tc, active);
                 continue;
             }
             _lapCars.Remove(d.CarIdx);
@@ -325,11 +328,12 @@ public sealed class TrafficDetector
             shownTta = Math.Min(shownTta, (float)(lead * 1.3));
             state.LastTta = shownTta;
 
-            // Shown catch rate: the lap-measured number when it exists (what the standings delta
+            // Chevron intensity: the lap-measured catch when it exists (what the standings delta
             // column would say), else the short-window slope extrapolated to a lap.
             float ratePerLap = lapCatch ?? Math.Max(0, rate) * playerLapTime;
+            var (paceText, paceSign) = PaceArrow(stints, d.CarIdx, playerPace);
             active.Add((BuildRow(d, t, state.Phase, isBlue && !isFaster, shownTta, gap, ratePerLap,
-                                 playerTotal, lead, tc), tta, gap, d.CarClassId));
+                                 paceText, paceSign, playerTotal, lead, tc), tta, gap, d.CarClassId));
         }
 
         // Sweep alerting cars that vanished from the roster loop (e.g. pitted mid-alert).
@@ -403,10 +407,21 @@ public sealed class TrafficDetector
         return den < 1e-6 ? 0f : (float)((n * stg - st * sg) / den);
     }
 
+    /// <summary>▲ they're quicker than the player · ► similar · ▼ the player is quicker —
+    /// same thresholds and glyphs as the relative box, so the two widgets agree.</summary>
+    private static (string Text, int Sign) PaceArrow(StintTracker stints, int idx, float? playerPace)
+    {
+        if (playerPace is not float pp || pp <= 0 || stints.RecentPace(idx) is not float rp)
+            return ("", 0);
+        if (rp < pp * 0.997f) return ("▲", 1);
+        if (rp > pp * 1.003f) return ("▼", -1);
+        return ("►", 0);
+    }
+
     /// <summary>Slower/lapped traffic ahead you're catching. Simpler than the behind machine:
     /// fires on raw gap (default 5s) while you're actually closing, with a short dismissal grace.</summary>
     private void HandleLapTarget(DriverEntry d, RawTick t, Roster roster, GapHistory history,
-        double now, float playerLapTime,
+        StintTracker stints, float? playerPace, double now, float playerLapTime,
         TrafficConfig tc, List<(TrafficRow Row, float Tta, float Gap, int ClassId)> active)
     {
         // They are ahead, so the shared phase gap is positive = time for us to reach them.
@@ -441,44 +456,48 @@ public sealed class TrafficDetector
         // For a car ahead the lap-measured delta is negative when the player gains — flip it.
         float ratePerLap = history.CatchRatePerLap(d.CarIdx) is float lc
             ? -lc : Math.Max(0, rate) * playerLapTime;
-        active.Add((BuildLapRow(d, t, s.Phase, gap, ratePerLap, tc), gap, gap, d.CarClassId));
+        var (paceText, paceSign) = PaceArrow(stints, d.CarIdx, playerPace);
+        active.Add((BuildLapRow(d, t, s.Phase, gap, ratePerLap, paceText, paceSign, tc),
+                    gap, gap, d.CarClassId));
     }
 
     private static TrafficRow BuildLapRow(DriverEntry d, RawTick t, TrafficPhase phase, float gap,
-        float ratePerLap, TrafficConfig tc)
+        float ratePerLap, string paceText, int paceSign, TrafficConfig tc)
     {
         string chevrons = ratePerLap > 6 ? "▾▾▾" : ratePerLap > 2.5 ? "▾▾" : "▾";
         int cp = d.CarIdx < t.ClassPosition.Length ? t.ClassPosition[d.CarIdx] : 0;
-        string sub = cp > 0 ? $"{d.ClassName} · P{cp} · lapping" : $"{d.ClassName} · lapping";
         return new TrafficRow(
             CarIdx: d.CarIdx, Phase: phase, IsBlue: false, IsLapping: true,
             ClassColor: string.IsNullOrEmpty(d.ClassColor) ? "#9DA0AA" : d.ClassColor,
-            CarNumber: "#" + d.CarNumber, Name: d.Name,
+            CarNumber: cp > 0 ? $"P{cp}" : "#" + d.CarNumber, Name: d.Name,
             IRatingText: tc.ShowIRating && d.IRating > 0 ? $"{d.IRating / 1000.0:0.0}k" : "",
-            SubText: sub,
+            SubText: $"{d.ClassName} · #{d.CarNumber} · lapping",
             TtaText: Math.Clamp(gap, 0.1, 99.9).ToString("0.0"),
-            RateText: ratePerLap > 0.05 ? $"+{ratePerLap:0.0}s/lap" : "",
+            PaceText: paceText, PaceSign: paceSign,
             Chevrons: chevrons, TrainCount: 1,
             BarPct: Math.Round(Math.Clamp(1 - gap / tc.LapTrafficGapSec, 0.03, 1), 2));
     }
 
     private static TrafficRow BuildRow(DriverEntry d, RawTick t, TrafficPhase phase, bool isBlue,
                                        float tta, float gap, float ratePerLap,
+                                       string paceText, int paceSign,
                                        double playerTotal, double lead, TrafficConfig tc)
     {
         string chevrons = ratePerLap > 6 ? "▾▾▾" : ratePerLap > 2.5 ? "▾▾" : "▾";
 
+        // Position is the headline chip (what you race against); the car number rides in the
+        // subtext — a bare number in the chip used to read as a position anyway.
+        int cp = t.ClassPosition[d.CarIdx];
+        string headline = cp > 0 ? $"P{cp}" : "#" + d.CarNumber;
         string sub;
         if (isBlue)
         {
             int lapsUp = (int)Math.Floor((t.Lap[d.CarIdx] + t.LapDistPct[d.CarIdx]) - playerTotal);
-            string who = t.ClassPosition[d.CarIdx] == 1 ? "leader" : $"P{t.ClassPosition[d.CarIdx]}";
-            sub = $"{d.ClassName} · {who} · +{Math.Max(1, lapsUp)} lap{(lapsUp > 1 ? "s" : "")}";
+            sub = $"{d.ClassName} · #{d.CarNumber} · +{Math.Max(1, lapsUp)} lap{(lapsUp > 1 ? "s" : "")}";
         }
         else
         {
-            int cp = t.ClassPosition[d.CarIdx];
-            sub = cp > 0 ? $"{d.ClassName} · P{cp} in class" : d.ClassName;
+            sub = cp > 0 ? $"{d.ClassName} · #{d.CarNumber}" : d.ClassName;
         }
 
         // Blue rows show the raw gap, not a countdown — "the leader is N seconds behind you" is
@@ -492,13 +511,13 @@ public sealed class TrafficDetector
             IsBlue: isBlue,
             IsLapping: false,
             ClassColor: string.IsNullOrEmpty(d.ClassColor) ? "#9DA0AA" : d.ClassColor,
-            // "#72", not "72" — a bare number in an alert reads as a position.
-            CarNumber: "#" + d.CarNumber,
+            CarNumber: headline,
             Name: d.Name,
             IRatingText: tc.ShowIRating && d.IRating > 0 ? $"{d.IRating / 1000.0:0.0}k" : "",
             SubText: sub,
             TtaText: shown.ToString("0.0"),
-            RateText: ratePerLap > 0.05 ? $"+{ratePerLap:0.0}s/lap" : "",
+            PaceText: paceText,
+            PaceSign: paceSign,
             Chevrons: chevrons,
             TrainCount: 1,
             BarPct: Math.Round(Math.Clamp(bar, 0.03, 1), 2));

@@ -7,7 +7,8 @@
         ResizeMode="NoResize" SizeToContent="WidthAndHeight">
 
     <Window.Resources>
-        <!-- Red border overlay that pulses while a row is imminent. -->
+        <!-- Border overlay that pulses while a row is imminent: subtle, and colored by the
+             alert type (blue rows pulse blue) so the pulse never hides what the row IS. -->
         <Style x:Key="PulseOverlay" TargetType="Border">
             <Setter Property="Opacity" Value="0"/>
             <Style.Triggers>
@@ -16,7 +17,7 @@
                         <BeginStoryboard x:Name="RowPulse">
                             <Storyboard RepeatBehavior="Forever" AutoReverse="True">
                                 <DoubleAnimation Storyboard.TargetProperty="Opacity"
-                                                 From="0.25" To="1" Duration="0:0:0.35"/>
+                                                 From="0.15" To="0.6" Duration="0:0:0.5"/>
                             </Storyboard>
                         </BeginStoryboard>
                     </DataTrigger.EnterActions>
@@ -52,7 +53,7 @@
                 <DataTemplate>
                     <Grid Height="36" Margin="0,0,0,4">
                         <Border Background="#F0212129" CornerRadius="4" BorderBrush="#34343F" BorderThickness="1"/>
-                        <Border CornerRadius="4" BorderBrush="#FF4040" BorderThickness="1.5"
+                        <Border CornerRadius="4" BorderBrush="{Binding PulseBrush}" BorderThickness="1.5"
                                 Style="{StaticResource PulseOverlay}"/>
                         <Grid Margin="1">
                             <Grid.RowDefinitions>
@@ -102,8 +103,8 @@
                                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                                     <TextBlock Text="{Binding Chevrons}" Foreground="{Binding TtaBrush}"
                                                FontSize="9" Margin="0,0,3,0"/>
-                                    <TextBlock Text="{Binding RateText}" Foreground="#9DA0AA"
-                                               FontFamily="Consolas" FontSize="10"/>
+                                    <TextBlock Text="{Binding PaceText}" Foreground="{Binding PaceBrush}"
+                                               FontSize="10" FontWeight="Bold"/>
                                 </StackPanel>
                             </StackPanel>
 
