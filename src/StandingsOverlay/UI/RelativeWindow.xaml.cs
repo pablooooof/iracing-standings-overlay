@@ -32,7 +32,7 @@ public sealed record RelativeRowViewModel(
     private static readonly Brush PitAmber = RowViewModel.Frozen("#FFB84D");
     private static readonly Brush PitExitCyan = RowViewModel.Frozen("#40D8FF");   // cold out-lap car
     private static readonly Brush ExitChip = RowViewModel.Frozen("#FF8A00");      // fresh pit exit — bright chip
-    private static readonly Brush StintAmber = RowViewModel.Frozen("#FFCA5C");    // stint number, always amber
+    private static readonly Brush StintAmber = RowViewModel.Frozen("#FFCA5C");    // stint laps, always amber
     private static readonly Brush Ink = RowViewModel.Frozen("#17171D");           // dark text on a bright chip
     private static readonly Brush SwapPurple = RowViewModel.Frozen("#C77DFF");    // team driver change
     private static readonly Brush RejoinGreen = RowViewModel.Frozen("#4CFF6A");

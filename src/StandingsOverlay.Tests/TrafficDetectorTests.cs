@@ -11,6 +11,7 @@ public class TrafficDetectorTests
     private static List<TrafficSnapshot> Run(Rig r, TrafficDetector det, double[] progress,
         Func<double, double[]> paceAt, double seconds)
     {
+        var history = new GapHistory();
         var snaps = new List<TrafficSnapshot>();
         for (double t = 0.25; t <= seconds; t += 0.25)
         {
@@ -21,7 +22,8 @@ public class TrafficDetectorTests
                 r.Place(i, progress[i]);
             }
             r.Tick.SessionTime = 100 + t;
-            snaps.Add(det.Update(r.Tick, r.Roster, r.Cfg));
+            history.Update(r.Tick, r.Roster);
+            snaps.Add(det.Update(r.Tick, r.Roster, history, r.Cfg));
         }
         return snaps;
     }
@@ -123,6 +125,25 @@ public class TrafficDetectorTests
         bool reWarnedBeforeContact = Enumerable.Range(TickOf(27), TickOf(31.5) - TickOf(27))
                                                .Any(i => snaps[i].Rows.Count > 0);
         Assert.True(reWarnedBeforeContact, "cooldown swallowed the re-approach until contact");
+    }
+
+    [Fact]
+    public void LappedByCarNearTrackOpposite_PhaseWrapSeam_NeverAlerts()
+    {
+        // Live 24h regression (2026-07-11): a same-class car +1.5 laps up sitting almost exactly
+        // half a lap away. Distance-pct wraps it to "0.41 behind" while the time-phase still
+        // reads "0.48 ahead" — the zero-floored gap read 0.0 and fired a phantom BLUE at "0.1 s"
+        // every re-alert cycle, for a car nowhere near the relative window.
+        var r = new Rig(2, sessionType: "Race");
+        r.AddCar(0, 2, 120f);
+        r.AddCar(1, 2, 120f);
+        var progress = new double[] { 40.65, 42.13 };
+        r.Place(0, progress[0]);
+        r.Place(1, progress[1]);
+
+        var snaps = Run(r, new TrafficDetector(), progress, _ => [120.0, 120.0], seconds: 30);
+
+        Assert.All(snaps, s => Assert.Empty(s.Rows));
     }
 
     [Fact]

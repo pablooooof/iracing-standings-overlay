@@ -114,7 +114,7 @@ public sealed class TrafficDetector
         _clearFlashUntil = -1;
     }
 
-    public TrafficSnapshot Update(RawTick t, Roster roster, OverlayConfig cfg)
+    public TrafficSnapshot Update(RawTick t, Roster roster, GapHistory history, OverlayConfig cfg)
     {
         var tc = cfg.Traffic;
         bool race = StandingsSnapshot.KindOf(t.SessionType) == SessionKind.Race;
@@ -158,7 +158,7 @@ public sealed class TrafficDetector
             if (race && lappingOn && tc.WarnLapping && deltaBehind >= 0.5 && playerTotal - carTot >= 0.5)
             {
                 _cars.Remove(d.CarIdx);
-                HandleLapTarget(d, t, roster, now, playerLapTime, tc, active);
+                HandleLapTarget(d, t, roster, history, now, playerLapTime, tc, active);
                 continue;
             }
             _lapCars.Remove(d.CarIdx);
@@ -188,8 +188,15 @@ public sealed class TrafficDetector
             // Shared phase gap (docs/RELATIVE.md): negative = the car is behind us, so flip
             // the sign for a chaser gap. Floor at zero — the phase occasionally puts a car with
             // deltaBehind ≈ 0 marginally "ahead", and for TTA purposes alongside is zero gap.
-            float gap = Math.Max(0f, -RelativeGap.SignedSeconds(t, roster, d.CarIdx, chaserLap));
-            bool inWindow = deltaBehind < 0.5 && gap < WindowSec;
+            float signed = RelativeGap.SignedSeconds(t, roster, d.CarIdx, chaserLap);
+            float gap = Math.Max(0f, -signed);
+            // The zero-floor is only legitimate alongside (deltaBehind ≈ 0). Near track-opposite
+            // the time-phase and distance-pct wrap their ±half-lap seam on different ticks, so a
+            // +1-lap car sitting ~half a lap away read phase-"ahead" while pct said 0.4x behind →
+            // gap=0 → phantom BLUE at "0.1 s" re-firing every cooldown cycle (live 24h,
+            // 2026-07-11). Phase-ahead with the car clearly behind in pct is that seam, not a car.
+            bool wrapSeam = signed > 0f && deltaBehind > 0.25;
+            bool inWindow = !wrapSeam && deltaBehind < 0.5 && gap < WindowSec;
 
             if (!inWindow)
             {
@@ -215,10 +222,13 @@ public sealed class TrafficDetector
                 state.Samples.RemoveAt(0);
 
             // Closing rate (s/s): least-squares slope over the buffer (noise-tolerant where an
-            // endpoint difference spikes on a single bad sample); until enough history exists,
-            // fall back to the class-pace difference for faster-class cars. Capped — anything
-            // "closing" above MaxRateSps is an artifact (tow, reset), not driving.
+            // endpoint difference spikes on a single bad sample). The steady-state truth is the
+            // standings delta history — avg of the last 5 clean per-lap deltas (pit/tow/driver-
+            // swap laps excluded) — which beats the class-pace *guess* wherever it exists and
+            // gives same-class chasers a real "+N.Ns/lap" too. Capped — anything "closing" above
+            // MaxRateSps is an artifact (tow, reset), not driving.
             float classPace = isFaster ? (playerLapTime - d.ClassEstLap) / playerLapTime : 0f;
+            float? lapCatch = history.CatchRatePerLap(d.CarIdx);   // s/lap, >0 = closing on us
             float rate = float.MinValue;
             double span = state.Samples.Count > 1 ? now - state.Samples[0].T : 0;
             if (span >= MinRateSpanSec)
@@ -226,10 +236,17 @@ public sealed class TrafficDetector
                 rate = -SlopeOf(state.Samples);
                 // A player accelerating out of a corner briefly "holds off" a faster car in
                 // the numbers, which used to blow the countdown up to 99 s. They are still
-                // coming — never let a faster car's rate fall below a third of class pace.
-                // Race only: in practice/qual cars run their own programs (out-laps, cool-downs),
-                // so a faster car ahead isn't necessarily catching you — require *measured* closing.
-                if (isFaster && race) rate = Math.Max(rate, classPace * 0.3f);
+                // coming — never let the rate fall below a third of the lap-measured catch
+                // (or, for a faster class with no history yet, a third of class pace; race
+                // only — in practice/qual cars run their own programs).
+                if (lapCatch is float lm && lm > 0f)
+                    rate = Math.Max(rate, lm / playerLapTime * 0.3f);
+                else if (isFaster && race)
+                    rate = Math.Max(rate, classPace * 0.3f);
+            }
+            else if (lapCatch is float lc && lc > 0f)
+            {
+                rate = lc / playerLapTime;
             }
             else if (isFaster && race)
             {
@@ -259,7 +276,8 @@ public sealed class TrafficDetector
                 state.AlertSince = state.PhaseSince = now;
                 state.OutOfRangeSince = -1;
                 Log.Write($"traffic: WATCH #{d.CarNumber} {d.ClassName}{(isBlue && !isFaster ? " BLUE" : "")} " +
-                          $"gap={gap:0.0}s tta={tta:0.0}s rate={rate:0.000}s/s");
+                          $"gap={gap:0.0}s tta={Math.Min(tta, 999.9f):0.0}s rate={Math.Max(rate, -9.999f):0.000}s/s " +
+                          $"catch={(lapCatch is float lg ? lg.ToString("0.0") : "n/a")}s/lap");
 
                 if (isBlue && !isFaster)
                 {
@@ -305,8 +323,11 @@ public sealed class TrafficDetector
             shownTta = Math.Min(shownTta, (float)(lead * 1.3));
             state.LastTta = shownTta;
 
-            active.Add((BuildRow(d, t, state.Phase, isBlue && !isFaster, shownTta, gap, rate,
-                                 playerLapTime, playerTotal, lead, tc), tta, gap, d.CarClassId));
+            // Shown catch rate: the lap-measured number when it exists (what the standings delta
+            // column would say), else the short-window slope extrapolated to a lap.
+            float ratePerLap = lapCatch ?? Math.Max(0, rate) * playerLapTime;
+            active.Add((BuildRow(d, t, state.Phase, isBlue && !isFaster, shownTta, gap, ratePerLap,
+                                 playerTotal, lead, tc), tta, gap, d.CarClassId));
         }
 
         // Sweep alerting cars that vanished from the roster loop (e.g. pitted mid-alert).
@@ -382,7 +403,8 @@ public sealed class TrafficDetector
 
     /// <summary>Slower/lapped traffic ahead you're catching. Simpler than the behind machine:
     /// fires on raw gap (default 5s) while you're actually closing, with a short dismissal grace.</summary>
-    private void HandleLapTarget(DriverEntry d, RawTick t, Roster roster, double now, float playerLapTime,
+    private void HandleLapTarget(DriverEntry d, RawTick t, Roster roster, GapHistory history,
+        double now, float playerLapTime,
         TrafficConfig tc, List<(TrafficRow Row, float Tta, float Gap, int ClassId)> active)
     {
         // They are ahead, so the shared phase gap is positive = time for us to reach them.
@@ -414,13 +436,15 @@ public sealed class TrafficDetector
         }
 
         if (gap <= 2.0f) s.Phase = TrafficPhase.Imminent;
-        active.Add((BuildLapRow(d, t, s.Phase, gap, rate, playerLapTime, tc), gap, gap, d.CarClassId));
+        // For a car ahead the lap-measured delta is negative when the player gains — flip it.
+        float ratePerLap = history.CatchRatePerLap(d.CarIdx) is float lc
+            ? -lc : Math.Max(0, rate) * playerLapTime;
+        active.Add((BuildLapRow(d, t, s.Phase, gap, ratePerLap, tc), gap, gap, d.CarClassId));
     }
 
     private static TrafficRow BuildLapRow(DriverEntry d, RawTick t, TrafficPhase phase, float gap,
-        float rate, float playerLapTime, TrafficConfig tc)
+        float ratePerLap, TrafficConfig tc)
     {
-        float ratePerLap = Math.Max(0, rate) * playerLapTime;
         string chevrons = ratePerLap > 6 ? "▾▾▾" : ratePerLap > 2.5 ? "▾▾" : "▾";
         int cp = d.CarIdx < t.ClassPosition.Length ? t.ClassPosition[d.CarIdx] : 0;
         string sub = cp > 0 ? $"{d.ClassName} · P{cp} · lapping" : $"{d.ClassName} · lapping";
@@ -437,10 +461,9 @@ public sealed class TrafficDetector
     }
 
     private static TrafficRow BuildRow(DriverEntry d, RawTick t, TrafficPhase phase, bool isBlue,
-                                       float tta, float gap, float rate, float playerLapTime,
+                                       float tta, float gap, float ratePerLap,
                                        double playerTotal, double lead, TrafficConfig tc)
     {
-        float ratePerLap = Math.Max(0, rate) * playerLapTime;
         string chevrons = ratePerLap > 6 ? "▾▾▾" : ratePerLap > 2.5 ? "▾▾" : "▾";
 
         string sub;

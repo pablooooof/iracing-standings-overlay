@@ -96,6 +96,44 @@ public sealed class GapHistory
         return result;
     }
 
+    /// <summary>
+    /// Average per-lap gap change over the last <paramref name="laps"/> clean laps — the same
+    /// per-lap deltas the standings delta column shows. Positive = the car gained on the player
+    /// (a chaser closing in); negative = the player gained. Outlier laps are excluded relative
+    /// to the median (a fixed cut can't work: a GTP legitimately catches 15-20 s/lap while a pit
+    /// stop, tow or driver swap is a 25-60 s swing) — so pit/swap/invalid laps drop out and the
+    /// steady pace stays. Null until at least two clean laps exist.
+    /// </summary>
+    public float? CatchRatePerLap(int carIdx, int laps = 5)
+    {
+        if (laps < 1 || !_byCar.TryGetValue(carIdx, out var list) || list.Count < 3) return null;
+
+        // Consecutive-lap deltas, newest first (a hole in the history = tow/no sample, skip).
+        Span<float> d = stackalloc float[laps + 2];
+        int n = 0;
+        for (int i = list.Count - 1; i >= 1 && n < d.Length; i--)
+        {
+            if (list[i].Lap != list[i - 1].Lap + 1) continue;
+            d[n++] = list[i].Rel - list[i - 1].Rel;
+        }
+        if (n < 2) return null;
+
+        var sorted = d[..n].ToArray();
+        Array.Sort(sorted);
+        float median = sorted[n / 2];
+        float band = Math.Max(5f, Math.Abs(median));   // scale-aware: ±5 s or ±the rate itself
+
+        float sum = 0;
+        int kept = 0;
+        for (int i = 0; i < n && kept < laps; i++)
+        {
+            if (Math.Abs(d[i] - median) > band) continue;
+            sum += d[i];
+            kept++;
+        }
+        return kept >= 2 ? sum / kept : null;
+    }
+
     /// <summary>Estimated laps until the player catches this car (positive, capped), or null.</summary>
     public float? LapsToCatch(int carIdx, int laps)
     {

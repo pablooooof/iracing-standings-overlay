@@ -25,6 +25,7 @@ public sealed class StintTracker
         public int CurrentStintStartLap;
         public bool WasOnPit;
         public int PitCount;
+        public int FirstSeenLap = int.MinValue;           // car's lap when we first saw it in the world
         public int GridPos;                               // first valid race position seen
         public double LastTotalDist = -1;                 // stopped-car detection
         public double LastMoveTime = -1;
@@ -70,6 +71,12 @@ public sealed class StintTracker
 
             if (_isRace && s.GridPos == 0 && t.Position[idx] > 0)
                 s.GridPos = t.Position[idx];
+
+            // First lap we ever saw this car on: ≤1 means we've watched its whole race, so its
+            // stint boundaries are trustworthy even before its first stop. A mid-race join
+            // (24h team events) leaves the opening stint unknowable.
+            if (s.FirstSeenLap == int.MinValue && t.Lap[idx] >= 0)
+                s.FirstSeenLap = t.Lap[idx];
 
             // Lap crossing: note it, but don't read CarIdxLastLapTime yet — iRacing bumps the
             // lap counter a beat before it publishes the time, and at 4 Hz we land in between.
@@ -146,14 +153,24 @@ public sealed class StintTracker
             bool onPit = t.OnPitRoad[idx];
             if (onPit && !s.WasOnPit)
             {
+                // Teleport arrivals (tow / team-driver reconnect: the car materializes in its
+                // stall without driving pit entry, surface never reads AproachingPits) and stints
+                // with an unknown start (mid-race join) poison the stats — a 24h field's
+                // "typical stint" once read as a car's entire lap count, and P·TOT clocked a
+                // 20-minute reconnect as a pit stop. Count the visit, skip stint length + timing.
+                bool droveIn = s.Surface == 2 || s.PrevSurface == 2;
+                bool knownStart = s.PitCount > 0 || s.FirstSeenLap is >= 0 and <= 1;
                 int stintLen = t.Lap[idx] - s.CurrentStintStartLap;
-                if (stintLen >= 3) s.StintLengths.Add(stintLen);   // ignore drive-throughs/early tows
+                if (droveIn && knownStart && stintLen >= 3) s.StintLengths.Add(stintLen);
                 s.PitCount++;
-                s.PitEntryTime = _now;
-                s.PitEntryLap = t.Lap[idx];
-                s.PitStationaryAccum = 0;
-                s.PitPrevNow = _now;
-                s.PitPrevDist = t.Lap[idx] + t.LapDistPct[idx];
+                if (droveIn)
+                {
+                    s.PitEntryTime = _now;
+                    s.PitEntryLap = t.Lap[idx];
+                    s.PitStationaryAccum = 0;
+                    s.PitPrevNow = _now;
+                    s.PitPrevDist = t.Lap[idx] + t.LapDistPct[idx];
+                }
             }
             else if (!onPit && s.WasOnPit)
             {
@@ -252,6 +269,25 @@ public sealed class StintTracker
         _cars.TryGetValue(idx, out var s) && s.PitCount > 0 && !s.WasOnPit
             ? Math.Max(0, carLap - s.CurrentStintStartLap)
             : null;
+
+    /// <summary>Laps the car has done in its current stint, or null when unknowable — on pit
+    /// road, or we joined mid-race and haven't seen it stop yet (its stint start is a mystery).
+    /// Unlike <see cref="LapsSincePit"/>, laps since the race start count: before the first
+    /// stop of a race watched from the start, that IS the current stint.</summary>
+    public int? StintLaps(int idx, int carLap) =>
+        _cars.TryGetValue(idx, out var s) && !s.WasOnPit
+        && (s.PitCount > 0 || s.FirstSeenLap is >= 0 and <= 1)
+            ? Math.Max(0, carLap - s.CurrentStintStartLap)
+            : null;
+
+    /// <summary>Drop the car's lap-time history — after a driver swap the recorded pace belongs
+    /// to the previous driver. Stint/pit state survives (the car's strategy timeline continues).</summary>
+    public void ResetPace(int idx)
+    {
+        if (!_cars.TryGetValue(idx, out var s)) return;
+        s.LapTimes.Clear();
+        s.PitLaps.Clear();
+    }
 
     /// <summary>All recorded laps for the car, oldest first (capped at 30). -1 = lap with no time.</summary>
     public IReadOnlyList<float> LapTimesFor(int idx) =>

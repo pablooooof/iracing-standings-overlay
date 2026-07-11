@@ -82,9 +82,10 @@ public sealed class IRacingSource : ITelemetrySource
             _stints.Update(t);
             _fuel.Update(t);
             _weather.Update(t);
-            _driverSwap.Update(t, _roster);
+            // A swapped car's recorded pace belongs to the outgoing driver — drop it.
+            foreach (int idx in _driverSwap.Update(t, _roster)) _stints.ResetPace(idx);
             SnapshotReady?.Invoke(SnapshotBuilder.Build(t, _roster, _history, _stints, _weather, _driverSwap, cfg));
-            TrafficReady?.Invoke(_traffic.Update(t, _roster, cfg));
+            TrafficReady?.Invoke(_traffic.Update(t, _roster, _history, cfg));
             RelativeReady?.Invoke(RelativeBuilder.Build(t, _roster, _stints, _driverSwap, cfg));
             FuelReady?.Invoke(_planner.Build(t, _fuel, cfg));
             _emitted = true;

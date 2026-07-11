@@ -45,9 +45,14 @@ Add to `ReadTick()` (same 4 Hz tick, three extra `GetData` calls):
    History: distance-only math blew the TTA up to 99 s on corner exit (Pablo, live,
    2026-07-05); the est/dist blend that replaced it breathed with track section and fired
    phantom 0.7 s/s "closing" alerts on stable gaps (Pablo, live, 2026-07-08/10) — both fixed
-   by the phase model. Faster-class closing rate stays floored at 30 % of the class-pace
-   difference in races (a player accelerating first still "holds off" the numbers briefly).
-   Window: `gapSec < 30`.
+   by the phase model. Faster-class closing rate stays floored at 30 % of the measured catch
+   rate (or class pace before history exists, races only — a player accelerating first still
+   "holds off" the numbers briefly). Window: `gapSec < 30`.
+   **Wrap seam:** the zero-floor on the phase gap is only legitimate alongside (`deltaPct ≈ 0`).
+   Near track-opposite the time-phase and distance-pct wrap the ±half-lap seam on different
+   ticks — a +1-lap car sitting ~half a lap away read phase-"ahead" while pct said 0.4x behind,
+   flooring the gap to 0 and firing a phantom BLUE at "0.1 s" every re-alert cycle (Pablo, live
+   24h, 2026-07-11). Phase-ahead with `deltaPct > 0.25` is treated as out of window.
 2. **Qualification.**
    - *Faster class:* `car.ClassEstLap < player.ClassEstLap − 1.0s` — alert regardless of laps.
    - *Being lapped (blue):* same class, `carTotal − playerTotal ≥ ~0.9` laps
@@ -62,6 +67,11 @@ Add to `ReadTick()` (same 4 Hz tick, three extra `GetData` calls):
    the displayed countdown holds its last finite value, capped at `lead × 1.3` — never "99.9".
    A dismissed car can't re-WATCH for 15 s (flap damping) — unless the re-approach is urgent
    (TTA ≤ ImminentSec or gap ≤ 2.5 s): the cooldown must never silence a car that's arriving.
+   **Displayed catch rate** (`+N.Ns/lap`) is the standings-delta measurement when it exists:
+   `GapHistory.CatchRatePerLap` = avg of the last 5 clean per-lap deltas, outliers excluded
+   relative to the median so pit stops, tows and driver swaps drop out while a GTP's honest
+   15-20 s/lap stays. It also floors/backs the TTA rate (see 1) — the slope covers the
+   here-and-now, the lap history covers the steady state.
 4. **State machine (per car), with hysteresis.**
    - HIDDEN → **WATCH** when `tta ≤ AlertLeadTimeSec` (12). Blue additionally fires on raw
      proximity (`gap ≤ 2.5 s`): a leader grinding up at 1–3 s/lap has a rate too small for a

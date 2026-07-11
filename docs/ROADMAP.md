@@ -100,7 +100,13 @@ Ideas and requests captured during rapid iteration so nothing is lost. Roughly o
   for 60s when its driver name changes across a YAML reparse.
 - [x] **Show top-N when leading** (`MinLeadingCars`, default 10) — near the front, show at least
   the top N instead of a tiny window around you.
-- [x] **Stint number** in the relative (`ST1`/`ST2`/…) instead of raw laps-since-pit.
+- [x] **Stint laps** in the relative — laps into the car's current stint (blank when unknowable:
+  mid-race join before its first observed stop). Was briefly a stint *number* (`ST1`/`ST2`);
+  reverted 2026-07-11 — lap count is the tyre-age answer the column exists for.
+- [x] **Endurance pit hardening (2026-07-11)** — teleport arrivals (tow / team-driver reconnect)
+  no longer count as pit stops for stint stats or P·LAP/P·TOT timing; per-car pace resets on
+  driver swap; traffic catch rate reads from the standings delta history (median-filtered
+  avg of last 5 clean laps); phase wrap-seam guard kills the phantom 0.1 s blue alerts.
 - ~~Class-colour override map~~ — dropped (live sessions use iRacing's own class colours).
 
 **Tyres / weather**

@@ -17,7 +17,7 @@ public sealed record RelativeRow(
     string IRatingText,
     string LicText,
     string LicColor,
-    string StintText,        // laps since last pit stop
+    string StintText,        // laps into the current stint
     bool StintFresh,         // ≤3 laps old rubber — a threat worth highlighting
     string LastLapText,
     string PaceText,         // ▲ ▼ ► vs the player (same convention as the standings)
@@ -147,13 +147,13 @@ public static class RelativeBuilder
         if (rc.ShowClassPos && cp > 0) pos = cp.ToString();
         else if (op > 0) pos = op.ToString();
 
-        // Stint number (ST1 = opening stint, ST2 = after one stop, …); still green while the tyres
-        // are fresh out of a stop.
+        // Laps into the current stint (blank when unknowable — mid-race join, on pit road);
+        // green while the tyres are fresh out of a stop.
         string stint = "";
         bool fresh = false;
         if (rc.ShowStintAge)
         {
-            stint = "ST" + (stints.PitStops(idx) + 1);
+            if (stints.StintLaps(idx, t.Lap[idx]) is int laps) stint = laps.ToString();
             if (stints.LapsSincePit(idx, t.Lap[idx]) is int age) fresh = age <= FreshTyreLaps;
         }
 

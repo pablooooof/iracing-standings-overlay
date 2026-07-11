@@ -321,9 +321,10 @@ public sealed class DemoSource : ITelemetrySource
         _stints.Update(_tick);
         _fuel.Update(_tick);
         _weather.Update(_tick);
-        _driverSwap.Update(_tick, _roster);
+        // A swapped car's recorded pace belongs to the outgoing driver — drop it.
+        foreach (int idx in _driverSwap.Update(_tick, _roster)) _stints.ResetPace(idx);
         SnapshotReady?.Invoke(SnapshotBuilder.Build(_tick, _roster, _history, _stints, _weather, _driverSwap, cfg));
-        TrafficReady?.Invoke(_traffic.Update(_tick, _roster, cfg));
+        TrafficReady?.Invoke(_traffic.Update(_tick, _roster, _history, cfg));
         RelativeReady?.Invoke(RelativeBuilder.Build(_tick, _roster, _stints, _driverSwap, cfg));
         FuelReady?.Invoke(_planner.Build(_tick, _fuel, cfg));
     }
