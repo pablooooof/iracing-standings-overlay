@@ -50,12 +50,17 @@ public readonly record struct CarStatus(string Penalty, string State)
         // forever — SPUN is only real while the car is still in the world (surface != -1).
         bool inWorld = idx >= t.TrackSurface.Length || t.TrackSurface[idx] != -1;
         bool inPit = idx < t.OnPitRoad.Length && t.OnPitRoad[idx];
+        // Stall or pit entry/exit lanes: crawling and stopping are what pits are FOR, so the
+        // on-track safety states (SPUN/REJOIN/SLOW) must never fire there — a car obeying the
+        // pit limiter on the entry road used to read SLOW.
+        bool inPitArea = inPit ||
+            (idx < t.TrackSurface.Length && t.TrackSurface[idx] is 1 or 2);
 
         string state =
             (idx == t.PlayerCarIdx && t.PlayerTowTime > 0) || stints.WasTowedIn(t, idx) ? "TOW"
-            : inWorld && stints.LooksStopped(idx) ? "SPUN"
-            : showRejoin && inWorld && stints.IsRejoining(idx, 6) ? "REJOIN"
-            : showRejoin && inWorld && stints.LooksSlow(idx, refLap) ? "SLOW"
+            : inWorld && !inPitArea && stints.LooksStopped(idx) ? "SPUN"
+            : showRejoin && inWorld && !inPitArea && stints.IsRejoining(idx, 6) ? "REJOIN"
+            : showRejoin && inWorld && !inPitArea && stints.LooksSlow(idx, refLap) ? "SLOW"
             : swapped ? "SWAP"
             : inPit ? "PIT"
             : outLapStates && stints.JustExitedPits(idx, 15) ? "EXIT"

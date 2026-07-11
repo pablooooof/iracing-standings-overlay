@@ -122,9 +122,11 @@ public sealed class TrafficDetector
             !t.Has(t.PlayerCarIdx) || t.SessionTime < 0 ||
             // Lone qualifying: other cars are ghosts from separate runs, never really near you.
             t.SessionType.Contains("Lone", StringComparison.OrdinalIgnoreCase) ||
-            // No traffic warnings while the player is in the pit lane — everyone "closes"
-            // at full speed on a stationary car and none of it is actionable.
-            t.OnPitRoad[t.PlayerCarIdx])
+            // No traffic warnings while the player is anywhere in the pit area (lane, stall,
+            // or the entry/exit roads before the cones) — everyone "closes" at full speed on
+            // a slow car and none of it is actionable.
+            t.OnPitRoad[t.PlayerCarIdx] ||
+            (t.PlayerCarIdx < t.TrackSurface.Length && t.TrackSurface[t.PlayerCarIdx] is 1 or 2))
         {
             if (_cars.Count > 0) Reset();
             return TrafficSnapshot.Empty;
@@ -451,7 +453,7 @@ public sealed class TrafficDetector
         return new TrafficRow(
             CarIdx: d.CarIdx, Phase: phase, IsBlue: false, IsLapping: true,
             ClassColor: string.IsNullOrEmpty(d.ClassColor) ? "#9DA0AA" : d.ClassColor,
-            CarNumber: d.CarNumber, Name: d.Name,
+            CarNumber: "#" + d.CarNumber, Name: d.Name,
             IRatingText: tc.ShowIRating && d.IRating > 0 ? $"{d.IRating / 1000.0:0.0}k" : "",
             SubText: sub,
             TtaText: Math.Clamp(gap, 0.1, 99.9).ToString("0.0"),
@@ -490,7 +492,8 @@ public sealed class TrafficDetector
             IsBlue: isBlue,
             IsLapping: false,
             ClassColor: string.IsNullOrEmpty(d.ClassColor) ? "#9DA0AA" : d.ClassColor,
-            CarNumber: d.CarNumber,
+            // "#72", not "72" — a bare number in an alert reads as a position.
+            CarNumber: "#" + d.CarNumber,
             Name: d.Name,
             IRatingText: tc.ShowIRating && d.IRating > 0 ? $"{d.IRating / 1000.0:0.0}k" : "",
             SubText: sub,

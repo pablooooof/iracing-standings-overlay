@@ -297,8 +297,7 @@ public static class SnapshotBuilder
             Kind: RowKind.Normal,
             LapsText: lapsDone > 0 ? lapsDone.ToString() : "",
             PosText: (i + 1).ToString(),
-            // Green (gained) / red (lost) already carries the direction — show just the count.
-            PosGainedText: gained == 0 ? "" : Math.Abs(gained).ToString(),
+            PosGainedText: gained == 0 ? "" : (gained > 0 ? "+" : "-") + Math.Abs(gained),
             PosGainedSign: gained > 0 ? -1 : gained < 0 ? 1 : 0,
             CarNumber: "#" + d.CarNumber,
             Name: d.Name,

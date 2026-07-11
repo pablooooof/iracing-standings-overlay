@@ -155,6 +155,26 @@ public sealed class GapHistory
         _lastPlayerLap = -1;
     }
 
+    // ---- restart survival (SessionStateStore) ----
+
+    public int ExportLastPlayerLap() => _lastPlayerLap;
+
+    public Dictionary<int, List<GapSampleDto>> Export()
+    {
+        var result = new Dictionary<int, List<GapSampleDto>>(_byCar.Count);
+        foreach (var (idx, list) in _byCar)
+            result[idx] = list.Select(s => new GapSampleDto(s.Lap, s.Rel)).ToList();
+        return result;
+    }
+
+    public void Import(int lastPlayerLap, Dictionary<int, List<GapSampleDto>> cars)
+    {
+        _byCar.Clear();
+        _lastPlayerLap = lastPlayerLap;
+        foreach (var (idx, list) in cars)
+            _byCar[idx] = list.Select(s => (s.Lap, s.Rel)).ToList();
+    }
+
     private static float RefLapTime(RawTick t, Roster roster)
     {
         if (roster.Drivers.TryGetValue(t.PlayerCarIdx, out var me) && me.ClassEstLap > 10)

@@ -274,7 +274,9 @@ public partial class SettingsWindow : Window
         body.Children.Add(Toggle("Car brand", null, () => r.ShowBrand, v => r.ShowBrand = v));
         body.Children.Add(Toggle("iRating", null, () => r.ShowIRating, v => r.ShowIRating = v));
         body.Children.Add(Toggle("License", null, () => r.ShowLicense, v => r.ShowLicense = v));
-        body.Children.Add(Toggle("Stint age", "Laps since their last stop; green while fresh.", () => r.ShowStintAge, v => r.ShowStintAge = v));
+        body.Children.Add(Toggle("Stint age", "STn = laps since their last stop; green while fresh.", () => r.ShowStintAge, v => r.ShowStintAge = v));
+        body.Children.Add(Toggle("Tire-change inference", "ST8+ = last stop took no tires (from stop lengths; needs fuel-and-tires-separate rules).",
+            () => _cfg.Current.InferTireChanges, v => _cfg.Current.InferTireChanges = v));
         body.Children.Add(Toggle("Last lap", null, () => r.ShowLastLap, v => r.ShowLastLap = v));
         body.Children.Add(Toggle("Pace arrow", "Their recent pace vs yours.", () => r.ShowPace, v => r.ShowPace = v));
 

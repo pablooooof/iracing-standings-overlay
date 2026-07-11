@@ -1,3 +1,4 @@
+using System.IO;
 using irsdkSharp;
 using irsdkSharp.Serialization.Models.Session;
 using StandingsOverlay.Config;
@@ -27,6 +28,13 @@ public sealed class IRacingSource : ITelemetrySource
     private int _lastSessionNum = -1;
     private bool _running;
 
+    // Restart survival: delta/stint history is snapshotted next to the exe and restored when
+    // the overlay reattaches to the same subsession (see SessionStateStore).
+    private readonly string _statePath = Path.Combine(AppContext.BaseDirectory, "session-state.json");
+    private string _subSessionId = "";
+    private bool _stateRestored;
+    private double _lastStateSaveAt = double.MinValue;
+
     public event Action<StandingsSnapshot>? SnapshotReady;
     public event Action<TrafficSnapshot>? TrafficReady;
     public event Action<RelativeSnapshot>? RelativeReady;
@@ -43,6 +51,9 @@ public sealed class IRacingSource : ITelemetrySource
             _lastSessionInfoUpdate = -1;
             _lastSessionNum = -1;
             _emitted = false;
+            _subSessionId = "";
+            _stateRestored = false;
+            _lastStateSaveAt = double.MinValue;
             _history.Reset();
             _stints.Reset();
             _traffic.Reset();
@@ -80,17 +91,34 @@ public sealed class IRacingSource : ITelemetrySource
             // churn) — freeze the last standings rather than showing garbage.
             if (t.SessionState >= 5 && _emitted) return;
 
+            // Restart survival: reattached to the same subsession → restore delta/stint
+            // history saved by the previous run (once, before the trackers see a tick).
+            if (!_stateRestored && _subSessionId.Length > 0 && _lastSessionNum >= 0 && t.SessionTime > 0)
+            {
+                _stateRestored = true;
+                SessionStateStore.TryRestore(_statePath, _subSessionId, _lastSessionNum,
+                                             t.SessionTime, _history, _stints);
+            }
+
             _history.Update(t, _roster);
             _stints.Update(t);
             _fuel.Update(t);
             _weather.Update(t);
-            // A swapped car's recorded pace belongs to the outgoing driver — drop it.
-            foreach (int idx in _driverSwap.Update(t, _roster)) _stints.ResetPace(idx);
+            // A swapped car's recorded pace belongs to the outgoing driver — drop it (and
+            // flag the pit visit so the swap overhead isn't read as a tire change).
+            foreach (int idx in _driverSwap.Update(t, _roster)) _stints.NoteDriverSwap(idx);
             SnapshotReady?.Invoke(SnapshotBuilder.Build(t, _roster, _history, _stints, _weather, _driverSwap, cfg));
             TrafficReady?.Invoke(_traffic.Update(t, _roster, _history, cfg));
             RelativeReady?.Invoke(RelativeBuilder.Build(t, _roster, _stints, _driverSwap, cfg));
             FuelReady?.Invoke(_planner.Build(t, _fuel, cfg));
             _emitted = true;
+
+            if (_stateRestored && t.SessionTime - _lastStateSaveAt >= 30)
+            {
+                _lastStateSaveAt = t.SessionTime;
+                SessionStateStore.Save(_statePath, _subSessionId, _lastSessionNum,
+                                       t.SessionTime, _history, _stints);
+            }
         }
         catch (Exception ex)
         {
@@ -152,6 +180,7 @@ public sealed class IRacingSource : ITelemetrySource
         }
 
         _lastSessionInfoUpdate = header.SessionInfoUpdate;
+        _subSessionId = model.WeekendInfo?.SubSessionID.ToString() ?? "";
 
         int sessionNum = _sdk.GetData("SessionNum") is int sn ? sn : -1;
         var session = model.SessionInfo?.Sessions?.FirstOrDefault(x => x.SessionNum == sessionNum)
@@ -170,6 +199,8 @@ public sealed class IRacingSource : ITelemetrySource
         {
             _lastSessionNum = sessionNum;
             _emitted = false;
+            _stateRestored = false;
+            _lastStateSaveAt = double.MinValue;
             _history.Reset();
             _stints.Reset();
             _traffic.Reset();

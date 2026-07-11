@@ -118,6 +118,22 @@ Ideas and requests captured during rapid iteration so nothing is lost. Roughly o
   player is out of the car (`IsOnTrack`, 5 s debounce, tow-guarded): every setting including
   widget positions can differ. Cloned from the driving profile on first use (seeded with a
   wider standings view); tune it live while spectating, edits persist to the active profile.
+- [x] **Tire-change inference (2026-07-11, `InferTireChanges`)** — no SDK channel exists for
+  opponents' tire sets, but under fuel-and-tires-separate rules service is sequential: a tire
+  stop sits ~10s+ longer than the car's own fuel-fill baseline (cheapest observed sec/stint-lap).
+  Relative shows `ST8+` = last stop took no tires (double-stint tell); fresh-green keys off
+  inferred tire age. Swap stops excluded (driver-change overhead looks like tire time);
+  unknown ⇒ assume fresh (quiet failure). Known limit: a car whose observed stops ALL took
+  tires has a contaminated baseline until its first fuel-only stop.
+- [x] **Restart survival (2026-07-11)** — `session-state.json` next to the exe: GapHistory +
+  StintTracker durables saved every 30 s, restored when reattaching to the same SubSessionID +
+  SessionNum (session-clock guard rejects restarted races). Time-anchored transients
+  deliberately not persisted. Follow-up: persist FuelModel learning too.
+- [x] **Pit-area status fixes (2026-07-11)** — SPUN/REJOIN/SLOW suppressed in the pit area
+  (stall + entry/exit lanes; the pit limiter used to read SLOW); traffic alerts suppressed on
+  the pit entry/exit roads, not just between the cones; driver-change blink no longer reads TOW
+  nor splits the pit visit; traffic rows show "#72"; positions gained shows +N/−N; relative
+  stint column reads `ST17`.
 - ~~Class-colour override map~~ — dropped (live sessions use iRacing's own class colours).
 
 **Tyres / weather**

@@ -206,15 +206,15 @@ public partial class TrafficWindow : Window
         {
             BeaconClassBorder.Background = TrafficRowViewModel.BlueBrush;
             BeaconClassText.Foreground = Brushes.White;
-            BeaconClassText.Text = $"{className} · BLUE · #{head.CarNumber}";
+            BeaconClassText.Text = $"{className} · BLUE · {head.CarNumber}";
         }
         else
         {
             BeaconClassBorder.Background = classBrush;
             BeaconClassText.Foreground = TrafficRowViewModel.Frozen("#17171D");
             BeaconClassText.Text = head.TrainCount > 1
-                ? $"{className} ×{head.TrainCount} · #{head.CarNumber}"
-                : $"{className} · #{head.CarNumber}";
+                ? $"{className} ×{head.TrainCount} · {head.CarNumber}"
+                : $"{className} · {head.CarNumber}";
         }
 
         BeaconTta.Text = head.TtaText;

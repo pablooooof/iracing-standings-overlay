@@ -177,14 +177,17 @@ public static class RelativeBuilder
             else if (op > 0) pos = op.ToString();
         }
 
-        // Laps into the current stint (blank when unknowable — mid-race join, on pit road);
-        // green while the tyres are fresh out of a stop.
+        // "ST17" = laps into the current stint (blank when unknowable — mid-race join, on pit
+        // road); "+" = the last stop took no tires (inferred), so the rubber is older than the
+        // stint — the double-stint tell. Green while the tyres are fresh.
         string stint = "";
         bool fresh = false;
-        if (rc.ShowStintAge)
+        if (rc.ShowStintAge && stints.StintLaps(idx, t.Lap[idx]) is int laps)
         {
-            if (stints.StintLaps(idx, t.Lap[idx]) is int laps) stint = laps.ToString();
-            if (stints.LapsSincePit(idx, t.Lap[idx]) is int age) fresh = age <= FreshTyreLaps;
+            stint = "ST" + laps;
+            int age = cfg.InferTireChanges ? stints.TireAgeLaps(idx, t.Lap[idx]) ?? laps : laps;
+            if (age > laps + 2) stint += "+";
+            fresh = age <= FreshTyreLaps;
         }
 
         string pace = "";

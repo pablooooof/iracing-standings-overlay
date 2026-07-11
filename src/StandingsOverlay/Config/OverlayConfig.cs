@@ -28,6 +28,10 @@ public sealed class OverlayConfig
     // Pin a towed player-class car into the standings at its live position (with a TOW badge)
     // even outside the window — it disappears again the moment it drives out of its stall.
     public bool PinTowedCars { get; set; } = true;
+    // Infer opponents' tire changes from stop lengths (no SDK channel exists for their tire
+    // sets): under fuel-and-tires-separate rules a tire stop sits ~10s+ longer than the same
+    // fuel fill alone. Shows as "ST8+" (rubber older than the stint) in the relative.
+    public bool InferTireChanges { get; set; } = true;
     public bool ShowColumnHeader { get; set; } = true;
     public bool ShowRejoinState { get; set; } = true;   // "REJOIN" badge when a stopped car moves again (experimental)
     // Status column style: "TextAndFlags" = penalty flag chip + physical-state text side by side;

@@ -40,12 +40,23 @@ public sealed class StintTracker
         // A towed car materializes InPitStall(1) without ever reading AproachingPits(2).
         public int Surface = int.MinValue;
         public int PrevSurface = int.MinValue;
+        // What the car was on when it left the world: a driver change blinks the car out of
+        // its stall (1/2) for a second or two; a real tow vanishes from the track (0/3).
+        public int SurfaceBeforeVanish = int.MinValue;
         // Pit-visit timing.
         public double PitEntryTime = -1;
         public int PitEntryLap;
         public double PitPrevNow = -1, PitPrevDist;
         public double PitStationaryAccum;
         public PitInfo? LastPit;
+        // Tire-change inference (no SDK channel exists for opponents' tire sets): with
+        // fuel-and-tires-separate rules a tire stop sits still ~10s+ longer than the same
+        // fuel fill alone, so the cheapest observed fill rate (sec per stint lap) becomes
+        // the fuel-only baseline and longer stops are classified as "took tires".
+        public double MinFillSecPerLap = double.MaxValue;
+        public int PendingStintLen = -1;                  // stint length latched at pit entry
+        public bool SwapThisVisit;                        // driver changed → stop time is meaningless
+        public int TireStartLap;                          // lap the current tires were (likely) fitted
     }
 
     private const int MaxLapTimes = 30;
@@ -147,8 +158,18 @@ public sealed class StintTracker
             {
                 int surf = t.TrackSurface[idx];
                 if (s.Surface == int.MinValue) s.Surface = surf;
-                else if (surf != s.Surface) { s.PrevSurface = s.Surface; s.Surface = surf; }
+                else if (surf != s.Surface)
+                {
+                    if (surf == -1) s.SurfaceBeforeVanish = s.Surface;
+                    s.PrevSurface = s.Surface;
+                    s.Surface = surf;
+                }
             }
+
+            // A car out of the world reads OnPitRoad=false even mid-stop — a driver-change
+            // blink used to split the pit visit in two (phantom exit + tow-shaped re-entry).
+            // Freeze pit-edge accounting until it's back.
+            if (s.Surface == -1) continue;
 
             bool onPit = t.OnPitRoad[idx];
             if (onPit && !s.WasOnPit)
@@ -163,6 +184,8 @@ public sealed class StintTracker
                 int stintLen = t.Lap[idx] - s.CurrentStintStartLap;
                 if (droveIn && knownStart && stintLen >= 3) s.StintLengths.Add(stintLen);
                 s.PitCount++;
+                s.PendingStintLen = droveIn && knownStart && stintLen >= 3 ? stintLen : -1;
+                s.SwapThisVisit = false;
                 if (droveIn)
                 {
                     s.PitEntryTime = _now;
@@ -174,15 +197,29 @@ public sealed class StintTracker
             }
             else if (!onPit && s.WasOnPit)
             {
-                s.CurrentStintStartLap = t.Lap[idx];
                 if (_now >= 0) s.LastPitExitTime = _now;
+                bool tookTires = true;   // unknown stop ⇒ assume fresh rubber (the quiet failure)
                 if (s.PitEntryTime >= 0 && _now > s.PitEntryTime)
                 {
                     double total = _now - s.PitEntryTime;
                     double stat = Math.Min(total, s.PitStationaryAccum);
                     s.LastPit = new PitInfo(s.PitEntryLap, total, stat, Math.Max(0, total - stat));
                     s.PitEntryTime = -1;
+
+                    // Tire inference: fuel time scales with the laps burned, tires add a fixed
+                    // ~10s+ on top (service is sequential under fuel-and-tires-separate rules).
+                    // Swap stops are excluded — driver-change overhead looks like tire time.
+                    if (!s.SwapThisVisit && s.PendingStintLen > 0 && stat > 2)
+                    {
+                        double perLap = stat / s.PendingStintLen;
+                        if (s.MinFillSecPerLap < double.MaxValue)
+                            tookTires = stat - s.MinFillSecPerLap * s.PendingStintLen > 7;
+                        if (perLap < s.MinFillSecPerLap) s.MinFillSecPerLap = perLap;
+                    }
                 }
+                if (tookTires) s.TireStartLap = t.Lap[idx];
+                s.PendingStintLen = -1;
+                s.CurrentStintStartLap = t.Lap[idx];
             }
             // Accumulate time sat still in the pit lane (≈ the stop itself) across the visit.
             if (onPit && s.PitEntryTime >= 0 && s.PitPrevNow >= 0 && _now >= 0)
@@ -278,14 +315,26 @@ public sealed class StintTracker
             ? Math.Max(0, carLap - s.CurrentStintStartLap)
             : null;
 
-    /// <summary>Drop the car's lap-time history — after a driver swap the recorded pace belongs
-    /// to the previous driver. Stint/pit state survives (the car's strategy timeline continues).</summary>
-    public void ResetPace(int idx)
+    /// <summary>A driver change was detected on this car: drop the old driver's pace history
+    /// (their laps say nothing about the new driver), and mark the current pit visit so its
+    /// stop time is never read as a tire change — driver-swap overhead looks exactly like
+    /// tire time. Stint/pit state survives (the car's strategy timeline continues).</summary>
+    public void NoteDriverSwap(int idx)
     {
         if (!_cars.TryGetValue(idx, out var s)) return;
         s.LapTimes.Clear();
         s.PitLaps.Clear();
+        if (s.WasOnPit) s.SwapThisVisit = true;
     }
+
+    /// <summary>Laps on the car's current tires, inferred from stop lengths (the pit-exit
+    /// classifier), or null when unknowable. Equals <see cref="StintLaps"/> unless a stop was
+    /// classified fuel-only, where it keeps counting across the stop — the double-stint tell.</summary>
+    public int? TireAgeLaps(int idx, int carLap) =>
+        _cars.TryGetValue(idx, out var s) && !s.WasOnPit
+        && (s.PitCount > 0 || s.FirstSeenLap is >= 0 and <= 1)
+            ? Math.Max(0, carLap - s.TireStartLap)
+            : null;
 
     /// <summary>All recorded laps for the car, oldest first (capped at 30). -1 = lap with no time.</summary>
     public IReadOnlyList<float> LapTimesFor(int idx) =>
@@ -326,7 +375,11 @@ public sealed class StintTracker
         && idx < t.TrackSurface.Length && t.TrackSurface[idx] == 1        // InPitStall
         && _cars.TryGetValue(idx, out var s)
         && s.LastLapSeen >= 1
-        && s.PrevSurface is -1 or 0 or 3;   // vanished / off-track / on-track — anything but pit entry
+        && s.PrevSurface is -1 or 0 or 3    // vanished / off-track / on-track — anything but pit entry
+        // Driver changes blink the car out of the world for a second or two MID-STOP; it
+        // re-materializes in its stall exactly like a tow. Only a car that vanished from the
+        // track (or off-track) was actually towed — one that vanished from the pit area wasn't.
+        && !(s.PrevSurface == -1 && s.SurfaceBeforeVanish is 1 or 2);
 
     /// <summary>
     /// True when the car has been stationary on track (not pit road) for a few seconds —
@@ -381,4 +434,54 @@ public sealed class StintTracker
     }
 
     public void Reset() => _cars.Clear();
+
+    // ---- restart survival (SessionStateStore): only the durable, lap-anchored fields.
+    // Time-anchored transients (movement timers, surface latches, pending crossings) re-latch
+    // within a tick; restoring them stale would misfire the tow/spin heuristics.
+
+    public Dictionary<int, CarStintDto> Export()
+    {
+        var result = new Dictionary<int, CarStintDto>(_cars.Count);
+        foreach (var (idx, s) in _cars)
+            result[idx] = new CarStintDto
+            {
+                LastLapSeen = s.LastLapSeen,
+                LastLapValue = s.LastLapValue,
+                LapTimes = [.. s.LapTimes],
+                PitLaps = [.. s.PitLaps],
+                StintLengths = [.. s.StintLengths],
+                CurrentStintStartLap = s.CurrentStintStartLap,
+                PitCount = s.PitCount,
+                FirstSeenLap = s.FirstSeenLap,
+                GridPos = s.GridPos,
+                TireStartLap = s.TireStartLap,
+                MinFillSecPerLap = s.MinFillSecPerLap,
+                LastPit = s.LastPit,
+            };
+        return result;
+    }
+
+    public void Import(Dictionary<int, CarStintDto> cars)
+    {
+        _cars.Clear();
+        foreach (var (idx, d) in cars)
+        {
+            var s = new CarState
+            {
+                LastLapSeen = d.LastLapSeen,
+                LastLapValue = d.LastLapValue,
+                CurrentStintStartLap = d.CurrentStintStartLap,
+                PitCount = d.PitCount,
+                FirstSeenLap = d.FirstSeenLap,
+                GridPos = d.GridPos,
+                TireStartLap = d.TireStartLap,
+                MinFillSecPerLap = d.MinFillSecPerLap,
+                LastPit = d.LastPit,
+            };
+            s.LapTimes.AddRange(d.LapTimes);
+            s.PitLaps.AddRange(d.PitLaps);
+            s.StintLengths.AddRange(d.StintLengths);
+            _cars[idx] = s;
+        }
+    }
 }
