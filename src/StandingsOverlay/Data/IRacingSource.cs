@@ -238,6 +238,7 @@ public sealed class IRacingSource : ITelemetrySource
         if (_sdk.GetData("WindVel") is float windVel) t.WindVel = windVel;
         if (_sdk.GetData("WindDir") is float windDir) t.WindDir = windDir;
         if (_sdk.GetData("PlayerCarMyIncidentCount") is int incs) t.PlayerIncidents = incs;
+        if (_sdk.GetData("PlayerCarTowTime") is float towTime) t.PlayerTowTime = towTime;
         if (_sdk.GetData("Precipitation") is float precip) t.Precipitation = precip;
         if (_sdk.GetData("WeatherDeclaredWet") is bool wet) t.DeclaredWet = wet;
         if (_sdk.GetData("TrackWetness") is int wetness) t.TrackWetness = wetness;

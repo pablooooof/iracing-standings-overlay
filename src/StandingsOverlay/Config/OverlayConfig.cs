@@ -27,6 +27,9 @@ public sealed class OverlayConfig
     public int MinLeadingCars { get; set; } = 10;
     public bool ShowColumnHeader { get; set; } = true;
     public bool ShowRejoinState { get; set; } = true;   // "REJOIN" badge when a stopped car moves again (experimental)
+    // Status column style: "TextAndFlags" = penalty flag chip + physical-state text side by side;
+    // "Text" = one text badge picked by the unified precedence (Data/CarStatus).
+    public string StatusStyle { get; set; } = "TextAndFlags";
     // Driver-name column: fixed width in DIPs so long names don't resize the whole table
     // (names past this length ellipsize). Tune to taste.
     public double NameColumnWidth { get; set; } = 150;
@@ -161,7 +164,7 @@ public sealed class RelativeConfig
     public bool Enabled { get; set; } = true;
     public int CarsAhead { get; set; } = 5;
     public int CarsBehind { get; set; } = 5;
-    public double Scale { get; set; } = 1.15;   // reads bigger than the dense standings by default
+    public double Scale { get; set; } = 1.0;    // fonts now match the standings ramp exactly at 1.0
 
     public bool ShowClassPos { get; set; } = true;
     public bool ShowTyre { get; set; } = true;       // wet/dry compound ring, like the standings
@@ -176,6 +179,9 @@ public sealed class RelativeConfig
     // Same-class same-lap cars within this many seconds get the ▸ battle marker + white gap.
     public double BattleGapSec { get; set; } = 1.5;
     public int GapPrecision { get; set; } = 1;
+
+    // Status style, independent of the standings: "Text" (default, denser) or "TextAndFlags".
+    public string StatusStyle { get; set; } = "Text";
 
     // Widget position (DIPs); -1 = auto bottom-right corner until dragged in edit mode.
     public double X { get; set; } = -1;

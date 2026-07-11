@@ -30,6 +30,7 @@ public sealed class RawTick
     public bool DeclaredWet;
     public int TrackWetness = -1;        // irsdk_TrackWetness: 1 dry … 7 extremely wet
     public int PlayerIncidents = -1;
+    public float PlayerTowTime;          // PlayerCarTowTime: seconds of tow remaining (player only)
     public int SessionState;             // irsdk_SessionState: 4 racing, 5 checkered, 6 cool down
     public string SessionType = "Race";
 
@@ -139,7 +140,7 @@ public sealed record StandingsRow(
     int BestLapSign,         // 2 = class-best lap (purple)
     string LastLapText,
     IReadOnlyList<DeltaCell> DeltaCells,   // oldest lap first
-    string StatusText,       // "" | "PIT" | "WRN" | "BLK" | "DMG" | "DQ"
+    string StatusText,       // physical-state badge (TOW/SPUN/…/PIT), or the Combined pick in "Text" style
     string RankText,         // # fastest on track in class over the last 5 clean laps
     int RankSign,            // 2 = fastest (purple), -1 = top 3 (green), 0 = rest
     string StratText,        // expected pit lap / stops to end
@@ -150,7 +151,8 @@ public sealed record StandingsRow(
     string PitLapText = "",   // last pit stop: lap number
     string PitTotalText = "", // last pit: total time on pit road (s)
     string PitDriveText = "", // last pit: pit-lane transit time (s)
-    string PitStallText = "") // last pit: time sat stationary in the box (s)
+    string PitStallText = "", // last pit: time sat stationary in the box (s)
+    string PenaltyText = "")  // penalty flag chip (DQ/BLK/DMG/WRN); empty in "Text" status style
 {
     public static readonly StandingsRow Separator = Empty(RowKind.Separator) with { Name = "···" };
 

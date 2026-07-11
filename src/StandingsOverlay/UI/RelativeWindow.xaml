@@ -33,8 +33,10 @@
                                     <ColumnDefinition Width="Auto" SharedSizeGroup="Gap"/>
                                 </Grid.ColumnDefinitions>
 
+                                <!-- Fonts match the standings: base size for primary cells, FontSm/FontXs
+                                     (set from config in ApplyConfig) for secondary cells and chips. -->
                                 <TextBlock Text="{Binding Pos}" Foreground="{Binding PosBrush}"
-                                           FontFamily="Consolas" FontSize="11" Margin="0,0,4,0"
+                                           Opacity="0.9" Margin="0,0,4,0"
                                            VerticalAlignment="Center"/>
 
                                 <!-- Class color bar: the same iOverlay-style separator as the standings -->
@@ -54,12 +56,12 @@
 
                                 <!-- Car number: coloured text like the standings, not a filled box -->
                                 <TextBlock Grid.Column="3" Text="{Binding CarNumber}" Foreground="{Binding NumBrush}"
-                                           FontFamily="Consolas" FontWeight="Bold" FontSize="11"
+                                           FontWeight="SemiBold"
                                            Margin="0,0,2,0" VerticalAlignment="Center"
                                            Visibility="{Binding NumVisibility}"/>
 
                                 <TextBlock Grid.Column="4" Text="{Binding Brand}" Foreground="#9DA0AA"
-                                           FontSize="10" Margin="5,0,0,0" VerticalAlignment="Center"/>
+                                           FontSize="{DynamicResource FontSm}" Margin="5,0,0,0" VerticalAlignment="Center"/>
 
                                 <Grid Grid.Column="5" Margin="6,0,4,0" VerticalAlignment="Center">
                                     <Grid.ColumnDefinitions>
@@ -74,17 +76,27 @@
                                                Visibility="{Binding BattleVisibility}"/>
                                 </Grid>
 
-                                <Border Grid.Column="6" Background="{Binding StatusBg}" CornerRadius="3"
-                                        Padding="4,0" Margin="0,0,5,1" VerticalAlignment="Center">
-                                    <TextBlock Text="{Binding Status}" Foreground="{Binding StatusBrush}"
-                                               FontSize="10" FontWeight="Bold"/>
-                                </Border>
+                                <!-- Status column: penalty flag chip (TextAndFlags style) + state text -->
+                                <StackPanel Grid.Column="6" Orientation="Horizontal" VerticalAlignment="Center">
+                                    <Grid VerticalAlignment="Center" Margin="0,0,4,0"
+                                          Visibility="{Binding FlagVisibility}">
+                                        <Rectangle Width="15" Height="13" RadiusX="3" RadiusY="3" StrokeThickness="1.6"
+                                                   Fill="{Binding FlagBodyBrush}" Stroke="{Binding FlagStrokeBrush}"/>
+                                        <Ellipse Width="6" Height="6" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                 Fill="{Binding FlagDotBrush}" Visibility="{Binding FlagDotVisibility}"/>
+                                    </Grid>
+                                    <Border Background="{Binding StatusBg}" CornerRadius="3"
+                                            Padding="4,0" Margin="0,0,5,1" VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding Status}" Foreground="{Binding StatusBrush}"
+                                                   FontSize="{DynamicResource FontSm}" FontWeight="Bold"/>
+                                    </Border>
+                                </StackPanel>
 
-                                <Border Grid.Column="7" Background="{Binding LicBrush}" CornerRadius="2"
-                                        Padding="3,0" Margin="0,1,5,1" VerticalAlignment="Center"
+                                <Border Grid.Column="7" Background="{Binding LicBrush}" CornerRadius="4"
+                                        Padding="4,0" Margin="0,1,5,1" VerticalAlignment="Center"
                                         Visibility="{Binding LicVisibility}">
                                     <TextBlock Text="{Binding License}" Foreground="{Binding LicTextBrush}"
-                                               FontFamily="Consolas" FontSize="10"/>
+                                               FontSize="{DynamicResource FontXs}" FontWeight="Bold"/>
                                 </Border>
 
                                 <!-- iRating chip: light pill, dark text (same as the standings) -->
@@ -92,23 +104,23 @@
                                         Margin="0,0,6,1" VerticalAlignment="Center"
                                         Visibility="{Binding IrVisibility}">
                                     <TextBlock Text="{Binding IRating}" Foreground="#17171D"
-                                               FontFamily="Consolas" FontWeight="Bold" FontSize="10.5"/>
+                                               FontWeight="Bold" FontSize="{DynamicResource FontXs}"/>
                                 </Border>
 
                                 <TextBlock Grid.Column="9" Text="{Binding Stint}"
-                                           Foreground="{Binding StintBrush}" FontFamily="Consolas"
-                                           FontSize="11" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                           Foreground="{Binding StintBrush}"
+                                           FontSize="{DynamicResource FontSm}" Margin="0,0,6,0" VerticalAlignment="Center"/>
 
                                 <TextBlock Grid.Column="10" Text="{Binding LastLap}" Foreground="#C9C9CF"
-                                           FontFamily="Consolas" FontSize="11" Margin="0,0,5,0"
+                                           Opacity="0.9" Margin="0,0,5,0"
                                            VerticalAlignment="Center"/>
 
                                 <TextBlock Grid.Column="11" Text="{Binding Pace}"
-                                           Foreground="{Binding PaceBrush}" FontSize="10"
+                                           Foreground="{Binding PaceBrush}" FontWeight="SemiBold"
                                            Margin="0,0,5,0" VerticalAlignment="Center"/>
 
                                 <TextBlock Grid.Column="12" Text="{Binding Gap}"
-                                           Foreground="{Binding GapBrush}" FontFamily="Consolas"
+                                           Foreground="{Binding GapBrush}"
                                            FontWeight="Bold" TextAlignment="Right" MinWidth="34"
                                            VerticalAlignment="Center"/>
                             </Grid>

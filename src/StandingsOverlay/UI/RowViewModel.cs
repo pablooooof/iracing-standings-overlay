@@ -93,15 +93,9 @@ public sealed class RowViewModel
             };
         }
 
-        // Penalty flags render as drawn flag icons; PIT stays a text badge.
-        var (flagVis, flagBody, flagStroke, flagDot, dotVis) = r.StatusText switch
-        {
-            "DQ"  => (Visibility.Visible, FlagBlackBody, DangerBrush, DangerBrush, Visibility.Visible),
-            "BLK" => (Visibility.Visible, FlagBlackBody, FlagStrokeGray, Brushes.Transparent, Visibility.Collapsed),
-            "DMG" => (Visibility.Visible, FlagBlackBody, FlagStrokeGray, MeatballOrange, Visibility.Visible),
-            "WRN" => (Visibility.Visible, FlagWarnBody, FlagYellowStroke, Brushes.Transparent, Visibility.Collapsed),
-            _     => (Visibility.Collapsed, FlagBlackBody, FlagStrokeGray, (Brush)Brushes.Transparent, Visibility.Collapsed),
-        };
+        // Penalty channel renders as a drawn flag icon; the state channel stays a text badge.
+        // In "Text" status style PenaltyText is empty and any penalty arrives in StatusText.
+        var (flagVis, flagBody, flagStroke, flagDot, dotVis) = PenaltyFlagVisuals(r.PenaltyText);
         var licChip = TryBrush(r.LicColor) ?? LicFallbackBrush;
 
         return new RowViewModel
@@ -126,7 +120,7 @@ public sealed class RowViewModel
                     > 0 => LossBrush,
                     _ => (c.Text?.Length ?? 0) > 4 ? Brushes.White : DimBrush, // quali laps white, neutral deltas dim
                 })).ToList(),
-            Status = r.StatusText is "PIT" or "SPUN" or "REJOIN" or "TOW" or "SWAP" or "SLOW" ? r.StatusText : "",
+            Status = r.StatusText,
             CarBrand = r.CarBrand,
             Rank = r.RankText,
             Strat = r.StratText,
@@ -141,10 +135,7 @@ public sealed class RowViewModel
             LicenseBrush = licChip,
             LicenseTextBrush = ContrastText(licChip),
             BestLapBrush = r.BestLapSign == 2 ? PurpleBrush : Brushes.White,
-            StatusBrush = r.StatusText == "SPUN" ? DangerBrush
-                        : r.StatusText is "TOW" or "SLOW" ? WarnBrush
-                        : r.StatusText == "SWAP" ? PurpleBrush
-                        : r.StatusText == "REJOIN" ? GainBrush : PitBrush,
+            StatusBrush = StatusTextBrush(r.StatusText),
             PaceBrush = r.PaceSign < 0 ? GainBrush : r.PaceSign > 0 ? LossBrush
                         : r.PaceText.Length > 0 ? SamePaceYellow : DimBrush,
             RankBrush = r.RankSign == 2 ? PurpleBrush : r.RankSign < 0 ? GainBrush : DimBrush,
@@ -164,6 +155,29 @@ public sealed class RowViewModel
             FlagDotVisibility = dotVis,
         };
     }
+
+    /// <summary>Drawn penalty flag chip visuals, shared by standings and relative.</summary>
+    internal static (Visibility Vis, Brush Body, Brush Stroke, Brush Dot, Visibility DotVis)
+        PenaltyFlagVisuals(string penalty) => penalty switch
+    {
+        "DQ"  => (Visibility.Visible, FlagBlackBody, DangerBrush, DangerBrush, Visibility.Visible),
+        "BLK" => (Visibility.Visible, FlagBlackBody, FlagStrokeGray, Brushes.Transparent, Visibility.Collapsed),
+        "DMG" => (Visibility.Visible, FlagBlackBody, FlagStrokeGray, MeatballOrange, Visibility.Visible),
+        "WRN" => (Visibility.Visible, FlagWarnBody, FlagYellowStroke, Brushes.Transparent, Visibility.Collapsed),
+        _     => (Visibility.Collapsed, FlagBlackBody, FlagStrokeGray, (Brush)Brushes.Transparent, Visibility.Collapsed),
+    };
+
+    /// <summary>Status badge text color — includes the penalty names, which appear as text
+    /// in the "Text" status style.</summary>
+    private static Brush StatusTextBrush(string status) => status switch
+    {
+        "SPUN" or "DQ" => DangerBrush,
+        "TOW" or "SLOW" or "WRN" or "DMG" => WarnBrush,
+        "SWAP" => PurpleBrush,
+        "REJOIN" => GainBrush,
+        "BLK" => Brushes.White,
+        _ => PitBrush,
+    };
 
     /// <summary>Black text on bright chip colors (yellow C license), white otherwise.</summary>
     private static Brush ContrastText(Brush chip) =>

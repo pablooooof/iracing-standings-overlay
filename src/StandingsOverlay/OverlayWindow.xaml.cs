@@ -69,6 +69,10 @@ public partial class OverlayWindow : Window
         Left = cfg.X;
         Top = cfg.Y;
         FontSize = cfg.FontSize;
+        // Shared type ramp (same formulas as the relative): secondary cells and chips derive
+        // from the base size instead of hardcoding pixel values per column.
+        Resources["FontSm"] = Math.Max(9.0, cfg.FontSize - 2);
+        Resources["FontXs"] = Math.Max(8.5, cfg.FontSize - 3);
         RootBorder.LayoutTransform = RowViewModel.ScaleTransformFor(cfg.Scale);
         FontFamily = new FontFamily("Segoe UI");
         Foreground = Brushes.White;

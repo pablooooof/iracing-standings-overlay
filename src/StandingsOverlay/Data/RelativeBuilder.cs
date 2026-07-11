@@ -23,7 +23,8 @@ public sealed record RelativeRow(
     string PaceText,         // ▲ ▼ ► vs the player (same convention as the standings)
     int PaceSign,
     string GapText,          // "+2.3" ahead · "-0.8" behind · "—" on the player row
-    int TyreSwitch = 0)      // 0 none · +1 just switched to wets · -1 to slicks (inline o→o)
+    int TyreSwitch = 0,      // 0 none · +1 just switched to wets · -1 to slicks (inline o→o)
+    string PenaltyText = "") // penalty flag chip (DQ/BLK/DMG/WRN); empty in "Text" status style
 {
     public static readonly RelativeRow Blank =
         new(false, "", "", -1, "", "", "", 0, "", false, "", "", "", "", false, "", "", 0, "");
@@ -122,6 +123,12 @@ public static class RelativeBuilder
         int idx = d.CarIdx;
         bool inPit = idx < t.OnPitRoad.Length && t.OnPitRoad[idx];
 
+        // Shared two-channel status (Data/CarStatus), collapsed per the relative's own style.
+        var st = CarStatus.Of(t, stints, idx, cfg.ShowRejoinState, swap.JustSwapped(idx, 60),
+                              d.ClassEstLap, outLapStates: true);
+        var (statusText, penaltyText) = rc.StatusStyle.Equals("TextAndFlags", StringComparison.OrdinalIgnoreCase)
+            ? (st.State, st.Penalty) : (st.Combined, "");
+
         // Lap parity relative to where the row is DISPLAYED: total-distance delta minus the
         // wrapped on-track delta is a near-integer lap count. A car shown 2 s behind you that
         // is 0.95 total laps up rounds to +1 — it is lapping you, exactly like the sim colors it.
@@ -172,7 +179,8 @@ public static class RelativeBuilder
             CarBrand: rc.ShowBrand ? d.CarBrand : "",
             Name: d.Name,
             LapParity: parity,
-            StatusText: RelativeStatus(t, stints, idx, inPit, cfg.ShowRejoinState, swap.JustSwapped(idx, 60), d.ClassEstLap),
+            StatusText: statusText,
+            PenaltyText: penaltyText,
             Battle: battle,
             IRatingText: rc.ShowIRating ? SnapshotBuilder.FmtIr(d.IRating) : "",
             LicText: rc.ShowLicense ? d.LicString : "",
@@ -187,26 +195,4 @@ public static class RelativeBuilder
                 : (gap < 0 ? "-" : "") + SnapshotBuilder.FmtGap(Math.Abs(gap), rc.GapPrecision));
     }
 
-    /// <summary>Relative status badge, sharing the standings' penalty flags plus the relative-only
-    /// PIT / OUT (out-lap) / REJOIN / SPUN states.</summary>
-    private static string RelativeStatus(RawTick t, StintTracker stints, int idx, bool inPit,
-        bool showRejoin, bool swapped, float refLap)
-    {
-        int flags = idx < t.SessionFlags.Length ? t.SessionFlags[idx] : 0;
-        if ((flags & CarFlags.Disqualify) != 0) return "DQ";
-        if ((flags & CarFlags.Black) != 0) return "BLK";
-        if ((flags & CarFlags.Repair) != 0) return "DMG";
-        if ((flags & CarFlags.Furled) != 0) return "WRN";
-        bool inWorld = idx >= t.TrackSurface.Length || t.TrackSurface[idx] != -1;
-        if (inWorld && stints.LooksStopped(idx)) return SnapshotBuilder.StoppedBadge(t, stints, idx);
-        if (swapped) return "SWAP";
-        if (showRejoin && inWorld && stints.IsRejoining(idx, 6)) return "REJOIN";
-        if (showRejoin && inWorld && stints.LooksSlow(idx, refLap)) return "SLOW";
-        if (inPit) return "PIT";
-        // Fresh out of the pits (~15s) reads EXIT — bright, to catch the eye; the rest of the
-        // out-lap is a steady OUT (cold tyres).
-        if (stints.JustExitedPits(idx, 15)) return "EXIT";
-        if (stints.OnOutLap(idx, t.Lap[idx])) return "OUT";
-        return "";
-    }
 }

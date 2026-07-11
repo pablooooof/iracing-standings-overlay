@@ -45,7 +45,9 @@ public sealed class DemoSource : ITelemetrySource
     private readonly float[] _pace = new float[Cars];       // seconds per lap
     private readonly int[] _stintLaps = new int[Cars];      // laps between stops
     private readonly int[] _lastPitLap = new int[Cars];
+    private readonly double[] _pitStart = new double[Cars]; // elapsed time when the visit began
     private readonly double[] _pitUntil = new double[Cars]; // elapsed time when the stop ends
+    private bool _towing9;                                   // car 9's scripted tow is active
     private readonly Random _rng = new(42);
     private Timer? _timer;
     private double _elapsed;
@@ -118,6 +120,9 @@ public sealed class DemoSource : ITelemetrySource
             if (i == RabbitIdx) _pace[i] = 23.0f;   // gains ~2.3 s/lap on the player
             _stintLaps[i] = 7 + _rng.Next(3);   // pit every 7-9 laps
         }
+        // Car 9 (#64) never makes scheduled stops — its pit visits are the scripted spin/tow
+        // incidents, so the TOW badge can't be masked by a regular PIT overlapping the window.
+        _stintLaps[9] = 999;
         _roster.ComputeSof();
 
         _tick.PlayerCarIdx = PlayerIdx;
@@ -172,6 +177,11 @@ public sealed class DemoSource : ITelemetrySource
         _timer = new Timer(_ => Step(periodMs / 1000.0), null, 0, periodMs);
     }
 
+    // Test hooks: drive the demo clock without the timer, so the scripted scenarios
+    // (spin, tow, pit sequences) are assertable deterministically end to end.
+    internal RawTick TickForTest => _tick;
+    internal void StepForTest(double dt) => Step(dt);
+
     private void Step(double dt)
     {
         _elapsed += dt;
@@ -187,13 +197,28 @@ public sealed class DemoSource : ITelemetrySource
             }
             _tick.OnPitRoad[i] = false;
 
-            // Car 9 spins and sits stationary for ~8 s every ~90 s so the SPUN badge shows up.
-            if (i == 9 && _tick.Lap[i] >= 1 && _elapsed % 90 < 8) continue;
+            // Car 9 alternates incidents: an ~8 s stationary spin every ~90 s (SPUN badge), and
+            // every third cycle the spin ends in a tow — the car teleports back to its pit stall
+            // WITHOUT ever reading "approaching pits", the exact transition the TOW rule keys on.
+            if (i == 9 && _tick.Lap[i] >= 1)
+            {
+                double inCycle = _elapsed % 90;
+                bool towCycle = (int)(_elapsed / 90) % 3 == 2;
+                if (towCycle && inCycle >= 8 && inCycle < 28)
+                {
+                    if (!_towing9) { _towing9 = true; _progress[9] = Math.Floor(_progress[9]) + 0.0002; }
+                    _tick.OnPitRoad[9] = true;
+                    continue;
+                }
+                _towing9 = false;
+                if (inCycle < 8) continue;   // spinning: stationary on track
+            }
 
             // Pit when the stint is up (crossing the line on the pit lap). Races only.
             if (_isRace && _tick.Lap[i] - _lastPitLap[i] >= _stintLaps[i] && _tick.LapDistPct[i] < 0.05f)
             {
                 _lastPitLap[i] = _tick.Lap[i];
+                _pitStart[i] = _elapsed;
                 _pitUntil[i] = _elapsed + PitDuration + _rng.Next(6);
                 _tick.OnPitRoad[i] = true;
                 // Wet enough to warrant a tyre switch → they come out on wets (fires the alert).
@@ -262,12 +287,16 @@ public sealed class DemoSource : ITelemetrySource
             _tick.DeclaredWet = ramp >= 0.7f;
         }
 
-        // Traffic-alerter inputs: everyone is on track (pit stall while stopped), and the
-        // spotter squawks "car left" whenever another car overlaps the player's position.
+        // Traffic-alerter inputs: surfaces mirror iRacing's pit sequence — a normal stop reads
+        // "approaching pits"(2) briefly before the stall(1); car 9's tow lands straight on 1.
+        // The spotter squawks "car left" whenever another car overlaps the player's position.
         _tick.CarLeftRight = 1; // clear
         for (int i = 0; i < Cars; i++)
         {
-            _tick.TrackSurface[i] = _tick.OnPitRoad[i] ? 1 : 3;
+            _tick.TrackSurface[i] =
+                i == 9 && _towing9 ? 1
+                : _tick.OnPitRoad[i] ? (_elapsed - _pitStart[i] < 2.5 ? 2 : 1)
+                : 3;
             if (i == PlayerIdx || _tick.OnPitRoad[i]) continue;
             double d = Math.Abs(_progress[i] - _progress[PlayerIdx]) % 1.0;
             if (Math.Min(d, 1.0 - d) < 0.006) _tick.CarLeftRight = 2; // car left

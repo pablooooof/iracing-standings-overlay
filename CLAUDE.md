@@ -53,6 +53,7 @@ Data flows one way: **source → snapshot → render**.
 - **Licensing**: uses irsdkSharp (MIT). Do NOT switch to IRSDKSharper — it is GPL-3.0 and conflicts with this repo's MIT license.
 - The csproj removes implicit `System.Drawing`/`System.Windows.Forms` usings (WPF type collisions); WinForms is only for the tray `NotifyIcon` — import those namespaces explicitly and only in `UI/TrayIcon.cs`.
 - iRacing session-type quirks live in `SnapshotBuilder`: race ordering uses `CarIdxPosition`, practice/qual falls back to best-lap sort (positions are often 0); race gaps use `CarIdxF2Time` with laps-down handling, practice/qual gaps are best-lap deltas.
+- Car status is `Data/CarStatus` — two channels (penalty flags DQ/BLK/DMG/WRN vs physical state TOW/SPUN/REJOIN/SLOW/SWAP/PIT/EXIT/OUT) shared by standings and relative; display style (`StatusStyle`: "TextAndFlags" | "Text") is per widget. TOW is transition-detected (car materializes in its pit stall without passing "approaching pits" — `StintTracker.WasTowedIn`) plus `PlayerCarTowTime` for the player; never infer TOW from how long a car sat still.
 - Column toggles are wired through `ColumnVisibility` (the Window's DataContext); per-column `Visibility` bindings resolve via `RelativeSource AncestorType=Window`. Snapshot dedup is `OverlayWindow.SnapshotsEqual` (record `Equals` alone compares row lists by reference).
 - Tyre column renders `CarIdxTireCompound >= 1` as a wet (blue) ring — correct for rain-enabled series, but series with an alternate dry compound also report 1.
 

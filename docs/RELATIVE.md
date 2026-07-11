@@ -70,6 +70,23 @@ pipeline as everything else — → `RelativeSnapshot` → `RelativeReady` event
 - Post-race freeze / disconnect mirror the standings window (`SessionState ≥ 5` handled at the
   source level, sources emit `RelativeSnapshot.Empty` on disconnect).
 
+## Status badges (shared model: `Data/CarStatus`)
+
+Two channels, same data as the standings so a car never tells two stories:
+
+- **Penalty** (race-control flags): DQ > BLK > DMG > WRN — rendered as the standings' drawn
+  flag chip in "Text + flags" style, or as text in "Text" style.
+- **State** (what the car is physically doing): TOW > SPUN > REJOIN > SLOW > SWAP > PIT >
+  EXIT > OUT. TOW is transition-detected (`StintTracker.WasTowedIn`: the car materializes in
+  its pit stall without ever reading "approaching pits" — towed cars teleport; race only) plus
+  `PlayerCarTowTime` for the player's own row. The old "stopped >15 s ⇒ TOW" guess is gone —
+  a long-parked car is SPUN, full stop.
+
+`Relative.StatusStyle` ("Text" default here, denser) and the standings' root `StatusStyle`
+("TextAndFlags" default) are independent. "Text" collapses both channels to one badge:
+DQ > TOW > SPUN > REJOIN > SLOW > BLK > DMG > WRN > SWAP > PIT > EXIT > OUT (physical safety
+states beat paperwork; DQ beats everything).
+
 ## Window
 
 `UI/RelativeWindow` — third overlay window, identical plumbing to `TrafficWindow`: click-through

@@ -284,6 +284,7 @@ public static class SnapshotBuilder
         int lapsDone = Math.Max(stints.LapCount(idx),
             roster.ResultsFromCurrentSession
             && roster.Results.TryGetValue(idx, out var res) ? res.LapsComplete : 0);
+        var status = StatusFor(t, stints, idx, cfg, swap, d.ClassEstLap);
 
         return new StandingsRow(
             Kind: RowKind.Normal,
@@ -308,7 +309,8 @@ public static class SnapshotBuilder
             BestLapSign: bestLap > 0 && classBest > 0 && Math.Abs(bestLap - classBest) < 0.0005f ? 2 : 0,
             LastLapText: last > 0 ? FmtLap(last, cfg.LapTimePrecision) : "",
             DeltaCells: deltaCells,
-            StatusText: Status(t, stints, idx, cfg.ShowRejoinState, swap.JustSwapped(idx, 60), d.ClassEstLap),
+            StatusText: status.Text,
+            PenaltyText: status.Penalty,
             RankText: paceRank.TryGetValue(idx, out var rank) ? rank.ToString() : "",
             RankSign: paceRank.TryGetValue(idx, out var rk) ? (rk == 1 ? 2 : rk <= 3 ? -1 : 0) : 0,
             StratText: stints.StrategyText(idx, t.Lap[idx], lapsRemain),
@@ -334,32 +336,15 @@ public static class SnapshotBuilder
     private static string GapToCar(RawTick t, int idx, int refIdx, int precision) =>
         LapsDownText(t, refIdx, idx) ?? FmtGap(Math.Max(0, t.F2Time[idx] - t.F2Time[refIdx]), precision);
 
-    /// <summary>Highest-priority per-car status badge.</summary>
-    private static string Status(RawTick t, StintTracker stints, int idx, bool showRejoin,
-        bool swapped, float refLap)
+    /// <summary>Shared two-channel status (Data/CarStatus), collapsed per the configured style:
+    /// "Text" → one Combined badge, no chip; "TextAndFlags" → state text + penalty chip.</summary>
+    private static (string Text, string Penalty) StatusFor(RawTick t, StintTracker stints, int idx,
+        OverlayConfig cfg, DriverSwapTracker swap, float refLap)
     {
-        int flags = idx < t.SessionFlags.Length ? t.SessionFlags[idx] : 0;
-        if ((flags & CarFlags.Disqualify) != 0) return "DQ";
-        if ((flags & CarFlags.Black) != 0) return "BLK";
-        if ((flags & CarFlags.Repair) != 0) return "DMG";
-        if ((flags & CarFlags.Furled) != 0) return "WRN";
-        // A car that dropped offline freezes its telemetry, so the "stationary" timer grows
-        // forever — SPUN is only real while the car is still in the world (surface != -1).
-        bool inWorld = idx >= t.TrackSurface.Length || t.TrackSurface[idx] != -1;
-        if (inWorld && stints.LooksStopped(idx)) return StoppedBadge(t, stints, idx);
-        if (swapped) return "SWAP";   // new driver just took over (team endurance)
-        if (showRejoin && inWorld && stints.IsRejoining(idx, 6)) return "REJOIN";
-        if (showRejoin && inWorld && stints.LooksSlow(idx, refLap)) return "SLOW";   // limping round
-        if (idx < t.OnPitRoad.Length && t.OnPitRoad[idx]) return "PIT";
-        return "";
-    }
-
-    /// <summary>A stationary car is SPUN (on track, likely to recover) or TOW (off the racing
-    /// surface, or stuck long enough that a tow is coming).</summary>
-    internal static string StoppedBadge(RawTick t, StintTracker stints, int idx)
-    {
-        bool offTrack = idx < t.TrackSurface.Length && t.TrackSurface[idx] == 0;
-        return offTrack || stints.StoppedSeconds(idx) > 15 ? "TOW" : "SPUN";
+        var s = CarStatus.Of(t, stints, idx, cfg.ShowRejoinState, swap.JustSwapped(idx, 60),
+                             refLap, outLapStates: false);
+        return cfg.StatusStyle.Equals("Text", StringComparison.OrdinalIgnoreCase)
+            ? (s.Combined, "") : (s.State, s.Penalty);
     }
 
     private static double EstimateLapsRemain(RawTick t, Roster roster)

@@ -162,6 +162,9 @@ public partial class SettingsWindow : Window
             () => c.SmoothGaps, v => c.SmoothGaps = v));
         PageBody.Children.Add(Toggle("Rejoin badge", "Show REJOIN when a stopped car starts moving again (experimental).",
             () => c.ShowRejoinState, v => c.ShowRejoinState = v));
+        PageBody.Children.Add(Segmented("Status style", "Penalties as flag chips beside the state text, or everything as one text badge.",
+            new[] { ("Text + flags", "TextAndFlags"), ("All text", "Text") },
+            () => c.StatusStyle, v => Apply(() => c.StatusStyle = v)));
 
         PageBody.Children.Add(Subhead("Header extras"));
         PageBody.Children.Add(Toggle("Real-life clock", "Your wall-clock time next to the in-sim clock.", () => c.ShowRealClock, v => c.ShowRealClock = v));
@@ -253,6 +256,9 @@ public partial class SettingsWindow : Window
         body.Children.Add(Toggle("Pace arrow", "Their recent pace vs yours.", () => r.ShowPace, v => r.ShowPace = v));
 
         body.Children.Add(Subhead("Behavior"));
+        body.Children.Add(Segmented("Status style", "Independent of the standings: flag chips + text, or one text badge.",
+            new[] { ("Text + flags", "TextAndFlags"), ("All text", "Text") },
+            () => r.StatusStyle, v => Apply(() => r.StatusStyle = v)));
         body.Children.Add(Toggle("Hide parked cars", "Drop cars sat in the pits (DNF / no driver) — cuts endurance noise.",
             () => r.HideParkedCars, v => r.HideParkedCars = v));
         body.Children.Add(Slider("Battle threshold", "Same-lap cars within this gap get the battle marker.", 0.5, 5, 0.5,
@@ -507,7 +513,7 @@ public partial class SettingsWindow : Window
             case "Standings":
                 var s = new OverlayConfig();
                 c.Scale = s.Scale; c.NameColumnWidth = s.NameColumnWidth; c.HeaderFontSize = s.HeaderFontSize;
-                c.SmoothGaps = s.SmoothGaps; c.ShowRejoinState = s.ShowRejoinState;
+                c.SmoothGaps = s.SmoothGaps; c.ShowRejoinState = s.ShowRejoinState; c.StatusStyle = s.StatusStyle;
                 c.DriversAtTop = s.DriversAtTop; c.DriversAhead = s.DriversAhead; c.DriversBehind = s.DriversBehind;
                 c.MinLeadingCars = s.MinLeadingCars; c.TyreSwitchDisplay = s.TyreSwitchDisplay;
                 c.OtherClassesDriversAtTop = s.OtherClassesDriversAtTop; c.DeltaLaps = s.DeltaLaps;

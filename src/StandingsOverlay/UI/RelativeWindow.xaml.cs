@@ -16,7 +16,9 @@ public sealed record RelativeRowViewModel(
     Brush StatusBrush, Brush StatusBg, Brush LicBrush, Brush LicTextBrush, Brush StintBrush, Brush PaceBrush,
     Brush GapBrush, Brush BattleBrush, Brush RowBackground,
     Visibility NumVisibility, Visibility TyreVisibility, Visibility TyreSwitchVisibility,
-    Visibility IrVisibility, Visibility LicVisibility, Visibility BattleVisibility)
+    Visibility IrVisibility, Visibility LicVisibility, Visibility BattleVisibility,
+    Visibility FlagVisibility, Brush FlagBodyBrush, Brush FlagStrokeBrush,
+    Brush FlagDotBrush, Visibility FlagDotVisibility)
 {
     private static readonly Brush White = RowViewModel.Frozen("#E8E9EE");
     private static readonly Brush DryTyre = RowViewModel.Frozen("#C9C9CF");
@@ -56,6 +58,8 @@ public sealed record RelativeRowViewModel(
                      : r.LapParity < 0 ? LappedBlue
                      : White;
         var licChip = RowViewModel.TryBrush(r.LicColor) ?? LicFallback;
+        // Penalty chip (TextAndFlags style): same drawn flag as the standings.
+        var (flagVis, flagBody, flagStroke, flagDot, dotVis) = RowViewModel.PenaltyFlagVisuals(r.PenaltyText);
 
         return new RelativeRowViewModel(
             Pos: r.PosText,
@@ -105,7 +109,12 @@ public sealed record RelativeRowViewModel(
             TyreSwitchVisibility: r.Tyre >= 0 && r.TyreSwitch != 0 ? Visibility.Visible : Visibility.Collapsed,
             IrVisibility: r.IRatingText.Length > 0 ? Visibility.Visible : Visibility.Collapsed,
             LicVisibility: r.LicText.Length > 0 ? Visibility.Visible : Visibility.Collapsed,
-            BattleVisibility: r.Battle ? Visibility.Visible : Visibility.Collapsed);
+            BattleVisibility: r.Battle ? Visibility.Visible : Visibility.Collapsed,
+            FlagVisibility: flagVis,
+            FlagBodyBrush: flagBody,
+            FlagStrokeBrush: flagStroke,
+            FlagDotBrush: flagDot,
+            FlagDotVisibility: dotVis);
     }
 }
 
@@ -158,7 +167,11 @@ public partial class RelativeWindow : Window
         }
         else AutoPlace();
 
-        FontSize = Math.Max(9, cfg.FontSize - 1.5);   // a relative reads at a glance; slightly denser
+        // Same base size as the standings — one type ramp across the widgets (use the
+        // Relative.Scale slider to make the whole box bigger/smaller, not a hidden offset).
+        FontSize = cfg.FontSize;
+        Resources["FontSm"] = Math.Max(9.0, cfg.FontSize - 2);      // secondary cells (brand, status…)
+        Resources["FontXs"] = Math.Max(8.5, cfg.FontSize - 3);      // chips (iR, license)
         Root.LayoutTransform = RowViewModel.ScaleTransformFor(cfg.Relative.Scale);
         var bg = RowViewModel.TryBrush(cfg.BackgroundColor) is SolidColorBrush b
             ? b.Color : Color.FromRgb(0x21, 0x21, 0x29);

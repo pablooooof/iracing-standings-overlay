@@ -11,6 +11,14 @@ Working v0.1 exists (live + demo). This is the improvement queue, roughly ordere
 - [x] ~~Per-car flag column~~ (v0.3 — STATUS badge: DQ/BLK/DMG/WRN/PIT from `CarIdxSessionFlags`)
 - **Live validation polish** — offline testing shows iRating 1 / license R 0.01 (iRacing reports those values in test sessions); IR/SoF now hidden when ≤1 but verify in an online race.
 - **Online race validation** — gaps, laps-down, positions gained, strategy column against a real field.
+- [x] ~~TOW state + status audit + fonts~~ (2026-07-10 — TOW is now transition-detected
+  (`StintTracker.WasTowedIn`: car materializes in its stall without passing "approaching pits";
+  + `PlayerCarTowTime` for the player) — the "stopped >15 s ⇒ TOW" guess Pablo kept seeing wrong
+  is gone (parked = SPUN). Status split into two channels (`Data/CarStatus`): penalty flags vs
+  physical state, so DMG-in-pit shows both; per-widget `StatusStyle` ("Text + flags" / "All text")
+  in Settings for standings and relative independently. Fonts unified: one Segoe UI ramp
+  (base/FontSm/FontXs from `FontSize`) across standings + relative, relative's hidden −1.5px
+  offset and Consolas cells removed, its default Scale now 1.0.)
 - [x] ~~Relative/traffic gap accuracy~~ (2026-07-10 — `RelativeGap` rewritten as a lap-phase
   model: `CarIdxEstTime / CarClassEstLapTime` per car, wrapped delta × chaser's lap, skew-gated
   pct fallback; the old est/dist blend breathed with track section → phantom 0.7 s/s closing

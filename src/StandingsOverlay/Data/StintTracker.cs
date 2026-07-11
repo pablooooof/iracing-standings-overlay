@@ -35,6 +35,10 @@ public sealed class StintTracker
         public int LastCompound = -1;                     // CarIdxTireCompound (0 dry, >=1 wet)
         public double CompoundSwitchTime = -1;            // when it last crossed dry<->wet
         public bool SwitchedToWet;                        // direction of that last switch
+        // Track-surface transition latch: the last surface value BEFORE the current one.
+        // A towed car materializes InPitStall(1) without ever reading AproachingPits(2).
+        public int Surface = int.MinValue;
+        public int PrevSurface = int.MinValue;
         // Pit-visit timing.
         public double PitEntryTime = -1;
         public int PitEntryLap;
@@ -129,6 +133,14 @@ public sealed class StintTracker
                     s.SwitchedToWet = comp >= 1;
                 }
                 s.LastCompound = comp;
+            }
+
+            // Latch surface transitions for the tow rule below.
+            if (idx < t.TrackSurface.Length)
+            {
+                int surf = t.TrackSurface[idx];
+                if (s.Surface == int.MinValue) s.Surface = surf;
+                else if (surf != s.Surface) { s.PrevSurface = s.Surface; s.Surface = surf; }
             }
 
             bool onPit = t.OnPitRoad[idx];
@@ -266,6 +278,21 @@ public sealed class StintTracker
                 result.Add(s.LapTimes[i]);
         return result;
     }
+
+    /// <summary>
+    /// True while the car sits in its pit stall having never driven through the pit entry —
+    /// iRacing teleports towed cars straight into their stall, while a normal stop always
+    /// passes through AproachingPits(2) first. Race only by definition: practice/qual resets
+    /// teleport the same way but aren't tows. The needs-a-lap guard keeps race joiners
+    /// (who also spawn in the stall) out. This replaces the old "stopped a long time = TOW"
+    /// guess, which mislabeled every parked car.
+    /// </summary>
+    public bool WasTowedIn(RawTick t, int idx) =>
+        _isRace
+        && idx < t.TrackSurface.Length && t.TrackSurface[idx] == 1        // InPitStall
+        && _cars.TryGetValue(idx, out var s)
+        && s.LastLapSeen >= 1
+        && s.PrevSurface is -1 or 0 or 3;   // vanished / off-track / on-track — anything but pit entry
 
     /// <summary>
     /// True when the car has been stationary on track (not pit road) for a few seconds —

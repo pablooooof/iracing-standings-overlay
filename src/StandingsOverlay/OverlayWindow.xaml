@@ -184,7 +184,7 @@
                                     </StackPanel>
                                 </Grid>
                                 <TextBlock Grid.Column="3" Text="{Binding PosGained}" Style="{StaticResource Num}"
-                                           Foreground="{Binding PosGainedBrush}" FontSize="11" VerticalAlignment="Center"
+                                           Foreground="{Binding PosGainedBrush}" FontSize="{DynamicResource FontSm}" VerticalAlignment="Center"
                                            Visibility="{Binding DataContext.PosGained, RelativeSource={RelativeSource AncestorType=Window}}"/>
                                 <TextBlock Grid.Column="4" Text="{Binding CarNumber}" Margin="0,0,10,0"
                                            Foreground="{Binding CarNumberBrush}" FontWeight="SemiBold"/>
@@ -199,12 +199,12 @@
                                             HorizontalAlignment="Right" VerticalAlignment="Center"
                                             Visibility="{Binding IrChipVisibility}">
                                         <TextBlock Text="{Binding IRating}" Foreground="Black"
-                                                   FontSize="10.5" FontWeight="Bold"/>
+                                                   FontSize="{DynamicResource FontXs}" FontWeight="Bold"/>
                                     </Border>
                                 </Grid>
                                 <!-- Car brand -->
                                 <TextBlock Grid.Column="7" Text="{Binding CarBrand}" Margin="0,0,14,0"
-                                           Opacity="0.75" FontSize="11" VerticalAlignment="Center"
+                                           Opacity="0.75" FontSize="{DynamicResource FontSm}" VerticalAlignment="Center"
                                            Visibility="{Binding DataContext.CarBrand, RelativeSource={RelativeSource AncestorType=Window}}"/>
                                 <!-- License chip: license color as background, contrasting text -->
                                 <Grid Grid.Column="8"
@@ -213,7 +213,7 @@
                                             HorizontalAlignment="Left" VerticalAlignment="Center"
                                             Visibility="{Binding LicChipVisibility}">
                                         <TextBlock Text="{Binding License}" Foreground="{Binding LicenseTextBrush}"
-                                                   FontSize="10.5" FontWeight="Bold"/>
+                                                   FontSize="{DynamicResource FontXs}" FontWeight="Bold"/>
                                     </Border>
                                 </Grid>
                                 <TextBlock Grid.Column="9" Text="{Binding Laps}" Style="{StaticResource Num}" Opacity="0.85"
@@ -242,10 +242,10 @@
                                 </ItemsControl>
                                 <!-- Fastest-on-track rank (last 5 clean laps, per class) -->
                                 <TextBlock Grid.Column="15" Text="{Binding Rank}" Style="{StaticResource Num}"
-                                           Foreground="{Binding RankBrush}" FontSize="11" VerticalAlignment="Center"
+                                           Foreground="{Binding RankBrush}" FontSize="{DynamicResource FontSm}" VerticalAlignment="Center"
                                            Visibility="{Binding DataContext.PaceRank, RelativeSource={RelativeSource AncestorType=Window}}"/>
                                 <TextBlock Grid.Column="16" Text="{Binding Strat}" Style="{StaticResource Num}"
-                                           Opacity="0.9" FontSize="11" VerticalAlignment="Center"
+                                           Opacity="0.9" FontSize="{DynamicResource FontSm}" VerticalAlignment="Center"
                                            Visibility="{Binding DataContext.Strategy, RelativeSource={RelativeSource AncestorType=Window}}"/>
                                 <TextBlock Grid.Column="17" Text="{Binding Pace}" Margin="0,0,10,0"
                                            Foreground="{Binding PaceBrush}" FontWeight="SemiBold"
@@ -260,19 +260,19 @@
                                                  Fill="{Binding FlagDotBrush}" Visibility="{Binding FlagDotVisibility}"/>
                                     </Grid>
                                     <TextBlock Text="{Binding Status}" Foreground="{Binding StatusBrush}"
-                                               FontSize="11" VerticalAlignment="Center" FontWeight="Bold"/>
+                                               FontSize="{DynamicResource FontSm}" VerticalAlignment="Center" FontWeight="Bold"/>
                                 </StackPanel>
                                 <TextBlock Grid.Column="19" Text="{Binding PitLap}" Style="{StaticResource Num}"
-                                           Opacity="0.85" FontFamily="Consolas" FontSize="11" VerticalAlignment="Center"
+                                           Opacity="0.85" FontSize="{DynamicResource FontSm}" VerticalAlignment="Center"
                                            Visibility="{Binding DataContext.PitLap, RelativeSource={RelativeSource AncestorType=Window}}"/>
                                 <TextBlock Grid.Column="20" Text="{Binding PitTotal}" Style="{StaticResource Num}"
-                                           Opacity="0.9" FontFamily="Consolas" FontSize="11" VerticalAlignment="Center"
+                                           Opacity="0.9" FontSize="{DynamicResource FontSm}" VerticalAlignment="Center"
                                            Visibility="{Binding DataContext.PitTotal, RelativeSource={RelativeSource AncestorType=Window}}"/>
                                 <TextBlock Grid.Column="21" Text="{Binding PitDrive}" Style="{StaticResource Num}"
-                                           Opacity="0.75" FontFamily="Consolas" FontSize="11" VerticalAlignment="Center"
+                                           Opacity="0.75" FontSize="{DynamicResource FontSm}" VerticalAlignment="Center"
                                            Visibility="{Binding DataContext.PitDrive, RelativeSource={RelativeSource AncestorType=Window}}"/>
                                 <TextBlock Grid.Column="22" Text="{Binding PitStall}" Style="{StaticResource Num}"
-                                           Opacity="0.9" FontFamily="Consolas" FontSize="11" VerticalAlignment="Center"
+                                           Opacity="0.9" FontSize="{DynamicResource FontSm}" VerticalAlignment="Center"
                                            Visibility="{Binding DataContext.PitStall, RelativeSource={RelativeSource AncestorType=Window}}"/>
                             </Grid>
                         </Border>
