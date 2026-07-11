@@ -97,6 +97,35 @@ public class TrafficDetectorTests
     }
 
     [Fact]
+    public void DismissedThenChargingAgain_ReAlertsBeforeContact_DespiteCooldown()
+    {
+        // Race: a GTP closes to ~2 s (WATCH), backs off (dismissed), then charges again within
+        // the 15 s re-alert cooldown. The cooldown must not swallow the re-approach — the alert
+        // has to be back up while the car is still meaningfully behind, not at contact.
+        var r = new Rig(2, sessionType: "Race");
+        r.AddCar(0, 2, 120f);
+        r.AddCar(1, 1, 100f, "GTP");
+        var progress = new double[] { 50.0, 50.0 - 5.0 / 100 };
+        r.Place(0, progress[0]);
+        r.Place(1, progress[1]);
+
+        // t<20: GTP closes at ~0.17 s/s → WATCH near t=18 (gap ≈ 2).
+        // t 20–26: GTP eases (130 s laps) → rate collapses → dismissed, DismissedAt ≈ 23-25.
+        // t>26: GTP charges (85 s laps, ~0.34 s/s) → contact ≈ t 33-34.
+        var snaps = Run(r, new TrafficDetector(), progress,
+            t => t < 20 ? [120.0, 100.0] : t < 26 ? [120.0, 130.0] : [120.0, 85.0], seconds: 40);
+
+        int TickOf(double t) => (int)(t / 0.25) - 1;
+        bool dismissed = Enumerable.Range(TickOf(24), TickOf(27) - TickOf(24))
+                                   .Any(i => snaps[i].Rows.Count == 0);
+        Assert.True(dismissed, "setup failed: the first alert never dismissed");
+
+        bool reWarnedBeforeContact = Enumerable.Range(TickOf(27), TickOf(31.5) - TickOf(27))
+                                               .Any(i => snaps[i].Rows.Count > 0);
+        Assert.True(reWarnedBeforeContact, "cooldown swallowed the re-approach until contact");
+    }
+
+    [Fact]
     public void BlueFlagLeaderGrindingCloser_FiresOnGap_AndShowsTheGap()
     {
         // Race: the class leader is +1 lap and 2.2 s behind, closing at a grind (~1 s/lap).

@@ -60,7 +60,8 @@ Add to `ReadTick()` (same 4 Hz tick, three extra `GetData` calls):
    not a car); `tta = gapSec / rate` when `rate > 0.05`. Gap jump > 3 s between ticks ⇒
    tow/reset ⇒ flush that car's buffer. When the rate collapses mid-alert (player accelerating)
    the displayed countdown holds its last finite value, capped at `lead × 1.3` — never "99.9".
-   A dismissed car can't re-WATCH for 15 s (flap damping).
+   A dismissed car can't re-WATCH for 15 s (flap damping) — unless the re-approach is urgent
+   (TTA ≤ ImminentSec or gap ≤ 2.5 s): the cooldown must never silence a car that's arriving.
 4. **State machine (per car), with hysteresis.**
    - HIDDEN → **WATCH** when `tta ≤ AlertLeadTimeSec` (12). Blue additionally fires on raw
      proximity (`gap ≤ 2.5 s`): a leader grinding up at 1–3 s/lap has a rate too small for a

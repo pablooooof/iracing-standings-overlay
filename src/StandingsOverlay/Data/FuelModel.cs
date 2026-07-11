@@ -84,6 +84,15 @@ public sealed class FuelModel
             {
                 _primedMidLap = true;   // we joined somewhere mid-lap; the next crossing is partial
             }
+            else if (lap > _lastLap + 1)
+            {
+                // Missed crossings (telemetry stall, PC hitch): the span since the last sample
+                // is multiple laps, and a 2-lap burn slips under the per-lap sanity cap —
+                // discard it and re-prime like a fresh join. Disconnects reset the whole model
+                // at the source, so this only guards in-session gaps.
+                _primedMidLap = true;
+                _pendingTime = false;
+            }
             else if (_primedMidLap)
             {
                 _primedMidLap = false;  // partial lap closed — resample, record nothing

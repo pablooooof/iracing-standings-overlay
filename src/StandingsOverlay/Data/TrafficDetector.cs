@@ -249,7 +249,11 @@ public sealed class TrafficDetector
 
             if (!state.Alerting)
             {
-                if (!inRange || now - state.DismissedAt < ReAlertCooldownSec) continue;
+                // The re-alert cooldown stops boundary flapping, but must never silence a car
+                // that is actually arriving — a dismissal at ~3 s followed by a fast re-approach
+                // used to fire WATCH only at contact (gap=0.0 in the logs). Urgent = it's here.
+                bool urgent = tta <= tc.ImminentSec || gap <= BlueGapSec;
+                if (!inRange || (!urgent && now - state.DismissedAt < ReAlertCooldownSec)) continue;
                 state.Alerting = true;
                 state.Phase = TrafficPhase.Watch;
                 state.AlertSince = state.PhaseSince = now;
