@@ -99,12 +99,12 @@ public class StintTrackerTests
 
         int lap = sim.Lap;
         int? stint = sim.St.StintLaps(1, lap);
-        int? age = sim.St.TireAgeLaps(1, lap);
+        var info = sim.St.TireInfo(1, lap);
         Assert.NotNull(stint);
-        Assert.NotNull(age);
+        Assert.NotNull(info);
         Assert.InRange(stint.Value, 5, 7);
-        Assert.InRange(age.Value, 16, 18);                    // laps since stop B, across stop C
-        Assert.True(age > stint + 2, "double-stint not flagged");   // the ST8+ condition
+        Assert.InRange(info.Value.Age, 16, 18);      // laps since stop B, across stop C
+        Assert.Equal(2, info.Value.Stints);          // second stint on this rubber → "²"
     }
 
     [Fact]

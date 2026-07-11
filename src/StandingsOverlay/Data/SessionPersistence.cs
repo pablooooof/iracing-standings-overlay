@@ -18,6 +18,7 @@ public sealed class CarStintDto
     public int FirstSeenLap { get; set; } = int.MinValue;
     public int GridPos { get; set; }
     public int TireStartLap { get; set; }
+    public int TireStints { get; set; } = 1;
     public double MinFillSecPerLap { get; set; } = double.MaxValue;
     public PitInfo? LastPit { get; set; }
 }

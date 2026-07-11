@@ -153,7 +153,9 @@ public sealed record StandingsRow(
     string PitTotalText = "", // last pit: total time on pit road (s)
     string PitDriveText = "", // last pit: pit-lane transit time (s)
     string PitStallText = "", // last pit: time sat stationary in the box (s)
-    string PenaltyText = "")  // penalty flag chip (DQ/BLK/DMG/WRN); empty in "Text" status style
+    string PenaltyText = "",  // penalty flag chip (DQ/BLK/DMG/WRN); empty in "Text" status style
+    string TyreAgeText = "",  // laps on the current tires: "42" · "42²" double-stint · "42³" triple
+    int TyreAgeSign = 0)      // 1 fresh (green) · 2 multi-stinted rubber (amber) · 0 rest
 {
     public static readonly StandingsRow Separator = Empty(RowKind.Separator) with { Name = "···" };
 

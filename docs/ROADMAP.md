@@ -143,6 +143,11 @@ Ideas and requests captured during rapid iteration so nothing is lost. Roughly o
 - [x] **Fuel plan wall clock (2026-07-11)** — the plan line ends with "box HH:mm:ss GMT"
   (or "flag … GMT" when no stops remain): the projected current-stint end from pace +
   strategy, anchored at the lap-crossing replan.
+- [x] **Tyre-age column (2026-07-11, `ShowTyreAge`, race default on)** — laps on the current
+  tires next to the compound ring, with a superscript stint count on that rubber: `42²` =
+  double-stinting, `42³` = triple (green ≤3 laps, amber when multi-stinted). The relative's
+  stint column carries the same superscript (`ST8²`). Backed by `StintTracker.TireInfo`
+  (TireStints counter, persisted in session state).
 - ~~Class-colour override map~~ — dropped (live sessions use iRacing's own class colours).
 
 **Tyres / weather**

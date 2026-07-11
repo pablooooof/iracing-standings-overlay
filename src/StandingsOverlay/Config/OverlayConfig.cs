@@ -230,6 +230,9 @@ public sealed class SessionColumns
 {
     public bool ShowPositionsGained { get; set; }
     public bool ShowTyre { get; set; } = true;       // dry/wet compound ring next to position
+    // Laps on current tires next to the ring ("42²" = double-stint). Renders in races only,
+    // so true is safe as the property default (pre-existing configs lack the key).
+    public bool ShowTyreAge { get; set; } = true;
     public bool ShowIRating { get; set; } = true;
     public bool ShowLicense { get; set; }            // off by default in favor of the car brand
     public bool ShowCarBrand { get; set; } = true;
@@ -252,6 +255,7 @@ public sealed class SessionColumns
     public static SessionColumns RaceDefaults() => new()
     {
         ShowPositionsGained = true,
+        ShowTyreAge = true,       // endurance: who's double-stinting is a glance, not a guess
         ShowBestLap = false,      // LAST + deltas matter in a race; BEST is qual/practice info
         ShowPaceRank = true,
         ShowStrategy = true,

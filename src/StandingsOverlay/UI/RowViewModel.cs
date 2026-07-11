@@ -50,6 +50,8 @@ public sealed class RowViewModel
     public Visibility TyreSwitchVisibility { get; init; } = Visibility.Collapsed; // inline o→o
     public Brush TyreBrush { get; init; } = Brushes.Gray;                        // current compound
     public Brush TyreOldBrush { get; init; } = Brushes.Gray;                     // pre-switch compound
+    public string TyreAge { get; init; } = "";                                   // "42²" = double-stinted rubber
+    public Brush TyreAgeBrush { get; init; } = Brushes.Gray;
 
     public Visibility FlagVisibility { get; init; } = Visibility.Collapsed;
     public Brush FlagBodyBrush { get; init; } = Brushes.Black;
@@ -147,6 +149,8 @@ public sealed class RowViewModel
             TyreSwitchVisibility = r.Tyre >= 0 && r.TyreSwitch != 0 ? Visibility.Visible : Visibility.Collapsed,
             TyreBrush = r.Tyre >= 1 ? WetTyreBrush : DryTyreBrush,
             TyreOldBrush = r.TyreSwitch > 0 ? DryTyreBrush : WetTyreBrush,   // switched TO wet ⇒ was dry
+            TyreAge = r.TyreAgeText,
+            TyreAgeBrush = r.TyreAgeSign == 1 ? GainBrush : r.TyreAgeSign == 2 ? PitBrush : DimBrush,
 
             FlagVisibility = flagVis,
             FlagBodyBrush = flagBody,

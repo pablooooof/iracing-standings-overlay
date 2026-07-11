@@ -178,15 +178,19 @@ public static class RelativeBuilder
         }
 
         // "ST17" = laps into the current stint (blank when unknowable — mid-race join, on pit
-        // road); "+" = the last stop took no tires (inferred), so the rubber is older than the
-        // stint — the double-stint tell. Green while the tyres are fresh.
+        // road); "ST17²" = second stint on this rubber, "³" = triple (inferred from stop
+        // lengths). Green while the tyres are fresh.
         string stint = "";
         bool fresh = false;
         if (rc.ShowStintAge && stints.StintLaps(idx, t.Lap[idx]) is int laps)
         {
             stint = "ST" + laps;
-            int age = cfg.InferTireChanges ? stints.TireAgeLaps(idx, t.Lap[idx]) ?? laps : laps;
-            if (age > laps + 2) stint += "+";
+            int age = laps;
+            if (cfg.InferTireChanges && stints.TireInfo(idx, t.Lap[idx]) is var (a, sets))
+            {
+                age = a;
+                stint += SnapshotBuilder.SupStints(sets);
+            }
             fresh = age <= FreshTyreLaps;
         }
 

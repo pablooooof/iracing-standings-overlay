@@ -286,6 +286,21 @@ public static class SnapshotBuilder
             if (stints.LooksLikeFuelSaving(idx)) pace += "S";
         }
 
+        // Laps on the current tires + stint count on that rubber: "42²" = 42-lap-old tires,
+        // second stint (double-stinting) — inferred from stop lengths (StintTracker.TireInfo).
+        string tyreAge = "";
+        int tyreAgeSign = 0;
+        if (isRace && cfg.InferTireChanges && stints.TireInfo(idx, t.Lap[idx]) is var (age, sets))
+        {
+            tyreAge = age + SupStints(sets);
+            tyreAgeSign = sets > 1 ? 2 : age <= 3 ? 1 : 0;
+        }
+        else if (isRace && stints.StintLaps(idx, t.Lap[idx]) is int sl)
+        {
+            tyreAge = sl.ToString();
+            tyreAgeSign = sl <= 3 ? 1 : 0;
+        }
+
         float last = EffLast(t, roster, idx);
         float bestLap = EffBest(t, roster, idx);
         int lapsDone = Math.Max(stints.LapCount(idx),
@@ -327,7 +342,9 @@ public static class SnapshotBuilder
             PitLapText: isRace && stints.LastPit(idx) is { } pl ? pl.Lap.ToString() : "",
             PitTotalText: isRace && stints.LastPit(idx) is { } pt ? pt.Total.ToString("0.0") : "",
             PitDriveText: isRace && stints.LastPit(idx) is { } pd ? pd.DriveThrough.ToString("0.0") : "",
-            PitStallText: isRace && stints.LastPit(idx) is { } ps ? ps.Stationary.ToString("0.0") : "");
+            PitStallText: isRace && stints.LastPit(idx) is { } ps ? ps.Stationary.ToString("0.0") : "",
+            TyreAgeText: tyreAge,
+            TyreAgeSign: tyreAgeSign);
     }
 
     /// <summary>"NL" when the car is a lap or more down on the reference, else null.</summary>
@@ -515,6 +532,16 @@ public static class SnapshotBuilder
             return ts.Minutes == 0 && ts.Seconds == 0 ? $"{(int)ts.TotalHours}h" : ts.ToString(@"h\:mm");
         return ts.Seconds == 0 ? $"{ts.Minutes}m" : ts.ToString(@"m\:ss");
     }
+
+    /// <summary>Superscript stint-count marker for tire age: nothing on fresh-this-stint rubber,
+    /// ² double-stint, ³ triple, ⁴ beyond. Shared by standings and relative.</summary>
+    internal static string SupStints(int n) => n switch
+    {
+        <= 1 => "",
+        2 => "²",
+        3 => "³",
+        _ => "⁴",
+    };
 
     internal static string FmtIr(int ir) =>
         ir >= 1000 ? (ir / 1000.0).ToString("0.0") + "k" : ir > 1 ? ir.ToString() : "";

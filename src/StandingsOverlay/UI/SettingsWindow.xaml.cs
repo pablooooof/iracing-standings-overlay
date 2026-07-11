@@ -238,6 +238,8 @@ public partial class SettingsWindow : Window
 
         T("Positions gained", "Race only.", () => s.ShowPositionsGained, v => s.ShowPositionsGained = v);
         T("Tyre compound", "Dry/wet ring next to the position.", () => s.ShowTyre, v => s.ShowTyre = v);
+        T("Tyre age", "Race only. Laps on their tires: 42² = double-stint, ³ = triple (inferred from stop lengths).",
+            () => s.ShowTyreAge, v => s.ShowTyreAge = v);
         T("iRating", null, () => s.ShowIRating, v => s.ShowIRating = v);
         T("License", null, () => s.ShowLicense, v => s.ShowLicense = v);
         T("Car brand", null, () => s.ShowCarBrand, v => s.ShowCarBrand = v);

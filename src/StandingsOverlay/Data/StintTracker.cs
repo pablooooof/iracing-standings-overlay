@@ -58,6 +58,7 @@ public sealed class StintTracker
         public bool SwapThisVisit;                        // driver changed → stop time is meaningless
         public bool DmgThisVisit;                         // meatball → repairs pad the stop, not tires
         public int TireStartLap;                          // lap the current tires were (likely) fitted
+        public int TireStints = 1;                        // stints on this rubber (2 = double, 3 = triple)
     }
 
     private const int MaxLapTimes = 30;
@@ -220,7 +221,8 @@ public sealed class StintTracker
                         if (perLap < s.MinFillSecPerLap) s.MinFillSecPerLap = perLap;
                     }
                 }
-                if (tookTires) s.TireStartLap = t.Lap[idx];
+                if (tookTires) { s.TireStartLap = t.Lap[idx]; s.TireStints = 1; }
+                else s.TireStints++;
                 s.PendingStintLen = -1;
                 s.CurrentStintStartLap = t.Lap[idx];
             }
@@ -333,14 +335,18 @@ public sealed class StintTracker
         if (s.WasOnPit) s.SwapThisVisit = true;
     }
 
-    /// <summary>Laps on the car's current tires, inferred from stop lengths (the pit-exit
-    /// classifier), or null when unknowable. Equals <see cref="StintLaps"/> unless a stop was
-    /// classified fuel-only, where it keeps counting across the stop — the double-stint tell.</summary>
-    public int? TireAgeLaps(int idx, int carLap) =>
+    /// <summary>Laps on the car's current tires plus the stint count on that rubber (1 = fresh
+    /// this stint, 2 = double-stinting, 3 = triple), inferred from stop lengths (the pit-exit
+    /// classifier), or null when unknowable. Age equals <see cref="StintLaps"/> unless a stop
+    /// was classified fuel-only, where it keeps counting across the stop.</summary>
+    public (int Age, int Stints)? TireInfo(int idx, int carLap) =>
         _cars.TryGetValue(idx, out var s) && !s.WasOnPit
         && (s.PitCount > 0 || s.FirstSeenLap is >= 0 and <= 1)
-            ? Math.Max(0, carLap - s.TireStartLap)
+            ? (Math.Max(0, carLap - s.TireStartLap), Math.Max(1, s.TireStints))
             : null;
+
+    /// <summary>Laps on the car's current tires (see <see cref="TireInfo"/>).</summary>
+    public int? TireAgeLaps(int idx, int carLap) => TireInfo(idx, carLap)?.Age;
 
     /// <summary>All recorded laps for the car, oldest first (capped at 30). -1 = lap with no time.</summary>
     public IReadOnlyList<float> LapTimesFor(int idx) =>
@@ -461,6 +467,7 @@ public sealed class StintTracker
                 FirstSeenLap = s.FirstSeenLap,
                 GridPos = s.GridPos,
                 TireStartLap = s.TireStartLap,
+                TireStints = s.TireStints,
                 MinFillSecPerLap = s.MinFillSecPerLap,
                 LastPit = s.LastPit,
             };
@@ -481,6 +488,7 @@ public sealed class StintTracker
                 FirstSeenLap = d.FirstSeenLap,
                 GridPos = d.GridPos,
                 TireStartLap = d.TireStartLap,
+                TireStints = Math.Max(1, d.TireStints),
                 MinFillSecPerLap = d.MinFillSecPerLap,
                 LastPit = d.LastPit,
             };
