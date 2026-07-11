@@ -106,4 +106,45 @@ public class StintTrackerTests
         Assert.InRange(age.Value, 16, 18);                    // laps since stop B, across stop C
         Assert.True(age > stint + 2, "double-stint not flagged");   // the ST8+ condition
     }
+
+    [Fact]
+    public void SessionState_RoundTrips_AndRejectsOtherSessions()
+    {
+        // Build real state, save it, restore into fresh trackers — the restart-survival path.
+        var sim = new Sim();
+        sim.Laps(10);
+        sim.Stop(20);
+        sim.Laps(6);
+        int lap = sim.Lap;
+        var history = new GapHistory();
+        history.Import(12, new Dictionary<int, List<GapSampleDto>>
+        {
+            [1] = [new(9, -30f), new(10, -28.2f), new(11, -26.1f), new(12, -24.3f)],
+        });
+
+        var dir = System.IO.Directory.CreateTempSubdirectory("overlay-state-test");
+        try
+        {
+            string path = System.IO.Path.Combine(dir.FullName, "session-state.json");
+            SessionStateStore.Save(path, "12345678", 2, 5000, history, sim.St);
+
+            var st2 = new StintTracker();
+            var h2 = new GapHistory();
+            // Wrong subsession / wrong session number / earlier clock: all rejected.
+            Assert.False(SessionStateStore.TryRestore(path, "99999999", 2, 6000, h2, st2));
+            Assert.False(SessionStateStore.TryRestore(path, "12345678", 3, 6000, h2, st2));
+            Assert.False(SessionStateStore.TryRestore(path, "12345678", 2, 4000, h2, st2));
+
+            Assert.True(SessionStateStore.TryRestore(path, "12345678", 2, 6000, h2, st2));
+            Assert.Equal(sim.St.StintLaps(1, lap), st2.StintLaps(1, lap));
+            Assert.Equal(sim.St.TireAgeLaps(1, lap), st2.TireAgeLaps(1, lap));
+            Assert.Equal(sim.St.PitStops(1), st2.PitStops(1));
+            Assert.Equal(sim.St.LastPit(1), st2.LastPit(1));
+            Assert.Equal(history.CatchRatePerLap(1), h2.CatchRatePerLap(1));
+        }
+        finally
+        {
+            dir.Delete(recursive: true);
+        }
+    }
 }
