@@ -70,7 +70,8 @@ public partial class App : Application
         _source.SnapshotReady += snapshot =>
         {
             _window.OnSnapshot(snapshot);
-            var status = snapshot.Connected ? "connected" : "waiting for iRacing";
+            var status = !snapshot.Connected ? "waiting for iRacing"
+                : _configService.Spectating ? "connected · spectate profile" : "connected";
             Dispatcher.BeginInvoke(() => _tray?.SetStatus(demo ? "demo" : status));
         };
         _source.TrafficReady += traffic =>
@@ -80,6 +81,13 @@ public partial class App : Application
         };
         _source.RelativeReady += relative => _relativeWindow.OnRelative(relative);
         _source.FuelReady += fuel => _fuelWindow.OnFuel(fuel);
+
+        // In the car vs spectating (team stints, garage): swap the whole config profile so
+        // positions, row counts and columns can differ. The source debounces IsOnTrack.
+        if (_source is IRacingSource live)
+            live.DrivingChanged += driving =>
+                Dispatcher.BeginInvoke(() => _configService.SetSpectating(!driving));
+
         _window.Show();
         _trafficWindow.Show();
         _relativeWindow.Show();

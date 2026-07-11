@@ -31,6 +31,7 @@ public sealed class RawTick
     public int TrackWetness = -1;        // irsdk_TrackWetness: 1 dry … 7 extremely wet
     public int PlayerIncidents = -1;
     public float PlayerTowTime;          // PlayerCarTowTime: seconds of tow remaining (player only)
+    public bool IsOnTrack = true;        // player physically in the car (false = teammate stint / garage / spectating)
     public int SessionState;             // irsdk_SessionState: 4 racing, 5 checkered, 6 cool down
     public string SessionType = "Race";
 

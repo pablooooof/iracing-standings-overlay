@@ -39,12 +39,20 @@ public partial class SettingsWindow : Window
         InitializeComponent();
         _cfg = cfg;
         _editMode = editMode;
+        // Edits go to whichever profile is active when the window opens; make that visible.
+        if (cfg.Spectating) Title += " — spectate profile";
 
         _saveTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(140) };
         _saveTimer.Tick += (_, _) => Flush();
 
+        // Section pages capture the profile objects in closures, so a profile swap (or an
+        // external edit replacing Current) would leave the open page editing a stale instance —
+        // rebuild the visible section against the new one. SaveAndNotify keeps the instance,
+        // so ordinary in-app edits don't rebuild.
+        _builtAgainst = cfg.Current;
+        cfg.Changed += OnProfileMaybeSwapped;
         SourceInitialized += (_, _) => Win32.UseDarkTitleBar(this);
-        Closed += (_, _) => Flush();   // never drop a pending edit on close
+        Closed += (_, _) => { _cfg.Changed -= OnProfileMaybeSwapped; Flush(); };   // never drop a pending edit
 
         foreach (var name in new[] { "General", "Standings", "Relative", "Traffic", "Fuel", "About" })
             Nav.Items.Add(name);
@@ -77,6 +85,19 @@ public partial class SettingsWindow : Window
         if (!_dirty) return;
         _dirty = false;
         _cfg.SaveAndNotify();
+    }
+
+    private OverlayConfig? _builtAgainst;
+
+    private void OnProfileMaybeSwapped(OverlayConfig cfg)
+    {
+        if (ReferenceEquals(cfg, _builtAgainst)) return;
+        Dispatcher.BeginInvoke(() =>
+        {
+            _builtAgainst = _cfg.Current;
+            Title = "Standings Overlay — Settings" + (_cfg.Spectating ? " — spectate profile" : "");
+            OnNavChanged(Nav, null!);   // rebuild the visible section against the new instance
+        });
     }
 
     // ---- navigation ------------------------------------------------------

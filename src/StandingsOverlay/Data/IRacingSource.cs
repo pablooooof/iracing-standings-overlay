@@ -74,6 +74,8 @@ public sealed class IRacingSource : ITelemetrySource
             var t = ReadTick();
             if (t is null) return;
 
+            UpdateDrivingState(t);
+
             // After the checkered/cooldown, telemetry goes weird (cars warp to pit, times
             // churn) — freeze the last standings rather than showing garbage.
             if (t.SessionState >= 5 && _emitted) return;
@@ -103,6 +105,36 @@ public sealed class IRacingSource : ITelemetrySource
     }
 
     private DateTime _lastErrorLog = DateTime.MinValue;
+
+    private bool _driving = true;
+    private bool _pendingDriving = true;
+    private double _pendingSince = -1;
+
+    /// <summary>Fires when the player gets in or out of the car (true = driving), debounced.</summary>
+    public event Action<bool>? DrivingChanged;
+
+    /// <summary>Driving vs spectating: IsOnTrack drops the moment the player leaves the car
+    /// (teammate stint, garage, spectating) but also blips during tows and resets — and a
+    /// profile flip re-layouts every widget, so commit only after 5 s of stable signal.</summary>
+    private void UpdateDrivingState(RawTick t)
+    {
+        bool driving = t.IsOnTrack || t.PlayerTowTime > 0;
+        if (driving == _driving) { _pendingSince = -1; return; }
+        if (_pendingSince < 0 || driving != _pendingDriving)
+        {
+            _pendingDriving = driving;
+            _pendingSince = t.SessionTime;
+            return;
+        }
+        if (t.SessionTime < _pendingSince) _pendingSince = t.SessionTime;   // session clock reset
+        if (t.SessionTime - _pendingSince >= 5)
+        {
+            _driving = driving;
+            _pendingSince = -1;
+            Log.Write($"player: {(driving ? "in the car" : "spectating")}");
+            DrivingChanged?.Invoke(driving);
+        }
+    }
 
     private void RefreshRosterIfStale()
     {
@@ -240,6 +272,7 @@ public sealed class IRacingSource : ITelemetrySource
         if (_sdk.GetData("WindDir") is float windDir) t.WindDir = windDir;
         if (_sdk.GetData("PlayerCarMyIncidentCount") is int incs) t.PlayerIncidents = incs;
         if (_sdk.GetData("PlayerCarTowTime") is float towTime) t.PlayerTowTime = towTime;
+        if (_sdk.GetData("IsOnTrack") is bool onTrack) t.IsOnTrack = onTrack;
         if (_sdk.GetData("Precipitation") is float precip) t.Precipitation = precip;
         if (_sdk.GetData("WeatherDeclaredWet") is bool wet) t.DeclaredWet = wet;
         if (_sdk.GetData("TrackWetness") is int wetness) t.TrackWetness = wetness;

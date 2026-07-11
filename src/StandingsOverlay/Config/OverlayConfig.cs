@@ -123,6 +123,11 @@ public sealed class OverlayConfig
     {
         File.WriteAllText(path, JsonSerializer.Serialize(this, JsonOpts));
     }
+
+    /// <summary>Deep copy via a JSON round-trip — used to seed the spectate profile.</summary>
+    public OverlayConfig Clone() =>
+        JsonSerializer.Deserialize<OverlayConfig>(JsonSerializer.Serialize(this, JsonOpts), JsonOpts)
+        ?? new OverlayConfig();
 }
 
 /// <summary>Traffic alerter settings. Detection details in docs/TRAFFIC-ALERTER.md.</summary>
@@ -267,28 +272,41 @@ public sealed class SessionColumns
 }
 
 /// <summary>
-/// Owns the config instance, persists it next to the exe, and hot-reloads on external edits.
+/// Owns the config instances, persists them next to the exe, and hot-reloads on external edits.
+/// Two profiles: config.json (driving) and config.spectate.json, active while the player is out
+/// of the car (teammate stint, garage, spectating — see IRacingSource.DrivingChanged). The
+/// spectate file is cloned from the driving profile on first use, seeded with a wider standings
+/// view, so EVERY setting — widget positions, columns, row counts — can differ per profile.
+/// <see cref="Current"/> is always the active profile; swapping raises <see cref="Changed"/> so
+/// all widgets re-apply, exactly like a settings edit.
 /// </summary>
 public sealed class ConfigService : IDisposable
 {
     private readonly string _path;
+    private readonly string _spectatePath;
     private readonly FileSystemWatcher? _watcher;
     private DateTime _lastSelfWrite = DateTime.MinValue;
+    private OverlayConfig _driving;
+    private OverlayConfig? _spectate;
 
     public OverlayConfig Current { get; private set; }
+    public bool Spectating { get; private set; }
     public event Action<OverlayConfig>? Changed;
 
     public ConfigService(string path)
     {
         _path = path;
-        Current = OverlayConfig.Load(path);
+        _spectatePath = Path.Combine(Path.GetDirectoryName(path) ?? "", "config.spectate.json");
+        _driving = OverlayConfig.Load(path);
+        if (File.Exists(_spectatePath)) _spectate = OverlayConfig.Load(_spectatePath);
+        Current = _driving;
         if (!File.Exists(path))
             Current.Save(path);
 
         var dir = Path.GetDirectoryName(path);
         if (dir is not null)
         {
-            _watcher = new FileSystemWatcher(dir, Path.GetFileName(path))
+            _watcher = new FileSystemWatcher(dir, "config*.json")
             {
                 NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName,
                 EnableRaisingEvents = true,
@@ -298,19 +316,52 @@ public sealed class ConfigService : IDisposable
         }
     }
 
+    /// <summary>Switch between the driving and spectate profiles. Clones the driving profile
+    /// into config.spectate.json on first use (nothing jumps, then the user tunes it live).</summary>
+    public void SetSpectating(bool spectating)
+    {
+        if (Spectating == spectating) return;
+        Spectating = spectating;
+        if (spectating && _spectate is null)
+        {
+            _spectate = _driving.Clone();
+            // Out of the car you're a crew chief: default to the field, not a window.
+            _spectate.DriversAhead = Math.Max(_spectate.DriversAhead, 8);
+            _spectate.DriversBehind = Math.Max(_spectate.DriversBehind, 8);
+            _spectate.OtherClassesDriversAtTop = Math.Max(_spectate.OtherClassesDriversAtTop, 2);
+            _lastSelfWrite = DateTime.UtcNow;
+            _spectate.Save(_spectatePath);
+        }
+        Current = spectating ? _spectate! : _driving;
+        Log.Write($"config profile: {(spectating ? "spectate" : "driving")}");
+        Changed?.Invoke(Current);
+    }
+
     private void OnFileChanged(object sender, FileSystemEventArgs e)
     {
         // Ignore the echo of our own Save(); editors also fire multiple events, so debounce.
         if ((DateTime.UtcNow - _lastSelfWrite).TotalMilliseconds < 500) return;
         Thread.Sleep(100); // let the editor finish writing
-        Current = OverlayConfig.Load(_path);
+        bool spectateFile = string.Equals(e.Name, Path.GetFileName(_spectatePath),
+                                          StringComparison.OrdinalIgnoreCase);
+        if (spectateFile)
+        {
+            if (!File.Exists(_spectatePath)) return;
+            _spectate = OverlayConfig.Load(_spectatePath);
+        }
+        else
+        {
+            _driving = OverlayConfig.Load(_path);
+        }
+        if (spectateFile != Spectating) return;   // inactive profile edited: reloaded silently
+        Current = spectateFile ? _spectate! : _driving;
         Changed?.Invoke(Current);
     }
 
     public void Save()
     {
         _lastSelfWrite = DateTime.UtcNow;
-        Current.Save(_path);
+        Current.Save(Spectating ? _spectatePath : _path);
     }
 
     /// <summary>Persist an in-app edit (the settings window) and push it to every widget.

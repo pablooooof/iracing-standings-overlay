@@ -114,6 +114,10 @@ Ideas and requests captured during rapid iteration so nothing is lost. Roughly o
 - [x] **Relative position = standings position (2026-07-11)** — relative rows rank by the same
   live total-distance ordering as the standings instead of scored `CarIdxPosition` (which only
   updates at timing lines, so the widgets disagreed for most of a lap after an overtake).
+- [x] **Driving vs spectate profiles (2026-07-11)** — `config.spectate.json` swaps in while the
+  player is out of the car (`IsOnTrack`, 5 s debounce, tow-guarded): every setting including
+  widget positions can differ. Cloned from the driving profile on first use (seeded with a
+  wider standings view); tune it live while spectating, edits persist to the active profile.
 - ~~Class-colour override map~~ — dropped (live sessions use iRacing's own class colours).
 
 **Tyres / weather**
