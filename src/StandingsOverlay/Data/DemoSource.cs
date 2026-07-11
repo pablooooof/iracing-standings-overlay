@@ -180,6 +180,7 @@ public sealed class DemoSource : ITelemetrySource
     // Test hooks: drive the demo clock without the timer, so the scripted scenarios
     // (spin, tow, pit sequences) are assertable deterministically end to end.
     internal RawTick TickForTest => _tick;
+    internal Roster RosterForTest => _roster;
     internal void StepForTest(double dt) => Step(dt);
 
     private void Step(double dt)

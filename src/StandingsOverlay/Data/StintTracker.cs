@@ -219,9 +219,12 @@ public sealed class StintTracker
     }
 
     /// <summary>
-    /// Strategy summary for the car: expected next pit lap, or stops remaining to the end.
+    /// Strategy summary for the car: the lap its next pit stop is expected on.
     /// Returns "" when unknowable (no completed stint yet, or not a race).
-    /// "~34" next stop around lap 34 · "34!" overdue · "0stp" can make it · "2stp*" = last stop is a splash.
+    /// "~34" next stop around lap 34 · "34!" overdue · "0stp" can make the finish ·
+    /// "~34*" that stop is the last one and only a splash. (Used to show "Nstp" stop
+    /// counts when 2+ stops remained — in an endurance race that told you nothing
+    /// actionable; the lap their window opens is the number you race against.)
     /// </summary>
     public string StrategyText(int idx, int carLap, double lapsRemain)
     {
@@ -234,17 +237,12 @@ public sealed class StintTracker
         if (lapsRemain >= 0 && lapsRemain <= lapsLeftInTank) return "0stp";
 
         int expectedPitLap = s.CurrentStintStartLap + stint;
-        if (lapsRemain < 0) return lapsLeftInTank < 0 ? $"{expectedPitLap}!" : $"~{expectedPitLap}";
+        if (lapsLeftInTank < 0) return $"{expectedPitLap}!";
+        if (lapsRemain < 0) return $"~{expectedPitLap}";
 
-        // Full stops needed to cover the remaining distance after the current tank.
         double afterTank = lapsRemain - Math.Max(0, lapsLeftInTank);
-        int stops = (int)Math.Ceiling(afterTank / stint);
-        double lastStintFraction = afterTank % stint / stint;
-        bool splash = stops >= 1 && lastStintFraction > 0 && lastStintFraction < 0.2;
-
-        return stops <= 1
-            ? $"~{expectedPitLap}{(splash ? "*" : "")}"
-            : $"{stops}stp{(splash ? "*" : "")}";
+        bool splash = afterTank > 0 && afterTank < stint * 0.2;   // one short final stop left
+        return $"~{expectedPitLap}{(splash ? "*" : "")}";
     }
 
     /// <summary>True for a few seconds after the car rejoined the track from pit road — a cold,

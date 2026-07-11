@@ -83,6 +83,13 @@ public static class SnapshotBuilder
                         for (int i = Math.Max(0, playerPos - cfg.DriversAhead);
                              i <= Math.Min(ordered.Count - 1, playerPos + cfg.DriversBehind); i++)
                             picked.Add(i);
+                    // A towed rival is exactly the row you want to find ("did my competitor
+                    // just lose five minutes?") but tows happen outside the window — pin it at
+                    // its live position, with the separators marking the jump. WasTowedIn ends
+                    // the moment the car drives out of its stall, so the row removes itself.
+                    if (isRace && cfg.PinTowedCars)
+                        for (int i = 0; i < ordered.Count; i++)
+                            if (stints.WasTowedIn(t, ordered[i].CarIdx)) picked.Add(i);
                 }
             }
             else

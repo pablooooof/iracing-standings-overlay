@@ -31,8 +31,9 @@ Working v0.1 exists (live + demo). This is the improvement queue, roughly ordere
 ## ⭐ Strategy inference per car (the "data project" phase)
 
 v0.3 shipped the core (`StintTracker`): stint history from `CarIdxOnPitRoad` transitions, per-car
-lap times, positions gained vs grid, **PIT column** (`~34` expected pit lap · `34!` overdue ·
-`0stp` no stop needed · `2stp*` = final stop is a splash-and-dash), **PACE column** (▲/▼ vs class
+lap times, positions gained vs grid, **PIT column** (`~34` expected next pit lap · `34!` overdue ·
+`0stp` no stop needed · `~34*` = that stop is the final splash; the old `Nstp` stop counts were
+dropped 2026-07-11 — useless in endurance), **PACE column** (▲/▼ vs class
 median over last 5 laps, `S` = fuel-saving: consistent laps ≥1.5% off own best with <1% spread).
 
 Still open:
@@ -107,6 +108,12 @@ Ideas and requests captured during rapid iteration so nothing is lost. Roughly o
   no longer count as pit stops for stint stats or P·LAP/P·TOT timing; per-car pace resets on
   driver swap; traffic catch rate reads from the standings delta history (median-filtered
   avg of last 5 clean laps); phase wrap-seam guard kills the phantom 0.1 s blue alerts.
+- [x] **Pinned tow rows (2026-07-11)** — a towed player-class car shows in the standings at its
+  live position even outside the window (`PinTowedCars`); the row removes itself when the car
+  drives out of its stall.
+- [x] **Relative position = standings position (2026-07-11)** — relative rows rank by the same
+  live total-distance ordering as the standings instead of scored `CarIdxPosition` (which only
+  updates at timing lines, so the widgets disagreed for most of a lap after an overtake).
 - ~~Class-colour override map~~ — dropped (live sessions use iRacing's own class colours).
 
 **Tyres / weather**

@@ -25,6 +25,9 @@ public sealed class OverlayConfig
     // When you're running near the front (position <= this), show at least this many from the top
     // instead of a tiny window — you want to see the whole leading group. 0 = off.
     public int MinLeadingCars { get; set; } = 10;
+    // Pin a towed player-class car into the standings at its live position (with a TOW badge)
+    // even outside the window — it disappears again the moment it drives out of its stall.
+    public bool PinTowedCars { get; set; } = true;
     public bool ShowColumnHeader { get; set; } = true;
     public bool ShowRejoinState { get; set; } = true;   // "REJOIN" badge when a stopped car moves again (experimental)
     // Status column style: "TextAndFlags" = penalty flag chip + physical-state text side by side;

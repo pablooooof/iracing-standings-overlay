@@ -149,6 +149,8 @@ public partial class SettingsWindow : Window
             0, 20, 1, () => c.MinLeadingCars, v => c.MinLeadingCars = (int)v, v => v <= 0 ? "off" : $"{v:0}"));
         PageBody.Children.Add(Slider("Other-class leaders", "Top cars of each other class in a multiclass field.", 0, 6, 1,
             () => c.OtherClassesDriversAtTop, v => c.OtherClassesDriversAtTop = (int)v, v => $"{v:0}"));
+        PageBody.Children.Add(Toggle("Pin towed cars", "A towed class rival shows at its position until it leaves the pits.",
+            () => c.PinTowedCars, v => c.PinTowedCars = v));
         PageBody.Children.Add(Slider("Delta laps", "Per-lap gap-change columns — the reason this overlay exists.", 1, 10, 1,
             () => c.DeltaLaps, v => c.DeltaLaps = (int)v, v => $"{v:0}"));
         PageBody.Children.Add(Slider("Name column width", "Fixed width so long names don't resize the table.", 60, 400, 10,
@@ -226,7 +228,7 @@ public partial class SettingsWindow : Window
         T("Per-lap cells", "Race: gap deltas · Qualify: each lap time.", () => s.ShowCells, v => s.ShowCells = v);
         T("Pace rank", "Fastest-in-class over the last 5 clean laps.", () => s.ShowPaceRank, v => s.ShowPaceRank = v);
         T("Status", "PIT / off-track / penalties.", () => s.ShowStatus, v => s.ShowStatus = v);
-        T("Strategy", "Race only.", () => s.ShowStrategy, v => s.ShowStrategy = v);
+        T("Strategy", "Race only. Next pit lap: ~34 · 34! overdue · 0stp none needed.", () => s.ShowStrategy, v => s.ShowStrategy = v);
         T("Pace arrow", "Race only.", () => s.ShowPace, v => s.ShowPace = v);
         T("Pit lap", "Race only. Lap of their last stop.", () => s.ShowPitLap, v => s.ShowPitLap = v);
         T("Pit time — total", "Race only. Time on pit road.", () => s.ShowPitTotal, v => s.ShowPitTotal = v);

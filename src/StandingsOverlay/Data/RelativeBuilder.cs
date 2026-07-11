@@ -104,20 +104,43 @@ public static class RelativeBuilder
         int takeAhead = Math.Min(ahead.Count, nAhead);
         for (int i = takeAhead; i < nAhead; i++) rows.Add(RelativeRow.Blank);
         for (int i = takeAhead - 1; i >= 0; i--)   // furthest ahead at the top
-            rows.Add(BuildRow(ahead[i].D, ahead[i].Gap, false, t, stints, swap, cfg, isRace,
+            rows.Add(BuildRow(ahead[i].D, ahead[i].Gap, false, t, roster, stints, swap, cfg, isRace,
                               playerTotal, me.CarClassId, playerPace));
-        rows.Add(BuildRow(me, 0, true, t, stints, swap, cfg, isRace, playerTotal, me.CarClassId, playerPace));
+        rows.Add(BuildRow(me, 0, true, t, roster, stints, swap, cfg, isRace, playerTotal, me.CarClassId, playerPace));
         for (int i = 0; i < Math.Min(behind.Count, nBehind); i++)
-            rows.Add(BuildRow(behind[i].D, behind[i].Gap, false, t, stints, swap, cfg, isRace,
+            rows.Add(BuildRow(behind[i].D, behind[i].Gap, false, t, roster, stints, swap, cfg, isRace,
                               playerTotal, me.CarClassId, playerPace));
         while (rows.Count < nAhead + 1 + nBehind) rows.Add(RelativeRow.Blank);
 
         return new RelativeSnapshot(rows);
     }
 
+    /// <summary>1-based live race position by total distance — the standings' own race ordering
+    /// (class-scoped when <paramref name="byClass"/>) — or 0 when the car has no live telemetry.
+    /// The scored CarIdxPosition only updates at timing lines, so the two widgets used to
+    /// disagree for most of a lap after an overtake.</summary>
+    private static int LiveRank(RawTick t, Roster roster, int idx, bool byClass)
+    {
+        if (idx >= t.Lap.Length || t.Lap[idx] < 0) return 0;
+        double mine = t.Lap[idx] + t.LapDistPct[idx];
+        if (mine <= 0.001) return 0;
+        int classId = roster.Drivers.TryGetValue(idx, out var me) ? me.CarClassId : -1;
+
+        int rank = 1;
+        foreach (var d in roster.Drivers.Values)
+        {
+            if (d.CarIdx == idx || d.IsPaceCar || d.IsSpectator || !t.Has(d.CarIdx)) continue;
+            if (byClass && d.CarClassId != classId) continue;
+            if (t.Lap[d.CarIdx] < 0) continue;
+            double tot = t.Lap[d.CarIdx] + t.LapDistPct[d.CarIdx];
+            if (tot > 0.001 && tot > mine) rank++;
+        }
+        return rank;
+    }
+
     private static RelativeRow BuildRow(DriverEntry d, float gap, bool isPlayer, RawTick t,
-        StintTracker stints, DriverSwapTracker swap, OverlayConfig cfg, bool isRace, double playerTotal,
-        int playerClassId, float? playerPace)
+        Roster roster, StintTracker stints, DriverSwapTracker swap, OverlayConfig cfg, bool isRace,
+        double playerTotal, int playerClassId, float? playerPace)
     {
         var rc = cfg.Relative;
         int idx = d.CarIdx;
@@ -141,11 +164,18 @@ public static class RelativeBuilder
                       d.CarClassId == playerClassId && Math.Abs(gap) <= rc.BattleGapSec;
 
         // Position is just the number in the relative (the column is self-evidently position).
+        // Races use the live total-distance rank so this always matches the standings row the
+        // car occupies; practice/qual keep the sim's scored positions.
         string pos = "";
-        int cp = idx < t.ClassPosition.Length ? t.ClassPosition[idx] : 0;
-        int op = idx < t.Position.Length ? t.Position[idx] : 0;
-        if (rc.ShowClassPos && cp > 0) pos = cp.ToString();
-        else if (op > 0) pos = op.ToString();
+        if (isRace && LiveRank(t, roster, idx, rc.ShowClassPos) is > 0 and var live)
+            pos = live.ToString();
+        else
+        {
+            int cp = idx < t.ClassPosition.Length ? t.ClassPosition[idx] : 0;
+            int op = idx < t.Position.Length ? t.Position[idx] : 0;
+            if (rc.ShowClassPos && cp > 0) pos = cp.ToString();
+            else if (op > 0) pos = op.ToString();
+        }
 
         // Laps into the current stint (blank when unknowable — mid-race join, on pit road);
         // green while the tyres are fresh out of a stop.
