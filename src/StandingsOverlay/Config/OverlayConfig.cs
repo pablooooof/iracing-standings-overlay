@@ -51,6 +51,10 @@ public sealed class OverlayConfig
     // Data refresh rate (snapshots per second, 1-10). Rendering only happens on change.
     public int UpdateHz { get; set; } = 4;
 
+    // One GET to GitHub's latest-release endpoint at launch (UpdateCheck); tray + About link
+    // when a newer version exists. Never polls, never downloads.
+    public bool CheckForUpdates { get; set; } = true;
+
     // Multiclass: how many drivers of each other class to show at the top of their group.
     public int OtherClassesDriversAtTop { get; set; } = 0;
 

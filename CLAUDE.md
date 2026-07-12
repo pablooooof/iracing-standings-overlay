@@ -33,6 +33,14 @@ Unit tests exist for the gap model and traffic detector (`dotnet test src/Standi
 
 Note for fresh shells on this machine: git/dotnet/gh need `$env:Path = [System.Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [System.Environment]::GetEnvironmentVariable('Path','User')` first.
 
+## Git workflow & releases
+
+- **Always commit completed work** — small, frequent commits directly on `master` (the only long-lived branch), each verified with a quick `--demo` run first. Push `master` to origin when a change set is done; pushing master never publishes anything.
+- **Versions come from git tags via MinVer** (`MinVerTagPrefix=v`: tag `v0.4.0` → version 0.4.0; untagged commits build as the next patch `-alpha`). Never hand-edit a version into the csproj. Display/log version is `UpdateCheck.CurrentDisplay` (informational version — MinVer leaves `AssemblyVersion` at major-only, so `GetName().Version` is wrong for display).
+- **Releasing is user-gated: NEVER create or push a `v*` tag without asking first.** When a meaningful set of user-visible changes has accumulated, propose a release with a suggested version (0.x semver: minor = features, patch = fixes only) and wait for the go-ahead.
+- To release after the go-ahead: `git tag vX.Y.Z; git push origin vX.Y.Z`. That triggers `.github/workflows/release.yml` (tests → self-contained single-file win-x64 publish → zip → GitHub Release with auto-generated notes). Watch it with `gh run watch`, confirm with `gh release view vX.Y.Z`.
+- The app itself checks GitHub's latest release once at launch (`UpdateCheck.cs`, toggle `CheckForUpdates`): tray menu item + About-page link when newer, notify-only — it never downloads. The check logs `update check:` to `overlay.log` either way, which is also how you verify it.
+
 ## Architecture
 
 Data flows one way: **source → snapshot → render**.

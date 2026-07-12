@@ -61,6 +61,21 @@ public sealed class TrayIcon : IDisposable
         _icon.DoubleClick += (_, _) => SettingsRequested?.Invoke();
     }
 
+    /// <summary>Insert an "update available" entry at the top of the menu. Called at most once
+    /// per run (UI thread), only when UpdateCheck found a newer release.</summary>
+    public void ShowUpdateAvailable(string tag, string url)
+    {
+        var menu = _icon.ContextMenuStrip!;
+        var item = new ToolStripMenuItem($"Update available — {tag}")
+        {
+            Font = new Font(menu.Font, System.Drawing.FontStyle.Bold),
+            ForeColor = Color.FromArgb(0, 200, 165),   // the app accent, readable on the menu
+        };
+        item.Click += (_, _) => UpdateCheck.OpenReleasePage(url);
+        menu.Items.Insert(0, item);
+        menu.Items.Insert(1, new ToolStripSeparator());
+    }
+
     /// <summary>Reflect edit mode toggled from elsewhere (the settings window) without re-firing.</summary>
     public void ReflectEditMode(bool on)
     {

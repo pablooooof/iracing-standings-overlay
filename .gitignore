@@ -26,6 +26,9 @@ desktop.ini
 
 # Local-only
 *.log
-.claude/settings.local.json
+publish/
 
+# Claude working files (CLAUDE.md itself is tracked project instructions)
 .claude/
+CLAUDE.local.md
+.claude-*

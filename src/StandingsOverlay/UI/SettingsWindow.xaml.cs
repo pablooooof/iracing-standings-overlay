@@ -142,6 +142,8 @@ public partial class SettingsWindow : Window
             AutoStart.IsEnabled, AutoStart.Set));
 
         var c = _cfg.Current;
+        PageBody.Children.Add(Toggle("Check for updates at launch", "One request to GitHub for the latest release; a tray link appears if newer. Never downloads anything.",
+            () => c.CheckForUpdates, v => c.CheckForUpdates = v));
         PageBody.Children.Add(Slider("Refresh rate", "Snapshots per second. Rendering still only happens on change.",
             1, 10, 1, () => c.UpdateHz, v => c.UpdateHz = (int)v, v => $"{v:0} Hz"));
 
@@ -363,7 +365,7 @@ public partial class SettingsWindow : Window
 
     private void BuildAbout()
     {
-        var ver = typeof(App).Assembly.GetName().Version?.ToString() ?? "0.1.0";
+        var ver = UpdateCheck.CurrentDisplay;
         void P(string text, Brush brush, double size = 13, double top = 2, FontWeight? weight = null) =>
             PageBody.Children.Add(new TextBlock
             {
@@ -373,6 +375,18 @@ public partial class SettingsWindow : Window
 
         P("Standings Overlay", Text, 18, 4, FontWeights.SemiBold);
         P($"Version {ver}", Dim);
+        if (UpdateCheck.Latest is { } up)
+        {
+            var link = new TextBlock
+            {
+                Text = $"Update available: {up.Tag} — open the release page",
+                Foreground = Accent, FontSize = 12.5, Margin = new Thickness(0, 6, 0, 0),
+                Cursor = System.Windows.Input.Cursors.Hand,
+                TextDecorations = TextDecorations.Underline,
+            };
+            link.MouseLeftButtonUp += (_, _) => UpdateCheck.OpenReleasePage(up.Url);
+            PageBody.Children.Add(link);
+        }
         P("A lightweight, standings-only overlay for iRacing. Its headline feature is the per-lap "
           + "gap delta over a configurable number of laps. Built to never affect sim frame times: "
           + "it repaints only on change and never busy-polls.", Dim, 12.5, 14);

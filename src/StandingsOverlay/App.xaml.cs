@@ -37,7 +37,7 @@ public partial class App : Application
             Log.Error("task", args.Exception);
             args.SetObserved();
         };
-        Log.Write($"started (v{typeof(App).Assembly.GetName().Version}) args: {string.Join(' ', e.Args)}");
+        Log.Write($"started (v{UpdateCheck.CurrentDisplay}) args: {string.Join(' ', e.Args)}");
 
         var configPath = Path.Combine(AppContext.BaseDirectory, "config.json");
         _configService = new ConfigService(configPath);
@@ -93,6 +93,12 @@ public partial class App : Application
         _relativeWindow.Show();
         _fuelWindow.Show();
         _source.Start();
+
+        // Update check: notify + link only, the user does the downloading.
+        // One request per launch, silent on any failure.
+        if (_configService.Current.CheckForUpdates)
+            UpdateCheck.Run((tag, url) =>
+                Dispatcher.BeginInvoke(() => _tray?.ShowUpdateAvailable(tag, url)));
 
         _tray.EditModeToggled += on => Dispatcher.BeginInvoke(() => SetEditMode(on));
         _tray.SettingsRequested += () => Dispatcher.BeginInvoke(ShowSettings);

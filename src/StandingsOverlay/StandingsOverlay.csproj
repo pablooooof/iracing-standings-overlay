@@ -10,7 +10,8 @@
     <RootNamespace>StandingsOverlay</RootNamespace>
     <AssemblyName>StandingsOverlay</AssemblyName>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <Version>0.1.0</Version>
+    <!-- Version comes from git tags via MinVer (tag v0.4.0 → version 0.4.0). Never hand-edit. -->
+    <MinVerTagPrefix>v</MinVerTagPrefix>
   </PropertyGroup>
 
   <ItemGroup>
@@ -23,6 +24,7 @@
   <ItemGroup>
     <PackageReference Include="irsdkSharp" Version="0.9.0" />
     <PackageReference Include="irsdkSharp.Serialization" Version="0.9.0" />
+    <PackageReference Include="MinVer" Version="6.0.0" PrivateAssets="All" />
   </ItemGroup>
 
 </Project>
