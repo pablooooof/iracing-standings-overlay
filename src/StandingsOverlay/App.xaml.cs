@@ -14,6 +14,7 @@ public partial class App : Application
     private TrafficWindow? _trafficWindow;
     private RelativeWindow? _relativeWindow;
     private FuelWindow? _fuelWindow;
+    private LapLabWindow? _lapLabWindow;
     private TrafficAudio? _trafficAudio;
     private TrayIcon? _tray;
     private SettingsWindow? _settings;
@@ -42,7 +43,7 @@ public partial class App : Application
         var configPath = Path.Combine(AppContext.BaseDirectory, "config.json");
         _configService = new ConfigService(configPath);
 
-        // --demo [race|qual|practice|timed]
+        // --demo [race|qual|practice|timed|rain|lab]
         int demoIdx = Array.FindIndex(e.Args, a => a.Equals("--demo", StringComparison.OrdinalIgnoreCase));
         bool demo = demoIdx >= 0;
         string demoArg = demoIdx >= 0 && demoIdx + 1 < e.Args.Length
@@ -51,6 +52,7 @@ public partial class App : Application
         {
             "qual" or "quali" or "qualify" => "Lone Qualify",
             "practice" => "Practice",
+            "lab" or "test" or "testing" => "Offline Testing",
             _ => "Race",
         };
         bool demoTimed = demoArg is "timed" or "time";
@@ -64,6 +66,7 @@ public partial class App : Application
         _trafficWindow = new TrafficWindow(_configService);
         _relativeWindow = new RelativeWindow(_configService);
         _fuelWindow = new FuelWindow(_configService);
+        _lapLabWindow = new LapLabWindow(_configService);
         _trafficAudio = new TrafficAudio();
         _tray = new TrayIcon(demo);
 
@@ -81,6 +84,7 @@ public partial class App : Application
         };
         _source.RelativeReady += relative => _relativeWindow.OnRelative(relative);
         _source.FuelReady += fuel => _fuelWindow.OnFuel(fuel);
+        _source.LapLabReady += lab => _lapLabWindow.OnLapLab(lab);
 
         // In the car vs spectating (team stints, garage): swap the whole config profile so
         // positions, row counts and columns can differ. The source debounces IsOnTrack.
@@ -92,6 +96,7 @@ public partial class App : Application
         _trafficWindow.Show();
         _relativeWindow.Show();
         _fuelWindow.Show();
+        _lapLabWindow.Show();
         _source.Start();
 
         // Update check: notify + link only, the user does the downloading.
@@ -119,6 +124,7 @@ public partial class App : Application
         _trafficWindow!.EditMode = on;
         _relativeWindow!.EditMode = on;
         _fuelWindow!.EditMode = on;
+        _lapLabWindow!.EditMode = on;
         _tray?.ReflectEditMode(on);
         _settings?.ReflectEditMode(on);
     }

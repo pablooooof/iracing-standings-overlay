@@ -98,6 +98,9 @@ public sealed class OverlayConfig
     // Fuel calculator + endurance strategy bars. Spec: docs/FUEL-STRATEGY.md.
     public FuelConfig Fuel { get; set; } = new();
 
+    // Lap Lab: practice lap table, sectors vs a reference lap. Spec: docs/LAP-LAB.md.
+    public LapLabConfig LapLab { get; set; } = new();
+
     public SessionColumns ColumnsFor(Data.SessionKind kind) => kind switch
     {
         Data.SessionKind.Race => Race,
@@ -226,6 +229,21 @@ public sealed class FuelConfig
     // Widget position (DIPs), draggable in edit mode like every widget.
     public double X { get; set; } = 810;
     public double Y { get; set; } = 130;
+}
+
+/// <summary>Lap Lab: the practice/testing lap table — every lap a row, official sectors as
+/// columns, gaps vs a reference lap. Never shows in races by design (Data/LapLabTracker).</summary>
+public sealed class LapLabConfig
+{
+    public bool Enabled { get; set; } = true;
+    public int Decimals { get; set; } = 2;        // sector/lap delta decimals (1-3)
+    public int MaxRows { get; set; } = 8;         // laps shown, newest on top
+    public string Reference { get; set; } = "SessionBest";   // SessionBest | SessionOptimal
+    public double Scale { get; set; } = 1.0;      // widget size multiplier (LayoutTransform)
+
+    // Widget position (DIPs), draggable in edit mode like every widget.
+    public double X { get; set; } = 7;
+    public double Y { get; set; } = 330;
 }
 
 /// <summary>Column toggles for one session type. Not every column is meaningful everywhere —

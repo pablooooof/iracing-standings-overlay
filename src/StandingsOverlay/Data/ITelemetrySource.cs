@@ -14,5 +14,8 @@ public interface ITelemetrySource : IDisposable
     /// <summary>Raised alongside SnapshotReady with the fuel calculator's view of the same tick.</summary>
     event Action<FuelSnapshot>? FuelReady;
 
+    /// <summary>Raised alongside SnapshotReady with Lap Lab's view of the same tick.</summary>
+    event Action<LapLabSnapshot>? LapLabReady;
+
     void Start();
 }

@@ -54,7 +54,7 @@ public partial class SettingsWindow : Window
         SourceInitialized += (_, _) => Win32.UseDarkTitleBar(this);
         Closed += (_, _) => { _cfg.Changed -= OnProfileMaybeSwapped; Flush(); };   // never drop a pending edit
 
-        foreach (var name in new[] { "General", "Standings", "Relative", "Traffic", "Fuel", "About" })
+        foreach (var name in new[] { "General", "Standings", "Relative", "Traffic", "Fuel", "Lap Lab", "About" })
             Nav.Items.Add(name);
         Nav.SelectedIndex = 0;
     }
@@ -116,6 +116,7 @@ public partial class SettingsWindow : Window
             case "Relative": SectionHeader("Relative box", "Cars physically around you, in track order."); BuildRelative(); break;
             case "Traffic": SectionHeader("Traffic alerter", "Warnings when a faster class is closing, or you're being lapped."); BuildTraffic(); break;
             case "Fuel": SectionHeader("Fuel & strategy", "Live fuel numbers and endurance stint planning."); BuildFuel(); break;
+            case "Lap Lab": SectionHeader("Lap Lab", "Practice lap table: your sectors against a reference lap. Testing, practice and qualifying only."); BuildLapLab(); break;
             case "About": SectionHeader("About", "Standings Overlay."); BuildAbout(); break;
         }
     }
@@ -431,6 +432,23 @@ public partial class SettingsWindow : Window
         Grid.SetColumn((UIElement)control, 1);
         grid.Children.Add(control);
         return grid;
+    }
+
+    private void BuildLapLab()
+    {
+        var l = _cfg.Current.LapLab;
+        var body = Master("Show lap lab", "Every lap a row, official sectors as columns, gaps vs a reference. Hidden in races.",
+            () => l.Enabled, v => l.Enabled = v);
+
+        body.Children.Add(Slider("Size", "Scales the whole lap table.", 0.6, 2.0, 0.05,
+            () => l.Scale, v => l.Scale = v, v => $"{v * 100:0}%"));
+        body.Children.Add(Slider("Laps shown", null, 3, 15, 1,
+            () => l.MaxRows, v => l.MaxRows = (int)v, v => $"{v:0}"));
+        body.Children.Add(Slider("Gap decimals", null, 1, 3, 1,
+            () => l.Decimals, v => l.Decimals = (int)v, v => $"{v:0}"));
+        body.Children.Add(Segmented("Reference", "Your fastest full lap, or your best sectors combined.",
+            new[] { ("Session best", "SessionBest"), ("Session optimal", "SessionOptimal") },
+            () => l.Reference, v => Apply(() => l.Reference = v)));
     }
 
     private FrameworkElement Toggle(string label, string? hint, Func<bool> get, Action<bool> set) =>

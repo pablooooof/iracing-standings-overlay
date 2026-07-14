@@ -36,6 +36,8 @@ public sealed class DemoSource : ITelemetrySource
     private readonly StrategyPlanner _planner = new();
     private readonly WeatherTracker _weather = new();
     private readonly DriverSwapTracker _driverSwap = new();
+    private readonly SectorClock _sectorClock = new();
+    private readonly LapLabTracker _lapLab = new();
     private readonly Roster _roster = new();
     private bool _swapDone;
     private double _playerFuel = PlayerTank;
@@ -60,11 +62,19 @@ public sealed class DemoSource : ITelemetrySource
     // "--demo rain": a scripted dry→wet arc so the weather trend arrows and the dry→wet flash are
     // exercisable offline (rain starts ramping ~25 s in, track goes damp→wet over the next minute).
     private readonly bool _rain;
+    // "--demo lab": offline-testing session with scripted player sector variance (S2 is the
+    // erratic corner complex), an off-track every 8th lap, and one active reset at ~112 s —
+    // everything Lap Lab's table needs to show its colors without iRacing.
+    private readonly bool _lab;
+    private double _prevPlayerProgress;
+    private double _prevElapsed;
+    private bool _labResetDone;
 
     public event Action<StandingsSnapshot>? SnapshotReady;
     public event Action<TrafficSnapshot>? TrafficReady;
     public event Action<RelativeSnapshot>? RelativeReady;
     public event Action<FuelSnapshot>? FuelReady;
+    public event Action<LapLabSnapshot>? LapLabReady;
 
     public DemoSource(Func<OverlayConfig> cfg, string sessionType = "Race", bool timed = false, bool rain = false)
     {
@@ -72,6 +82,10 @@ public sealed class DemoSource : ITelemetrySource
         _isRace = sessionType.Contains("Race", StringComparison.OrdinalIgnoreCase);
         _timed = timed && _isRace;
         _rain = rain;
+        _lab = sessionType.Contains("Testing", StringComparison.OrdinalIgnoreCase);
+        // Three equal-distance sectors; with the non-uniform TrackPct speed profile the middle
+        // sector is the slow hairpin third, so sector TIMES come out realistically uneven.
+        _sectorClock.SetBoundaries([0f, 1f / 3f, 2f / 3f]);
 
         string[] names =
         [
@@ -231,6 +245,8 @@ public sealed class DemoSource : ITelemetrySource
             // fuel-save (steady but slow) so the pace tags have something to find.
             double jitter = 1.0 + 0.02 * Math.Sin(_elapsed / 7.0 + i * 1.7);
             if (i is 14 or 17) jitter = 1.022; // fuel saving: consistent +2.2%
+            if (_lab && i == PlayerIdx)
+                jitter = 1.0 + LabLoss(_tick.Lap[i], _progress[i] - Math.Floor(_progress[i]));
             _progress[i] += dt / (_pace[i] * jitter);
             if (i == PlayerIdx)
                 _playerFuel = Math.Max(0, _playerFuel - PlayerBurnPerLap * dt / (_pace[i] * jitter));
@@ -306,6 +322,43 @@ public sealed class DemoSource : ITelemetrySource
         _tick.PlayerFuelLevel = (float)_playerFuel;
         _tick.PlayerInPitStall = _tick.OnPitRoad[PlayerIdx];
 
+        // Lap Lab: one scripted active reset — the player teleports a quarter lap back exactly
+        // like iRacing's AR Run button, so the abandon-and-rearm path is exercisable offline.
+        if (_lab && !_labResetDone && _elapsed > 112 &&
+            _progress[PlayerIdx] - Math.Floor(_progress[PlayerIdx]) > 0.45)
+        {
+            _labResetDone = true;
+            _progress[PlayerIdx] -= 0.25;
+        }
+
+        // Feed the player's motion to the sector clock in sub-steps: the demo ticks at the
+        // snapshot rate (4 Hz), far below the 60 Hz the live clock samples at, and progress is
+        // linear in time within a step — so interpolated sub-samples recover most of the
+        // crossing accuracy (TrackPct is evaluated per sub-sample, not linearized).
+        {
+            double playerTf = _progress[PlayerIdx] - Math.Floor(_progress[PlayerIdx]);
+            int playerSurf = _lab && _tick.Lap[PlayerIdx] % 8 == 4 && playerTf is > 0.45 and < 0.55 ? 0 : 3;
+            double prog = _progress[PlayerIdx];
+            if (_prevElapsed > 0 && prog > _prevPlayerProgress && prog - _prevPlayerProgress < 0.5)
+            {
+                const int Sub = 8;
+                for (int k = 1; k <= Sub; k++)
+                {
+                    double p = _prevPlayerProgress + (prog - _prevPlayerProgress) * k / Sub;
+                    double tm = _prevElapsed + (_elapsed - _prevElapsed) * (double)k / Sub;
+                    _sectorClock.Sample(TrackPct((float)(p - Math.Floor(p))), tm,
+                                        playerSurf, _tick.OnPitRoad[PlayerIdx]);
+                }
+            }
+            else if (_prevElapsed > 0)   // teleport (scripted AR): one raw sample, no interpolation
+            {
+                _sectorClock.Sample(TrackPct((float)playerTf), _elapsed,
+                                    playerSurf, _tick.OnPitRoad[PlayerIdx]);
+            }
+            _prevPlayerProgress = prog;
+            _prevElapsed = _elapsed;
+        }
+
         var cfg = _cfg();
         // ~35s in, one team swaps drivers (roster entry gets a new name) so the SWAP tag is
         // exercisable offline.
@@ -329,6 +382,17 @@ public sealed class DemoSource : ITelemetrySource
         TrafficReady?.Invoke(_traffic.Update(_tick, _roster, _history, _stints, cfg));
         RelativeReady?.Invoke(RelativeBuilder.Build(_tick, _roster, _stints, _driverSwap, cfg));
         FuelReady?.Invoke(_planner.Build(_tick, _fuel, cfg));
+        LapLabReady?.Invoke(_lapLab.Build(_tick, _sectorClock, cfg));
+    }
+
+    /// <summary>Scripted lab-mode player pace: a repeating per-lap loss factor over the middle
+    /// third (S2, the hairpin complex — deliberately the weak, erratic sector) plus light drift
+    /// elsewhere. Index 4 is the big excursion that pairs with the scripted off-track.</summary>
+    private static double LabLoss(int lap, double tf)
+    {
+        ReadOnlySpan<double> s2 = [0.030, 0.012, 0.045, 0.020, 0.140, 0.006, 0.028, 0.016];
+        double mid = tf is > 0.31 and < 0.69 ? s2[lap % s2.Length] : 0;
+        return mid + 0.004 * Math.Sin(lap * 2.1 + tf * 6.283);
     }
 
     public void Dispose() => _timer?.Dispose();

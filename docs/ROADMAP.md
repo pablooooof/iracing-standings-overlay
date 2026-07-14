@@ -81,6 +81,21 @@ strategy phase.
 - [x] ~~Relative overlay~~ (v0.5 — `RelativeBuilder`/`RelativeWindow`, shared `RelativeGap`
   helper with the traffic alerter; spec in `docs/RELATIVE.md`)
 
+## Lap Lab (practice lap table, phased — design draft 2026-07-12)
+
+Offline-testing/practice tool: every lap a row, official sectors as columns, gaps vs a
+reference lap; corner-level "biggest losses" panel later. Spec: `docs/LAP-LAB.md`.
+
+- [x] **Phase 1 (2026-07-13)** — `SectorClock` (60 Hz player sampling, ±2 ms splits, active-reset/
+  tow disarm), `LapLabTracker` (session best + optimal refs, clean-lap rules), `LapLabWindow`,
+  `LapLab` config + settings section, `--demo lab`, unit tests.
+- [ ] **Phase 2** — `.ibt` reference import (embedded YAML → conditions BLOCK/WARN/INFO chips) +
+  auto-saved previous-session best per car+track.
+- [ ] **Phase 3** — corner segmentation from the reference speed trace (minima = apexes, merge
+  <1.5%) + "biggest losses" panel with erratic/repeatable spread badges.
+- [ ] **Phase 4** — active-reset run mode: rows = attempts between resets, span timing, delta
+  vs best run. (.blap/.olap parsing cut: proprietary format; G61 API pull = v2 candidate.)
+
 ## Live-iteration backlog (2026-07)
 
 Ideas and requests captured during rapid iteration so nothing is lost. Roughly ordered.

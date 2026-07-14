@@ -21,6 +21,8 @@ public sealed class IRacingSource : ITelemetrySource
     private readonly StrategyPlanner _planner = new();
     private readonly WeatherTracker _weather = new();
     private readonly DriverSwapTracker _driverSwap = new();
+    private readonly SectorClock _sectorClock = new();
+    private readonly LapLabTracker _lapLab = new();
     private readonly Roster _roster = new();
 
     private int _frameCount;
@@ -39,6 +41,7 @@ public sealed class IRacingSource : ITelemetrySource
     public event Action<TrafficSnapshot>? TrafficReady;
     public event Action<RelativeSnapshot>? RelativeReady;
     public event Action<FuelSnapshot>? FuelReady;
+    public event Action<LapLabSnapshot>? LapLabReady;
 
     public IRacingSource(Func<OverlayConfig> cfg) => _cfg = cfg;
 
@@ -61,11 +64,14 @@ public sealed class IRacingSource : ITelemetrySource
             _planner.Reset();
             _weather.Reset();
             _driverSwap.Reset();
+            _sectorClock.Reset();
+            _lapLab.Reset();
             lock (_roster) _roster.Drivers.Clear();
             SnapshotReady?.Invoke(StandingsSnapshot.Disconnected);
             TrafficReady?.Invoke(TrafficSnapshot.Empty);
             RelativeReady?.Invoke(RelativeSnapshot.Empty);
             FuelReady?.Invoke(FuelSnapshot.Empty);
+            LapLabReady?.Invoke(LapLabSnapshot.Empty);
         };
         SnapshotReady?.Invoke(StandingsSnapshot.Disconnected);
     }
@@ -75,6 +81,19 @@ public sealed class IRacingSource : ITelemetrySource
         if (!_running) return;
 
         var cfg = _cfg();
+
+        // Lap Lab's sector clock samples EVERY 60 Hz frame (player scalars only — three cheap
+        // reads): crossing interpolation at the snapshot rate would be ±125 ms, at 60 Hz ±2 ms.
+        // Races are gated out here so the hot path costs nothing where Lap Lab never shows.
+        if (cfg.LapLab.Enabled && _sectorClock.HasBoundaries && !_lapLabRace &&
+            _sdk.GetData("LapDistPct") is float labPct && _sdk.GetData("SessionTime") is double labTime)
+        {
+            int surf = _sdk.GetData("PlayerTrackSurface") is int sf ? sf : 3;
+            bool pit = _sdk.GetData("OnPitRoad") is bool pr && pr;
+            try { _sectorClock.Sample(labPct, labTime, surf, pit); }
+            catch { /* never let lap timing break the tick */ }
+        }
+
         int stride = Math.Max(1, 60 / Math.Clamp(cfg.UpdateHz, 1, 10));
         if (++_frameCount % stride != 0) return;
 
@@ -111,6 +130,7 @@ public sealed class IRacingSource : ITelemetrySource
             TrafficReady?.Invoke(_traffic.Update(t, _roster, _history, _stints, cfg));
             RelativeReady?.Invoke(RelativeBuilder.Build(t, _roster, _stints, _driverSwap, cfg));
             FuelReady?.Invoke(_planner.Build(t, _fuel, cfg));
+            LapLabReady?.Invoke(_lapLab.Build(t, _sectorClock, cfg));
             _emitted = true;
 
             if (_stateRestored && t.SessionTime - _lastStateSaveAt >= 30)
@@ -182,11 +202,18 @@ public sealed class IRacingSource : ITelemetrySource
         _lastSessionInfoUpdate = header.SessionInfoUpdate;
         _subSessionId = model.WeekendInfo?.SubSessionID.ToString() ?? "";
 
+        // Lap Lab sector boundaries (SplitTimeInfo isn't in irsdkSharp's model — parse raw).
+        var bounds = SectorClock.ParseBoundaries(yaml);
+        if (bounds.Length >= 2 && _sectorClock.SetBoundaries(bounds))
+            Log.Write($"lap lab: {_sectorClock.SectorCount} sectors " +
+                      $"[{string.Join(" ", bounds.Select(b => b.ToString("0.###")))}]");
+
         int sessionNum = _sdk.GetData("SessionNum") is int sn ? sn : -1;
         var session = model.SessionInfo?.Sessions?.FirstOrDefault(x => x.SessionNum == sessionNum)
                       ?? model.SessionInfo?.Sessions?.LastOrDefault();
         _currentSessionType = session?.SessionType ?? "Race";
         _sessionLapsTotal = int.TryParse(session?.SessionLaps, out var sl) && sl > 0 ? sl : -1;
+        _lapLabRace = StandingsSnapshot.KindOf(_currentSessionType) == SessionKind.Race;
 
         // Usable tank: BoP can cap the physical tank, so the max-pct multiplier is not optional.
         var di = model.DriverInfo;
@@ -208,6 +235,8 @@ public sealed class IRacingSource : ITelemetrySource
             _planner.Reset();
             _weather.Reset();
             _driverSwap.Reset();
+            _sectorClock.Reset();
+            _lapLab.Reset();
         }
 
         lock (_roster)
@@ -261,6 +290,7 @@ public sealed class IRacingSource : ITelemetrySource
     private string _lastRosterSummary = "";
 
     private string _currentSessionType = "Race";
+    private volatile bool _lapLabRace = true;   // read on the 60 Hz path, written on YAML refresh
     private int _sessionLapsTotal = -1;
     private float _tankCapacity = -1;
     private bool _emitted;
