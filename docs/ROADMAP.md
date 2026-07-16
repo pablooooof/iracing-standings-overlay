@@ -93,8 +93,10 @@ reference lap; corner-level "biggest losses" panel later. Spec: `docs/LAP-LAB.md
   conditions BLOCK/WARN/INFO chips via `RefGuard`) + auto-saved previous-session best per
   car+track (`LapRefStore`, only-improves); refs stored as time/speed-at-pct grids
   (`LapRef.SectorsFor` derives sectors at the live boundaries).
-- [ ] **Phase 3** — corner segmentation from the reference speed trace (minima = apexes, merge
-  <1.5%) + "biggest losses" panel with erratic/repeatable spread badges.
+- [x] **Phase 3a (2026-07-16)** — turn-by-turn view: `CornerMap` segments the reference speed
+  trace (prominence-gated apexes, merge <1.5%, boundaries at inter-apex maxima); `LapLab.View`
+  toggle Sectors ↔ Turns, splits from the recorded time grids, sector fallback when no trace.
+- [ ] **Phase 3b** — "biggest losses" panel with erratic/repeatable spread badges.
 - [ ] **Phase 4** — active-reset run mode: rows = attempts between resets, span timing, delta
   vs best run. (.blap/.olap parsing cut: proprietary format; G61 API pull = v2 candidate.)
 

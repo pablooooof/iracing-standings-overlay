@@ -66,6 +66,9 @@ public sealed class LapLabTracker
         _optimal = [];
         _loggedResets = 0;
         _loggedTows = 0;
+        _turnBounds = [];
+        _turnSrcRef = null;
+        _turnSrcLap = -1;
     }
 
     public LapLabSnapshot Build(RawTick t, SectorClock clock, Roster roster, LapRefStore store, OverlayConfig cfg)
@@ -113,13 +116,13 @@ public sealed class LapLabTracker
             StandingsSnapshot.KindOf(t.SessionType) == SessionKind.Race)
             return LapLabSnapshot.Empty;
 
-        int n = clock.SectorCount;
         int dec = Math.Clamp(cfg.LapLab.Decimals, 1, 3);
         double eps = 0.5 * Math.Pow(10, -dec);
 
         // Reference: File / PreviousBest are external LapRefs, scored at TODAY's boundaries
         // (SectorsFor) and run through the conditions guard; anything unavailable or blocked
         // falls back to the session best so the table never goes delta-less mid-session.
+        // Resolved BEFORE the view: turn segmentation prefers the reference's speed trace.
         double[]? refSecs = null;
         double refLap = 0;
         string refName = "";
@@ -152,44 +155,59 @@ public sealed class LapLabTracker
             if (sev == 2) { warnSev = 2; warnChip = "ref blocked: " + chip; ext = null; }
             else if (sev >= 0) { warnSev = sev; warnChip = chip; }
         }
+        // View: official sectors, or turn zones segmented from the reference's speed trace
+        // (the session best's own trace when the ref carries none). No usable trace → sectors.
+        bool turnView = cfg.LapLab.View.Equals("Turns", StringComparison.OrdinalIgnoreCase);
+        float[] bounds = clock.Bounds;
+        if (turnView)
+        {
+            var tb = TurnBounds(ext);
+            if (tb.Length >= CornerMap.MinZones) bounds = tb;
+            else turnView = false;
+        }
+        int n = bounds.Length;
+
         if (ext is not null)
         {
-            refSecs = ext.SectorsFor(clock.Bounds);
+            refSecs = ext.SectorsFor(bounds);
             refLap = ext.LapTime;
             refName = ext.Source;
         }
         else
         {
-            // The optimal composite needs every sector seen clean at least once; until then
+            // The optimal composite needs every split seen clean at least once; until then
             // (and always for "SessionBest") the fastest clean lap is the reference.
             bool wantOptimal = mode.Equals("SessionOptimal", StringComparison.OrdinalIgnoreCase);
-            if (wantOptimal && _optimal.Length == n && !_optimal.Any(double.IsNaN))
+            if (wantOptimal)
             {
-                refSecs = _optimal;
-                refName = "optimal";
+                refSecs = turnView ? OptimalFor(bounds)
+                    : _optimal.Length == n && !_optimal.Any(double.IsNaN) ? _optimal : null;
+                if (refSecs is not null) refName = "optimal";
             }
-            else if (_bestIdx >= 0)
+            if (refSecs is null && _bestIdx >= 0)
             {
-                refSecs = _laps[_bestIdx].Sectors;
+                var b = _laps[_bestIdx];
+                refSecs = turnView ? LapRef.SplitsOf(b.TimeAtPct, b.LapTime, bounds) : b.Sectors;
                 refName = "best";
             }
             refLap = refSecs?.Sum() ?? 0;
         }
 
         var headers = new string[n];
-        for (int i = 0; i < n; i++) headers[i] = $"S{i + 1}";
+        for (int i = 0; i < n; i++) headers[i] = turnView ? $"T{i + 1}" : $"S{i + 1}";
 
         var rows = new List<LapLabRow>();
         int maxRows = Math.Clamp(cfg.LapLab.MaxRows, 1, 30);
         for (int li = _laps.Count - 1; li >= 0 && rows.Count < maxRows; li--)
         {
             var lap = _laps[li];
+            double[] splits = turnView ? LapRef.SplitsOf(lap.TimeAtPct, lap.LapTime, bounds) : lap.Sectors;
             var cells = new LapLabCell[n];
             for (int i = 0; i < n; i++)
             {
-                double s = lap.Sectors[i];
+                double s = splits[i];
                 if (double.IsNaN(s)) { cells[i] = new LapLabCell("·", 4); continue; }
-                bool dirty = lap.SectorDirty[i];
+                bool dirty = turnView ? TurnDirty(lap, bounds, i, clock.Bounds) : lap.SectorDirty[i];
                 if (refSecs is null)
                 {
                     cells[i] = new LapLabCell(FmtTime(s, dec), dirty ? 3 : 0);
@@ -238,6 +256,62 @@ public sealed class LapLabTracker
             ? "no reference yet"
             : $"ref {refName} {FmtTime(refLap, Math.Max(dec, 2))}";
         return new LapLabSnapshot(true, refText, headers, rows, warnChip, warnChip.Length > 0 ? warnSev : -1);
+    }
+
+    private float[] _turnBounds = [];
+    private LapRef? _turnSrcRef;
+    private int _turnSrcLap = -1;
+
+    /// <summary>Turn-zone boundaries from the active reference's speed trace, falling back to
+    /// the session best's own. Cached per source lap, so zones stay stable across the session
+    /// and segmentation only reruns when the source actually changes.</summary>
+    private float[] TurnBounds(LapRef? ext)
+    {
+        float[] speed = [];
+        LapRef? srcRef = null;
+        int srcLap = -1;
+        if (ext is { SpeedAtPct.Length: > 0 }) { speed = ext.SpeedAtPct; srcRef = ext; }
+        else if (_bestIdx >= 0 && _laps[_bestIdx].SpeedAtPct.Length > 0)
+        { speed = _laps[_bestIdx].SpeedAtPct; srcLap = _bestIdx; }
+        if (speed.Length == 0) return [];
+
+        if (ReferenceEquals(srcRef, _turnSrcRef) && srcLap == _turnSrcLap) return _turnBounds;
+        _turnSrcRef = srcRef;
+        _turnSrcLap = srcLap;
+        _turnBounds = CornerMap.FromSpeed(speed);
+        Log.Write(_turnBounds.Length >= CornerMap.MinZones
+            ? $"lap lab: {_turnBounds.Length} turn zones [{string.Join(" ", _turnBounds.Select(b => b.ToString("0.###")))}]"
+            : "lap lab: turn detection found no usable zones — falling back to sectors");
+        return _turnBounds;
+    }
+
+    /// <summary>Per-zone best over the session's clean laps — the turn-view optimal.</summary>
+    private double[]? OptimalFor(float[] bounds)
+    {
+        double[]? opt = null;
+        foreach (var lap in _laps)
+        {
+            if (lap.Dirt != LapDirt.Clean || lap.TimeAtPct.Length == 0) continue;
+            var s = LapRef.SplitsOf(lap.TimeAtPct, lap.LapTime, bounds);
+            if (opt is null) { opt = s; continue; }
+            for (int i = 0; i < opt.Length; i++)
+                if (s[i] < opt[i]) opt[i] = s[i];
+        }
+        return opt;
+    }
+
+    /// <summary>Off-track/pit attribution is recorded per official sector — a turn zone is
+    /// dirty when its span overlaps any dirty sector (conservative amber).</summary>
+    private static bool TurnDirty(SectorLap lap, float[] bounds, int i, float[] secBounds)
+    {
+        float from = bounds[i], to = i < bounds.Length - 1 ? bounds[i + 1] : 1f;
+        for (int s = 0; s < secBounds.Length && s < lap.SectorDirty.Length; s++)
+        {
+            if (!lap.SectorDirty[s]) continue;
+            float sFrom = secBounds[s], sTo = s < secBounds.Length - 1 ? secBounds[s + 1] : 1f;
+            if (from < sTo && to > sFrom) return true;
+        }
+        return false;
     }
 
     /// <summary>Fold lap <paramref name="li"/> into best/optimal, and log it — the log line is

@@ -361,7 +361,11 @@ public sealed class DemoSource : ITelemetrySource
                     double dtSub = (_elapsed - _prevElapsed) / Sub;
                     float dp = pct - prevPct2;
                     if (dp < -0.5f) dp += 1;
-                    float speed = dtSub > 0 ? (float)(dp * TrackLenM / dtSub) : float.NaN;
+                    // Lab mode feeds a synthetic corner PROFILE instead of the motion
+                    // derivative — the demo track's sine curve has only one wide dip, which
+                    // the turn detector rightly refuses to call a corner map.
+                    float speed = _lab ? SynthSpeed(pct)
+                        : dtSub > 0 ? (float)(dp * TrackLenM / dtSub) : float.NaN;
                     _sectorClock.Sample(pct, tm, playerSurf, _tick.OnPitRoad[PlayerIdx], speed);
                     prevPct2 = pct;
                 }
@@ -399,6 +403,24 @@ public sealed class DemoSource : ITelemetrySource
         RelativeReady?.Invoke(RelativeBuilder.Build(_tick, _roster, _stints, _driverSwap, cfg));
         FuelReady?.Invoke(_planner.Build(_tick, _fuel, cfg));
         LapLabReady?.Invoke(_lapLab.Build(_tick, _sectorClock, _roster, _refStore, cfg));
+    }
+
+    /// <summary>Synthetic lab-mode speed trace: eight Gaussian braking zones on a 62 m/s
+    /// baseline, two of them close enough (0.475/0.487) to exercise apex merging — the turn
+    /// detector should report SEVEN zones. Only feeds the corner detector; the demo's motion
+    /// stays on TrackPct, and the slight inconsistency is invisible to everything else.</summary>
+    internal static float SynthSpeed(float pct)
+    {
+        ReadOnlySpan<float> apex = [0.06f, 0.19f, 0.335f, 0.475f, 0.487f, 0.60f, 0.74f, 0.88f];
+        ReadOnlySpan<float> depth = [22f, 14f, 26f, 18f, 16f, 24f, 12f, 20f];
+        float v = 62f;
+        for (int i = 0; i < apex.Length; i++)
+        {
+            float d = Math.Abs(pct - apex[i]);
+            if (d > 0.5f) d = 1 - d;
+            v -= depth[i] * MathF.Exp(-d * d / (2 * 0.012f * 0.012f));
+        }
+        return v;
     }
 
     /// <summary>Scripted lab-mode player pace: a repeating per-lap loss factor over the middle

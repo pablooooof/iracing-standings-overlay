@@ -446,6 +446,9 @@ public partial class SettingsWindow : Window
             () => l.MaxRows, v => l.MaxRows = (int)v, v => $"{v:0}"));
         body.Children.Add(Slider("Gap decimals", null, 1, 3, 1,
             () => l.Decimals, v => l.Decimals = (int)v, v => $"{v:0}"));
+        body.Children.Add(Segmented("Columns", "Official sectors, or turn zones detected from the reference lap's speed trace (a chicane or esses complex counts as one T).",
+            new[] { ("Sectors", "Sectors"), ("Turns", "Turns") },
+            () => l.View, v => Apply(() => l.View = v)));
 
         body.Children.Add(Subhead("Reference lap"));
         body.Children.Add(Segmented("Reference", "Fastest full lap · best sectors combined · your saved best from an earlier session · an imported telemetry lap.",

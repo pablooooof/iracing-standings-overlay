@@ -64,6 +64,20 @@ state difference. Unknown fields never fire. Session best/optimal never warn by 
 Phase 3: corner segmentation from the reference lap's speed trace + "biggest losses" panel.
 Phase 4: active-reset run mode (rows = attempts between resets).
 
+## Turn view (phase 3a)
+
+`LapLab.View: "Turns"` swaps the sector columns for auto-detected turn zones. iRacing has no
+corner channel — `Data/CornerMap` segments the **reference lap's speed trace** (smoothed
+minima = apexes, prominence-gated ≥12% drop; apexes closer than 1.5% of a lap merge, so a
+chicane/esses complex is ONE numbered T; boundaries at the fastest point between apexes).
+Zone splits come from the recorded time-at-pct grids (`LapRef.SplitsOf`) — no extra 60 Hz
+work. Segmentation source: the external ref's trace, else the session best's own; cached per
+source so zones stay stable. Detection outside 4–24 zones (ovals, missing speed) falls back
+to sectors with a log line. T-numbers are sequential per braking zone — close to the track
+map until complexes merge. Off-track/pit attribution maps from the official sectors
+(conservative amber). `--demo lab` feeds a synthetic 8-apex profile (`DemoSource.SynthSpeed`,
+one mergeable pair → 7 zones).
+
 ## Display
 
 `UI/LapLabWindow`, same plumbing as the fuel widget (click-through, own position, repaint on

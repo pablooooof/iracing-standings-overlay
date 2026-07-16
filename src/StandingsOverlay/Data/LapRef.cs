@@ -37,31 +37,37 @@ public sealed class LapRef
     public RefConditions? Conditions { get; set; }
 
     /// <summary>Time since lap start at a lap fraction, linearly interpolated on the grid.</summary>
-    public double TimeAt(double pct)
+    public double TimeAt(double pct) => TimeAtOf(TimeAtPct, LapTime, pct);
+
+    /// <summary>Sector times at the given boundary pcts (ascending, [0] == 0).</summary>
+    public double[] SectorsFor(float[] bounds) => SplitsOf(TimeAtPct, LapTime, bounds);
+
+    /// <summary>Static grid interpolation, shared with own-lap grids (SectorLap.TimeAtPct).</summary>
+    public static double TimeAtOf(float[] grid, double lapTime, double pct)
     {
-        if (TimeAtPct.Length == 0) return double.NaN;
+        if (grid.Length == 0) return double.NaN;
         pct = Math.Clamp(pct, 0, 1);
         double x = pct * GridSize;
         int k = (int)x;
-        if (k >= TimeAtPct.Length - 1)
+        if (k >= grid.Length - 1)
         {
             // Above the last bin: interpolate toward the known lap total at pct = 1.
-            double last = TimeAtPct[^1];
-            double span = 1.0 - (double)(TimeAtPct.Length - 1) / GridSize;
-            double frac = span <= 0 ? 0 : (pct - (double)(TimeAtPct.Length - 1) / GridSize) / span;
-            return last + (LapTime - last) * Math.Clamp(frac, 0, 1);
+            double last = grid[^1];
+            double span = 1.0 - (double)(grid.Length - 1) / GridSize;
+            double frac = span <= 0 ? 0 : (pct - (double)(grid.Length - 1) / GridSize) / span;
+            return last + (lapTime - last) * Math.Clamp(frac, 0, 1);
         }
-        return TimeAtPct[k] + (TimeAtPct[k + 1] - TimeAtPct[k]) * (x - k);
+        return grid[k] + (grid[k + 1] - grid[k]) * (x - k);
     }
 
-    /// <summary>Sector times at the given boundary pcts (ascending, [0] == 0).</summary>
-    public double[] SectorsFor(float[] bounds)
+    /// <summary>Split times of any recorded lap grid at arbitrary boundaries.</summary>
+    public static double[] SplitsOf(float[] grid, double lapTime, float[] bounds)
     {
         var s = new double[bounds.Length];
         for (int i = 0; i < bounds.Length; i++)
         {
-            double start = TimeAt(bounds[i]);
-            double end = i < bounds.Length - 1 ? TimeAt(bounds[i + 1]) : LapTime;
+            double start = TimeAtOf(grid, lapTime, bounds[i]);
+            double end = i < bounds.Length - 1 ? TimeAtOf(grid, lapTime, bounds[i + 1]) : lapTime;
             s[i] = end - start;
         }
         return s;

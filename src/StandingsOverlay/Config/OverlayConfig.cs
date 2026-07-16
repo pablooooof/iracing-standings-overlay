@@ -238,6 +238,9 @@ public sealed class LapLabConfig
     public bool Enabled { get; set; } = true;
     public int Decimals { get; set; } = 2;        // sector/lap delta decimals (1-3)
     public int MaxRows { get; set; } = 8;         // laps shown, newest on top
+    // Columns: official sectors, or turn zones auto-detected from the reference's speed
+    // trace (falls back to sectors when no trace segments cleanly).
+    public string View { get; set; } = "Sectors";             // Sectors | Turns
     // SessionBest | SessionOptimal | PreviousBest | File
     public string Reference { get; set; } = "SessionBest";
     public string ReferenceFile { get; set; } = "";       // .ibt path used when Reference = File
