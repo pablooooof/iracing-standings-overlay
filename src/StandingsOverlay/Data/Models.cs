@@ -69,7 +69,9 @@ public sealed record DriverEntry(
     bool IsSpectator);
 
 /// <summary>Per-car line from the session YAML results — the only place laps completed before
-/// the player joined (or after a car left the world) are recorded, and the official positions.</summary>
+/// the player joined (or after a car left the world) are recorded, and the official positions.
+/// CAUTION: ClassPosition is kept raw and the YAML encodes it 0-BASED (class leader = 0),
+/// unlike Position and the live CarIdxClassPosition (both 1-based). Prefer Position.</summary>
 public readonly record struct SessionResult(
     float BestLap, float LastLap, int LapsComplete, int Position, int ClassPosition);
 

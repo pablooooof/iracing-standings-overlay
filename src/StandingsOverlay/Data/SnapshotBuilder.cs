@@ -177,11 +177,13 @@ public static class SnapshotBuilder
                    .ToList();
     }
 
-    /// <summary>Official position from the session results (class position when scored).</summary>
+    /// <summary>Official position from the session results. OVERALL position on purpose:
+    /// within one class it induces exactly the class order, and the YAML's ClassPosition is
+    /// 0-BASED (class leader = 0, unlike the 1-based Position and the 1-based live
+    /// CarIdxClassPosition) — a &gt;0 guard on it dumped every class leader onto the overall
+    /// fallback, sorting them BEHIND their own class in multiclass practice.</summary>
     private static int OfficialPos(Roster roster, int idx) =>
-        roster.Results.TryGetValue(idx, out var r)
-            ? r.ClassPosition > 0 ? r.ClassPosition : r.Position > 0 ? r.Position : int.MaxValue
-            : int.MaxValue;
+        roster.Results.TryGetValue(idx, out var r) && r.Position > 0 ? r.Position : int.MaxValue;
 
     /// <summary>Best lap from live telemetry, falling back to the session-YAML results —
     /// telemetry arrays go blank for cars that aren't currently in the world.</summary>
