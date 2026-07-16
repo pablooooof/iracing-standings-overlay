@@ -38,6 +38,7 @@ public sealed class DemoSource : ITelemetrySource
     private readonly DriverSwapTracker _driverSwap = new();
     private readonly SectorClock _sectorClock = new();
     private readonly LapLabTracker _lapLab = new();
+    private readonly LapRefStore _refStore = new();
     private readonly Roster _roster = new();
     private bool _swapDone;
     private double _playerFuel = PlayerTank;
@@ -86,6 +87,14 @@ public sealed class DemoSource : ITelemetrySource
         // Three equal-distance sectors; with the non-uniform TrackPct speed profile the middle
         // sector is the slow hairpin third, so sector TIMES come out realistically uneven.
         _sectorClock.SetBoundaries([0f, 1f / 3f, 2f / 3f]);
+        // Identity for Lap Lab's previous-best key + conditions guard: a real Spa/GT3 .ibt
+        // picked as File ref in demo mode exercises the "≠ track" BLOCK chip by design.
+        _roster.TrackName = "Demo Ring";
+        _roster.TrackId = 990001;
+        _roster.TrackConfig = "Demo";
+        _roster.PlayerCarPath = "demo_gt3";
+        _roster.PlayerCarName = "Demo GT3";
+        _roster.RubberState = "moderately low usage";
 
         string[] names =
         [
@@ -342,12 +351,19 @@ public sealed class DemoSource : ITelemetrySource
             if (_prevElapsed > 0 && prog > _prevPlayerProgress && prog - _prevPlayerProgress < 0.5)
             {
                 const int Sub = 8;
+                const float TrackLenM = 1000;   // nominal, only feeds the reference speed grid
+                float prevPct2 = TrackPct((float)(_prevPlayerProgress - Math.Floor(_prevPlayerProgress)));
                 for (int k = 1; k <= Sub; k++)
                 {
                     double p = _prevPlayerProgress + (prog - _prevPlayerProgress) * k / Sub;
                     double tm = _prevElapsed + (_elapsed - _prevElapsed) * (double)k / Sub;
-                    _sectorClock.Sample(TrackPct((float)(p - Math.Floor(p))), tm,
-                                        playerSurf, _tick.OnPitRoad[PlayerIdx]);
+                    float pct = TrackPct((float)(p - Math.Floor(p)));
+                    double dtSub = (_elapsed - _prevElapsed) / Sub;
+                    float dp = pct - prevPct2;
+                    if (dp < -0.5f) dp += 1;
+                    float speed = dtSub > 0 ? (float)(dp * TrackLenM / dtSub) : float.NaN;
+                    _sectorClock.Sample(pct, tm, playerSurf, _tick.OnPitRoad[PlayerIdx], speed);
+                    prevPct2 = pct;
                 }
             }
             else if (_prevElapsed > 0)   // teleport (scripted AR): one raw sample, no interpolation
@@ -382,7 +398,7 @@ public sealed class DemoSource : ITelemetrySource
         TrafficReady?.Invoke(_traffic.Update(_tick, _roster, _history, _stints, cfg));
         RelativeReady?.Invoke(RelativeBuilder.Build(_tick, _roster, _stints, _driverSwap, cfg));
         FuelReady?.Invoke(_planner.Build(_tick, _fuel, cfg));
-        LapLabReady?.Invoke(_lapLab.Build(_tick, _sectorClock, cfg));
+        LapLabReady?.Invoke(_lapLab.Build(_tick, _sectorClock, _roster, _refStore, cfg));
     }
 
     /// <summary>Scripted lab-mode player pace: a repeating per-lap loss factor over the middle

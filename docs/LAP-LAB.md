@@ -31,15 +31,38 @@ Never shows in races by design. Testing/practice/qualifying only (`LapLabTracker
   (amber, with a reason chip in the Δ column: "off S2" / "pit") but are excluded from the
   session best and the optimal composite.
 
-## References (phase 1)
+## References (phases 1–2)
 
 - **Session best** (default): fastest clean lap; improving re-bases every visible row.
 - **Session optimal**: best clean time per sector composited; used once every sector has been
   seen clean at least once (falls back to session best until then).
-- Phase 2 adds: `.ibt` file import (embedded session YAML → conditions BLOCK/WARN/INFO chips)
-  and auto-saved previous-session bests per car+track. Phase 3: corner segmentation from the
-  reference lap's speed trace + "biggest losses" panel. Phase 4: active-reset run mode
-  (rows = attempts between resets).
+- **Previous best** (`Reference: "PreviousBest"`): your best clean lap from an earlier session
+  at this car+track, auto-saved as `laps/prev_{car}_{trackid}_{config}.json` next to the exe
+  (`SaveSessionBest`, on by default; only ever overwritten by a *faster* lap — the store
+  re-checks disk before writing). In-memory it always means "before this session".
+- **File** (`Reference: "File"` + `ReferenceFile`): any `.ibt` — yours from
+  `Documents\iRacing\telemetry`, a teammate's, a Garage 61/VRS download. `Data/IbtLap` is a
+  self-written ~250-line reader (header → var headers → embedded session YAML → row stream);
+  it picks the fastest complete lap (clean preferred, teleports discarded) in two passes, so
+  even a 200 MB endurance file parses in ~a second on the thread pool, and the result is
+  cached as JSON (`laps/cache_*.json`, keyed by name+mtime) so re-selection is instant.
+
+External references are stored as a **time-at-pct grid** (0.1%, `LapRef`, plus speed-at-pct
+for phase 3) and sector times are derived at the LIVE session's boundaries (`SectorsFor`), so
+sector definitions can differ between recordings without corrupting the columns. The
+SectorClock records the same grids for every live lap (doubles internally — absolute session
+time exceeds float precision late in long sessions).
+
+## Conditions guard (phase 2)
+
+An `.ibt` embeds the full session YAML; our own saves snapshot live conditions. `RefGuard.Diff`
+compares reference vs live on every build: **BLOCK** (red chip, ref refused, falls back to
+session best) on track/config or car mismatch; **WARN** (amber) on dry↔wet mismatch or track
+temp Δ > `WarnTrackTempDelta` (default 4 °C); **INFO** (grey) on wind Δ > 4 m/s or rubber
+state difference. Unknown fields never fire. Session best/optimal never warn by construction.
+
+Phase 3: corner segmentation from the reference lap's speed trace + "biggest losses" panel.
+Phase 4: active-reset run mode (rows = attempts between resets).
 
 ## Display
 
@@ -49,7 +72,9 @@ beat the ref sector, amber = dirty, green lap number + time = session best. Befo
 lap exists, cells show absolute sector times instead of deltas.
 
 Config: `LapLab` section — `Enabled`, `Decimals` (1-3, default 2), `MaxRows`, `Reference`
-("SessionBest" | "SessionOptimal"), `Scale`, `X/Y`. Settings window: "Lap Lab" section.
+("SessionBest" | "SessionOptimal" | "PreviousBest" | "File"), `ReferenceFile`,
+`SaveSessionBest`, `WarnTrackTempDelta`, `Scale`, `X/Y`. Settings window: "Lap Lab" section
+(4-way reference picker + .ibt browse row).
 
 ## Demo & verification
 

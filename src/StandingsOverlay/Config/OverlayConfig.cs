@@ -238,7 +238,11 @@ public sealed class LapLabConfig
     public bool Enabled { get; set; } = true;
     public int Decimals { get; set; } = 2;        // sector/lap delta decimals (1-3)
     public int MaxRows { get; set; } = 8;         // laps shown, newest on top
-    public string Reference { get; set; } = "SessionBest";   // SessionBest | SessionOptimal
+    // SessionBest | SessionOptimal | PreviousBest | File
+    public string Reference { get; set; } = "SessionBest";
+    public string ReferenceFile { get; set; } = "";       // .ibt path used when Reference = File
+    public bool SaveSessionBest { get; set; } = true;     // auto-save best clean lap per car+track
+    public double WarnTrackTempDelta { get; set; } = 4.0; // °C difference vs ref that warns
     public double Scale { get; set; } = 1.0;      // widget size multiplier (LayoutTransform)
 
     // Widget position (DIPs), draggable in edit mode like every widget.

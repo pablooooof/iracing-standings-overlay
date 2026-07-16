@@ -93,6 +93,12 @@ public sealed class Roster
     /// shown before a race has results) — lap counts/last times don't apply then.</summary>
     public bool ResultsFromCurrentSession = true;
     public string TrackName = "";
+    // Track/car identity + rubber, for Lap Lab's conditions guard and previous-best keys.
+    public int TrackId;
+    public string TrackConfig = "";
+    public string PlayerCarPath = "";
+    public string PlayerCarName = "";
+    public string RubberState = "";
     public double StrengthOfField;                       // whole field
     public Dictionary<int, double> SofByClass { get; } = new();   // per CarClassId
 

@@ -23,6 +23,7 @@ public sealed class IRacingSource : ITelemetrySource
     private readonly DriverSwapTracker _driverSwap = new();
     private readonly SectorClock _sectorClock = new();
     private readonly LapLabTracker _lapLab = new();
+    private readonly LapRefStore _refStore = new();
     private readonly Roster _roster = new();
 
     private int _frameCount;
@@ -90,7 +91,8 @@ public sealed class IRacingSource : ITelemetrySource
         {
             int surf = _sdk.GetData("PlayerTrackSurface") is int sf ? sf : 3;
             bool pit = _sdk.GetData("OnPitRoad") is bool pr && pr;
-            try { _sectorClock.Sample(labPct, labTime, surf, pit); }
+            float spd = _sdk.GetData("Speed") is float sv ? sv : float.NaN;
+            try { _sectorClock.Sample(labPct, labTime, surf, pit, spd); }
             catch { /* never let lap timing break the tick */ }
         }
 
@@ -130,7 +132,7 @@ public sealed class IRacingSource : ITelemetrySource
             TrafficReady?.Invoke(_traffic.Update(t, _roster, _history, _stints, cfg));
             RelativeReady?.Invoke(RelativeBuilder.Build(t, _roster, _stints, _driverSwap, cfg));
             FuelReady?.Invoke(_planner.Build(t, _fuel, cfg));
-            LapLabReady?.Invoke(_lapLab.Build(t, _sectorClock, cfg));
+            LapLabReady?.Invoke(_lapLab.Build(t, _sectorClock, _roster, _refStore, cfg));
             _emitted = true;
 
             if (_stateRestored && t.SessionTime - _lastStateSaveAt >= 30)
@@ -275,6 +277,12 @@ public sealed class IRacingSource : ITelemetrySource
                         r.FastestTime, r.LastTime, r.LapsComplete, r.Position, r.ClassPosition);
 
             _roster.TrackName = model.WeekendInfo?.TrackDisplayShortName ?? "";
+            _roster.TrackId = model.WeekendInfo?.TrackID ?? 0;
+            _roster.TrackConfig = model.WeekendInfo?.TrackConfigName ?? "";
+            var me = model.DriverInfo.Drivers.FirstOrDefault(x => x.CarIdx == model.DriverInfo.DriverCarIdx);
+            _roster.PlayerCarPath = me?.CarPath ?? "";
+            _roster.PlayerCarName = me?.CarScreenName ?? "";
+            _roster.RubberState = session?.SessionTrackRubberState ?? "";
             _roster.ComputeSof();
         }
         // The YAML updates constantly during a race (results churn); only log real changes.

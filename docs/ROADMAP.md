@@ -89,8 +89,10 @@ reference lap; corner-level "biggest losses" panel later. Spec: `docs/LAP-LAB.md
 - [x] **Phase 1 (2026-07-13)** — `SectorClock` (60 Hz player sampling, ±2 ms splits, active-reset/
   tow disarm), `LapLabTracker` (session best + optimal refs, clean-lap rules), `LapLabWindow`,
   `LapLab` config + settings section, `--demo lab`, unit tests.
-- [ ] **Phase 2** — `.ibt` reference import (embedded YAML → conditions BLOCK/WARN/INFO chips) +
-  auto-saved previous-session best per car+track.
+- [x] **Phase 2 (2026-07-13)** — `.ibt` reference import (`IbtLap` two-pass reader + JSON cache,
+  conditions BLOCK/WARN/INFO chips via `RefGuard`) + auto-saved previous-session best per
+  car+track (`LapRefStore`, only-improves); refs stored as time/speed-at-pct grids
+  (`LapRef.SectorsFor` derives sectors at the live boundaries).
 - [ ] **Phase 3** — corner segmentation from the reference speed trace (minima = apexes, merge
   <1.5%) + "biggest losses" panel with erratic/repeatable spread badges.
 - [ ] **Phase 4** — active-reset run mode: rows = attempts between resets, span timing, delta

@@ -446,9 +446,52 @@ public partial class SettingsWindow : Window
             () => l.MaxRows, v => l.MaxRows = (int)v, v => $"{v:0}"));
         body.Children.Add(Slider("Gap decimals", null, 1, 3, 1,
             () => l.Decimals, v => l.Decimals = (int)v, v => $"{v:0}"));
-        body.Children.Add(Segmented("Reference", "Your fastest full lap, or your best sectors combined.",
-            new[] { ("Session best", "SessionBest"), ("Session optimal", "SessionOptimal") },
+
+        body.Children.Add(Subhead("Reference lap"));
+        body.Children.Add(Segmented("Reference", "Fastest full lap · best sectors combined · your saved best from an earlier session · an imported telemetry lap.",
+            new[] { ("Best", "SessionBest"), ("Optimal", "SessionOptimal"), ("Prev", "PreviousBest"), ("File", "File") },
             () => l.Reference, v => Apply(() => l.Reference = v)));
+        body.Children.Add(FileRow("Reference .ibt", "Telemetry file used when Reference is File — yours, a teammate's, or a Garage 61 / VRS download. Its conditions are checked against the live session.",
+            () => l.ReferenceFile, v => l.ReferenceFile = v));
+        body.Children.Add(Toggle("Save session best", "Keep your best clean lap per car+track as the next session's Prev reference.",
+            () => l.SaveSessionBest, v => l.SaveSessionBest = v));
+        body.Children.Add(Slider("Track-temp warning", "Amber chip when the live track temp differs from the reference by more than this.", 1, 15, 1,
+            () => l.WarnTrackTempDelta, v => l.WarnTrackTempDelta = v, v => $"{v:0}°C"));
+    }
+
+    private FrameworkElement FileRow(string label, string? hint, Func<string> get, Action<string> set)
+    {
+        var name = new TextBlock
+        {
+            Text = get().Length > 0 ? System.IO.Path.GetFileName(get()) : "none",
+            Foreground = Dim, FontSize = 12, VerticalAlignment = VerticalAlignment.Center,
+            MaxWidth = 200, TextTrimming = TextTrimming.CharacterEllipsis,
+            Margin = new Thickness(0, 0, 8, 0),
+        };
+        var browse = new Button { Content = "Browse…", Padding = new Thickness(10, 2, 10, 3) };
+        browse.Click += (_, _) =>
+        {
+            var dlg = new Microsoft.Win32.OpenFileDialog
+            {
+                Filter = "iRacing telemetry (*.ibt)|*.ibt|All files (*.*)|*.*",
+            };
+            var telemetryDir = System.IO.Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "iRacing", "telemetry");
+            if (get().Length > 0) dlg.FileName = get();
+            else if (System.IO.Directory.Exists(telemetryDir)) dlg.InitialDirectory = telemetryDir;
+            if (dlg.ShowDialog(this) == true)
+            {
+                name.Text = System.IO.Path.GetFileName(dlg.FileName);
+                Apply(() => set(dlg.FileName));
+            }
+        };
+        var clear = new Button { Content = "✕", Padding = new Thickness(8, 2, 8, 3), Margin = new Thickness(6, 0, 0, 0) };
+        clear.Click += (_, _) => { name.Text = "none"; Apply(() => set("")); };
+        var panel = new StackPanel { Orientation = Orientation.Horizontal };
+        panel.Children.Add(name);
+        panel.Children.Add(browse);
+        panel.Children.Add(clear);
+        return Row(label, hint, panel);
     }
 
     private FrameworkElement Toggle(string label, string? hint, Func<bool> get, Action<bool> set) =>
@@ -589,6 +632,7 @@ public partial class SettingsWindow : Window
             case "Relative": c.Relative = KeepPos(new RelativeConfig(), c.Relative.X, c.Relative.Y); break;
             case "Traffic": c.Traffic = KeepPos(new TrafficConfig(), c.Traffic.X, c.Traffic.Y); break;
             case "Fuel": c.Fuel = KeepPos(new FuelConfig(), c.Fuel.X, c.Fuel.Y); break;
+            case "Lap Lab": c.LapLab = KeepPos(new LapLabConfig(), c.LapLab.X, c.LapLab.Y); break;
             case "About": return;
         }
         Apply(() => { });          // mark dirty + schedule save
@@ -598,6 +642,7 @@ public partial class SettingsWindow : Window
     private static RelativeConfig KeepPos(RelativeConfig r, double x, double y) { r.X = x; r.Y = y; return r; }
     private static TrafficConfig KeepPos(TrafficConfig t, double x, double y) { t.X = x; t.Y = y; return t; }
     private static FuelConfig KeepPos(FuelConfig f, double x, double y) { f.X = x; f.Y = y; return f; }
+    private static LapLabConfig KeepPos(LapLabConfig l, double x, double y) { l.X = x; l.Y = y; return l; }
 
     private void OnClose(object sender, RoutedEventArgs e) => Close();
 }

@@ -28,13 +28,16 @@ public sealed record LapLabSnapshot(
     bool Show,
     string RefText,                       // "ref best 1:59.48" / "no reference yet"
     IReadOnlyList<string> SectorHeaders,  // "S1".."Sn"
-    IReadOnlyList<LapLabRow> Rows)        // newest first
+    IReadOnlyList<LapLabRow> Rows,        // newest first
+    string WarnText = "",                 // conditions chip ("track +5°C vs ref", "ref blocked: ≠ car")
+    int WarnSeverity = -1)                // 2 block (red) · 1 warn (amber) · 0 info (grey)
 {
     public static readonly LapLabSnapshot Empty = new(false, "", [], []);
 
     public bool VisuallyEquals(LapLabSnapshot? o)
     {
         if (o is null || Show != o.Show || RefText != o.RefText ||
+            WarnText != o.WarnText || WarnSeverity != o.WarnSeverity ||
             Rows.Count != o.Rows.Count || !SectorHeaders.SequenceEqual(o.SectorHeaders)) return false;
         for (int i = 0; i < Rows.Count; i++)
             if (!Rows[i].VisuallyEquals(o.Rows[i])) return false;
@@ -65,10 +68,33 @@ public sealed class LapLabTracker
         _loggedTows = 0;
     }
 
-    public LapLabSnapshot Build(RawTick t, SectorClock clock, OverlayConfig cfg)
+    public LapLabSnapshot Build(RawTick t, SectorClock clock, Roster roster, LapRefStore store, OverlayConfig cfg)
     {
+        int prevBest = _bestIdx;
         int drained = clock.DrainInto(_laps);
         for (int i = _laps.Count - drained; i < _laps.Count; i++) Absorb(i);
+
+        // New session best → persist as this combo's previous-best benchmark (the store only
+        // writes when it actually beats what's on disk).
+        if (_bestIdx != prevBest && _bestIdx >= 0 && cfg.LapLab.SaveSessionBest)
+        {
+            string saveKey = LapRefStore.Key(roster);
+            var b = _laps[_bestIdx];
+            if (saveKey.Length > 0 && b.TimeAtPct.Length > 0)
+                store.SavePrev(saveKey, new LapRef
+                {
+                    Source = "prev",
+                    Label = "previous best",
+                    LapTime = b.LapTime,
+                    TimeAtPct = b.TimeAtPct,
+                    SpeedAtPct = b.SpeedAtPct,
+                    Conditions = new RefConditions(
+                        roster.TrackId, roster.TrackConfig, roster.TrackName,
+                        roster.PlayerCarPath, roster.PlayerCarName,
+                        t.TrackTemp, float.NaN, t.WindVel, t.TrackWetness,
+                        roster.RubberState, DateTime.UtcNow.ToString("yyyy-MM-dd")),
+                });
+        }
 
         // Teleports/tows are invisible in the table (the lap simply never completes) — log
         // them so a missing row is explainable from overlay.log.
@@ -91,22 +117,64 @@ public sealed class LapLabTracker
         int dec = Math.Clamp(cfg.LapLab.Decimals, 1, 3);
         double eps = 0.5 * Math.Pow(10, -dec);
 
-        // Reference: the optimal composite needs every sector seen clean at least once;
-        // until then (and always for "SessionBest") the fastest clean lap is the reference.
+        // Reference: File / PreviousBest are external LapRefs, scored at TODAY's boundaries
+        // (SectorsFor) and run through the conditions guard; anything unavailable or blocked
+        // falls back to the session best so the table never goes delta-less mid-session.
         double[]? refSecs = null;
+        double refLap = 0;
         string refName = "";
-        bool wantOptimal = cfg.LapLab.Reference.Equals("SessionOptimal", StringComparison.OrdinalIgnoreCase);
-        if (wantOptimal && _optimal.Length == n && !_optimal.Any(double.IsNaN))
+        int warnSev = -1;
+        string warnChip = "";
+        string mode = cfg.LapLab.Reference;
+        LapRef? ext = null;
+        if (mode.Equals("File", StringComparison.OrdinalIgnoreCase))
         {
-            refSecs = _optimal;
-            refName = "optimal";
+            store.EnsureFile(cfg.LapLab.ReferenceFile);
+            ext = store.FileRef;
+            if (ext is null)
+            {
+                warnSev = 0;
+                warnChip = store.FileLoading ? "loading ref…"
+                    : store.FileError.Length > 0 ? "file: " + store.FileError
+                    : string.IsNullOrWhiteSpace(cfg.LapLab.ReferenceFile) ? "no file picked" : "";
+            }
         }
-        else if (_bestIdx >= 0)
+        else if (mode.Equals("PreviousBest", StringComparison.OrdinalIgnoreCase))
         {
-            refSecs = _laps[_bestIdx].Sectors;
-            refName = "best";
+            string key = LapRefStore.Key(roster);
+            store.EnsurePrev(key);
+            ext = store.PrevRef;
+            if (ext is null && key.Length > 0) { warnSev = 0; warnChip = "no previous best yet"; }
         }
-        double refLap = refSecs?.Sum() ?? 0;
+        if (ext is not null)
+        {
+            var (sev, chip) = RefGuard.Diff(ext.Conditions, roster, t, cfg.LapLab.WarnTrackTempDelta);
+            if (sev == 2) { warnSev = 2; warnChip = "ref blocked: " + chip; ext = null; }
+            else if (sev >= 0) { warnSev = sev; warnChip = chip; }
+        }
+        if (ext is not null)
+        {
+            refSecs = ext.SectorsFor(clock.Bounds);
+            refLap = ext.LapTime;
+            refName = ext.Source;
+        }
+        else
+        {
+            // The optimal composite needs every sector seen clean at least once; until then
+            // (and always for "SessionBest") the fastest clean lap is the reference.
+            bool wantOptimal = mode.Equals("SessionOptimal", StringComparison.OrdinalIgnoreCase);
+            if (wantOptimal && _optimal.Length == n && !_optimal.Any(double.IsNaN))
+            {
+                refSecs = _optimal;
+                refName = "optimal";
+            }
+            else if (_bestIdx >= 0)
+            {
+                refSecs = _laps[_bestIdx].Sectors;
+                refName = "best";
+            }
+            refLap = refSecs?.Sum() ?? 0;
+        }
 
         var headers = new string[n];
         for (int i = 0; i < n; i++) headers[i] = $"S{i + 1}";
@@ -169,7 +237,7 @@ public sealed class LapLabTracker
         string refText = refSecs is null
             ? "no reference yet"
             : $"ref {refName} {FmtTime(refLap, Math.Max(dec, 2))}";
-        return new LapLabSnapshot(true, refText, headers, rows);
+        return new LapLabSnapshot(true, refText, headers, rows, warnChip, warnChip.Length > 0 ? warnSev : -1);
     }
 
     /// <summary>Fold lap <paramref name="li"/> into best/optimal, and log it — the log line is

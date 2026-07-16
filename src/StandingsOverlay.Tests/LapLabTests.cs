@@ -143,7 +143,7 @@ public class LapLabTests
 
         // Laps: 26.0 (best so far), 26.5, then 25.0 (new best → older rows re-base).
         Drive(clock, [25, 26.0, 26.5, 25.0]);
-        var snap = tracker.Build(rig.Tick, clock, rig.Cfg);
+        var snap = tracker.Build(rig.Tick, clock, rig.Roster, new LapRefStore(), rig.Cfg);
 
         Assert.True(snap.Show);
         Assert.Equal(["S1", "S2", "S3"], snap.SectorHeaders);
@@ -169,7 +169,7 @@ public class LapLabTests
 
         // Two clean laps with different sector strengths: optimal beats both totals.
         Drive(clock, [25, 25.0, 25.0], (lap, tf) => (3, false, 0));
-        var snap = tracker.Build(rig.Tick, clock, rig.Cfg);
+        var snap = tracker.Build(rig.Tick, clock, rig.Roster, new LapRefStore(), rig.Cfg);
 
         Assert.True(snap.Show);
         Assert.StartsWith("ref optimal", snap.RefText);
@@ -189,10 +189,11 @@ public class LapLabTests
         var tracker = new LapLabTracker();
         Drive(clock, [25, 25]);
 
-        Assert.False(tracker.Build(rig.Tick, clock, rig.Cfg).Show);
+        Assert.False(tracker.Build(rig.Tick, clock, rig.Roster, new LapRefStore(), rig.Cfg).Show);
 
         var bare = new SectorClock();   // no boundaries yet (YAML not parsed)
-        Assert.False(new LapLabTracker().Build(new Rig(1, "Practice").Tick, bare, rig.Cfg).Show);
+        Assert.False(new LapLabTracker()
+            .Build(new Rig(1, "Practice").Tick, bare, rig.Roster, new LapRefStore(), rig.Cfg).Show);
     }
 
     [Fact]

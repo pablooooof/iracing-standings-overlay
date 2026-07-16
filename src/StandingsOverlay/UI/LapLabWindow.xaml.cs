@@ -24,6 +24,9 @@ public partial class LapLabWindow : Window
     private static readonly Brush GainBrush = RowViewModel.Frozen("#B8A2FF");
     private static readonly Brush DirtyBrush = RowViewModel.Frozen("#FFB84D");
     private static readonly Brush BestBrush = RowViewModel.Frozen("#35A653");
+    private static readonly Brush BlockBg = RowViewModel.Frozen("#33FF4040");
+    private static readonly Brush WarnBg = RowViewModel.Frozen("#33FFB84D");
+    private static readonly Brush InfoBg = RowViewModel.Frozen("#26FFFFFF");
 
     private readonly ConfigService _configService;
     private LapLabSnapshot? _last;
@@ -73,6 +76,18 @@ public partial class LapLabWindow : Window
         if (!s.Show) return;
 
         RefText.Text = s.RefText;
+
+        WarnChip.Visibility = s.WarnText.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+        if (s.WarnText.Length > 0)
+        {
+            WarnText.Text = s.WarnText;
+            (WarnChip.Background, WarnText.Foreground) = s.WarnSeverity switch
+            {
+                2 => (BlockBg, LossBrush),
+                1 => (WarnBg, DirtyBrush),
+                _ => (InfoBg, DimBrush),
+            };
+        }
 
         Table.Children.Clear();
         Table.ColumnDefinitions.Clear();
@@ -164,7 +179,9 @@ public partial class LapLabWindow : Window
     {
         Render(new LapLabSnapshot(
             Show: true,
-            RefText: "ref best 1:59.48",
+            RefText: "ref file 1:59.48",
+            WarnText: "track +5°C vs ref",
+            WarnSeverity: 1,
             SectorHeaders: ["S1", "S2", "S3"],
             Rows:
             [

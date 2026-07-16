@@ -18,6 +18,10 @@
                                VerticalAlignment="Center"/>
                     <TextBlock x:Name="RefText" FontFamily="Consolas" FontSize="11"
                                Foreground="#B8A2FF" Margin="10,0,0,0" VerticalAlignment="Center"/>
+                    <Border x:Name="WarnChip" CornerRadius="3" Padding="5,1,5,2" Margin="8,0,0,0"
+                            VerticalAlignment="Center" Visibility="Collapsed">
+                        <TextBlock x:Name="WarnText" FontFamily="Consolas" FontSize="10" FontWeight="Bold"/>
+                    </Border>
                 </StackPanel>
 
                 <!-- Lap table (header + rows), built in code-behind: sector count varies per track. -->
