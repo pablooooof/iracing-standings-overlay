@@ -51,6 +51,26 @@ public class TrafficDetectorTests
     }
 
     [Fact]
+    public void NoAlertsWhileSpectating_UnlessOptedIn()
+    {
+        // The same steadily-closing scenario that reliably alerts — but the player is out of
+        // the car. Default: silence; Traffic.WhileSpectating opts the warnings back in.
+        var r = new Rig(2, sessionType: "Race");
+        r.AddCar(0, 2, 120f);
+        r.AddCar(1, 1, 100f, "GTP");
+        r.Tick.IsOnTrack = false;
+        var progress = new double[] { 20.0, 20.0 - 8.0 / 100 };
+
+        var snaps = Run(r, new TrafficDetector(), progress, _ => [120.0, 100.0], seconds: 90);
+        Assert.All(snaps, s => Assert.Empty(s.Rows));
+
+        r.Cfg.Traffic.WhileSpectating = true;
+        progress = [20.0, 20.0 - 8.0 / 100];
+        var optedIn = Run(r, new TrafficDetector(), progress, _ => [120.0, 100.0], seconds: 90);
+        Assert.Contains(optedIn, s => s.Rows.Count > 0);
+    }
+
+    [Fact]
     public void FasterClassSteadilyClosing_AlertsOnce_WithASaneCountdown()
     {
         // Race: GTP (100 s laps) closes on the GT3 player (120 s laps) at a steady ~0.17 s/s

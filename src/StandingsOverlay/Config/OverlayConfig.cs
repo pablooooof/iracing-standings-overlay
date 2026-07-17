@@ -146,6 +146,7 @@ public sealed class TrafficConfig
 {
     public bool Enabled { get; set; } = true;
     public bool RacesOnly { get; set; }                         // default: also alert in practice/qual (blue flags stay race-only)
+    public bool WhileSpectating { get; set; }                   // default: no alerts while out of the car
     public string Style { get; set; } = "Row";                  // Row | Beacon
     public string Mode { get; set; } = "FasterClassAndLapping"; // FasterClassOnly | FasterClassAndLapping | AllClosing
     public double AlertLeadTimeSec { get; set; } = 12;  // WATCH threshold (time to arrival) for traffic
@@ -241,8 +242,14 @@ public sealed class LapLabConfig
     // Columns: official sectors, or turn zones auto-detected from the reference's speed
     // trace (falls back to sectors when no trace segments cleanly).
     public string View { get; set; } = "Sectors";             // Sectors | Turns
-    public bool HideSlowLaps { get; set; } = true;    // >107% of best → one quiet line (traffic/spin)
-    public double HeatScale { get; set; } = 0.25;     // seconds lost for a fully saturated cell background
+    // Heatmap bands, in % of the reference split — pace thinking, not absolute seconds.
+    // Under Good: on pace (quiet; telemetry-at-the-desk territory). Good→Full: ramps to full
+    // red — the "findable on track" focus band. Above Ignore: mistake/traffic, shown dim.
+    public double HeatGoodPct { get; set; } = 1.0;
+    public double HeatFullPct { get; set; } = 2.0;
+    public double HeatIgnorePct { get; set; } = 4.5;
+    public bool HideSlowLaps { get; set; } = true;    // slow laps → one quiet line (traffic/spin)
+    public int SlowLapPct { get; set; } = 105;        // % of session best that counts as slow
     // SessionBest | SessionOptimal | PreviousBest | File
     public string Reference { get; set; } = "SessionBest";
     public string ReferenceFile { get; set; } = "";       // .ibt path used when Reference = File

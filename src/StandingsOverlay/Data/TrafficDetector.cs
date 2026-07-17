@@ -121,6 +121,8 @@ public sealed class TrafficDetector
         var tc = cfg.Traffic;
         bool race = StandingsSnapshot.KindOf(t.SessionType) == SessionKind.Race;
         if (!tc.Enabled || (tc.RacesOnly && !race) ||
+            // Out of the car (teammate stint, garage, spectating) nobody needs a warning.
+            (!t.IsOnTrack && !tc.WhileSpectating) ||
             !t.Has(t.PlayerCarIdx) || t.SessionTime < 0 ||
             // Lone qualifying: other cars are ghosts from separate runs, never really near you.
             t.SessionType.Contains("Lone", StringComparison.OrdinalIgnoreCase) ||

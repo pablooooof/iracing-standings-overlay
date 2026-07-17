@@ -85,12 +85,16 @@ one mergeable pair → 7 zones).
 beat the ref sector, amber = dirty, green lap number + time = session best. Before any clean
 lap exists, cells show absolute sector times instead of deltas.
 
-Glance channels (2026-07-16 UX round): split cells carry a **heatmap background** — red/green
-saturation ∝ delta magnitude, full color at `HeatScale` (default ±0.25 s) — readable in
-peripheral vision at speed. The Δ column always shows the number (even on dirty laps); the
-dirty reason ("off S2" / "pit" / "AR") lives in its own trailing status column. Laps slower
-than **107 % of the session best** collapse to one quiet line ("slow") — traffic/spins don't
-scream red (`HideSlowLaps`, on by default). Gray time = lap not clean.
+Glance channels (2026-07-16 UX round): split cells carry a **heatmap background** in
+percentage-of-reference bands (how drivers think about pace, and it scales naturally from an
+8 s turn zone to a 40 s sector): within `HeatGoodPct` (1 %) = quiet — on pace, improving it
+is desk-telemetry territory; `HeatGoodPct→HeatFullPct` (1–2 %) ramps to full red — **the
+focus band, time findable on track**; at `HeatIgnorePct` (4.5 %) and beyond the cell renders
+dim, not red — that's a mistake or traffic, not pace. Gains ramp green. The Δ column always
+shows the number (even on dirty laps) and gets the same banded heat; the dirty reason
+("off S2" / "pit" / "AR") lives in its own trailing status column. Whole laps slower than
+`SlowLapPct` (105 %) of the session best collapse to one quiet line ("slow") —
+traffic/spins don't scream red (`HideSlowLaps`, on by default). Gray time = lap not clean.
 
 **Optimal semantics** match iRacing: the composite takes the best NON-DIRTY split from any
 honestly timed lap (teleport-broken laps excluded) — a fast S1 on a lap that ended in the

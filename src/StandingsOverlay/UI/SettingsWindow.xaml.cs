@@ -306,6 +306,8 @@ public partial class SettingsWindow : Window
             () => t.Scale, v => t.Scale = v, v => $"{v * 100:0}%"));
         body.Children.Add(Toggle("Races only", "Off = also warn in practice/qual (blue flags stay race-only).",
             () => t.RacesOnly, v => t.RacesOnly = v));
+        body.Children.Add(Toggle("Alert while spectating", "Keep warnings while you're out of the car (teammate stint, garage).",
+            () => t.WhileSpectating, v => t.WhileSpectating = v));
         body.Children.Add(Segmented("Style", "How the alert is drawn.",
             new[] { ("Row", "Row"), ("Beacon", "Beacon") }, () => t.Style, v => Apply(() => t.Style = v)));
         body.Children.Add(Segmented("Trigger", "Which cars raise an alert.",
@@ -449,10 +451,17 @@ public partial class SettingsWindow : Window
         body.Children.Add(Segmented("Columns", "Official sectors, or turn zones detected from the reference lap's speed trace (a chicane or esses complex counts as one T). Switch freely — laps always record both.",
             new[] { ("Sectors", "Sectors"), ("Turns", "Turns") },
             () => l.View, v => Apply(() => l.View = v)));
-        body.Children.Add(Slider("Heat range", "Cell backgrounds reach full color at this much time lost or gained — the glance-while-driving channel.", 0.05, 1.0, 0.05,
-            () => l.HeatScale, v => l.HeatScale = v, v => $"±{v:0.00}s"));
-        body.Children.Add(Toggle("Hide 107% laps", "Laps slower than 107% of your best collapse to one quiet line — traffic, spins, offs.",
+        body.Children.Add(Subhead("Heatmap (% off the reference split)"));
+        body.Children.Add(Slider("On pace under", "Within this % of the reference: quiet — improving it is telemetry-at-the-desk territory.", 0.2, 2.0, 0.1,
+            () => l.HeatGoodPct, v => l.HeatGoodPct = v, v => $"{v:0.0}%"));
+        body.Children.Add(Slider("Full heat at", "The focus band: cells ramp to full red between the two — time you can find on track.", 1.0, 4.0, 0.1,
+            () => l.HeatFullPct, v => l.HeatFullPct = v, v => $"{v:0.0}%"));
+        body.Children.Add(Slider("Ignore above", "Bigger than this is a mistake or traffic, not pace — shown dim instead of red.", 2, 10, 0.5,
+            () => l.HeatIgnorePct, v => l.HeatIgnorePct = v, v => $"{v:0.0}%"));
+        body.Children.Add(Toggle("Hide slow laps", "Whole laps slower than the cutoff collapse to one quiet line — traffic, spins, offs.",
             () => l.HideSlowLaps, v => l.HideSlowLaps = v));
+        body.Children.Add(Slider("Slow-lap cutoff", null, 102, 112, 1,
+            () => l.SlowLapPct, v => l.SlowLapPct = (int)v, v => $"{v:0}%"));
 
         body.Children.Add(Subhead("Reference lap"));
         body.Children.Add(Segmented("Reference", "Fastest full lap · best sectors combined · your saved best from an earlier session · an imported telemetry lap.",

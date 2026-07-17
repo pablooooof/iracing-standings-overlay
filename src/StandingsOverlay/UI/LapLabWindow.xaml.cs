@@ -112,7 +112,7 @@ public partial class LapLabWindow : Window
                 Cell(r + 1, 1 + i, row.Sectors[i].Text, SignBrush(row.Sectors[i].Sign), heat: row.Sectors[i].Heat);
             Cell(r + 1, cols - 3, row.TimeText,
                  row.IsSessionBest ? BestBrush : row.TimeDim ? FaintBrush : TextBrush, bold: row.IsSessionBest);
-            Cell(r + 1, cols - 2, row.Delta.Text, SignBrush(row.Delta.Sign));
+            Cell(r + 1, cols - 2, row.Delta.Text, SignBrush(row.Delta.Sign), heat: row.Delta.Heat);
             Cell(r + 1, cols - 1, row.Status.Text, SignBrush(row.Status.Sign));
         }
     }

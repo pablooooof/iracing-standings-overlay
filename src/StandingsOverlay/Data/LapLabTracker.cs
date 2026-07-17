@@ -202,10 +202,10 @@ public sealed class LapLabTracker
 
         var rows = new List<LapLabRow>();
         int maxRows = Math.Clamp(cfg.LapLab.MaxRows, 1, 30);
-        float heatScale = (float)Math.Max(0.05, cfg.LapLab.HeatScale);
-        // 107% rule: a lap this far off the pace is traffic or a trip through the gravel —
+        // Slow-lap rule: a lap this far off the pace is traffic or a trip through the gravel —
         // it collapses to one quiet line instead of a row of screaming red.
-        double slowAt = 1.07 * (_bestIdx >= 0 ? _laps[_bestIdx].LapTime : refSecs is not null ? refLap : double.MaxValue);
+        double slowAt = Math.Clamp(cfg.LapLab.SlowLapPct, 101, 130) / 100.0
+                        * (_bestIdx >= 0 ? _laps[_bestIdx].LapTime : refSecs is not null ? refLap : double.MaxValue);
         for (int li = _laps.Count - 1; li >= 0 && rows.Count < maxRows; li--)
         {
             var lap = _laps[li];
@@ -243,9 +243,10 @@ public sealed class LapLabTracker
                 else
                 {
                     double delta = s - refSecs[i];
-                    int sign = dirty ? 3 : delta <= -eps ? 2 : delta >= eps ? 1 : 0;
-                    float heat = dirty ? 0 : (float)Math.Clamp(delta / heatScale, -1, 1);
-                    cells[i] = new LapLabCell(FmtDelta(delta, dec), sign, heat);
+                    double pctOff = refSecs[i] > 0.5 ? delta / refSecs[i] * 100 : 0;
+                    float heat = dirty ? 0 : HeatOf(pctOff, cfg.LapLab);
+                    int sign = dirty ? 3 : float.IsNaN(heat) ? 4 : delta <= -eps ? 2 : delta >= eps ? 1 : 0;
+                    cells[i] = new LapLabCell(FmtDelta(delta, dec), sign, float.IsNaN(heat) ? 0 : heat);
                 }
             }
 
@@ -253,7 +254,11 @@ public sealed class LapLabTracker
             if (refSecs is not null)
             {
                 double delta = lap.LapTime - refLap;
-                deltaCell = new LapLabCell(FmtDelta(delta, dec), delta <= -eps ? 2 : delta >= eps ? 1 : 0);
+                double pctOff = refLap > 0.5 ? delta / refLap * 100 : 0;
+                float heat = HeatOf(pctOff, cfg.LapLab);
+                deltaCell = new LapLabCell(FmtDelta(delta, dec),
+                    float.IsNaN(heat) ? 4 : delta <= -eps ? 2 : delta >= eps ? 1 : 0,
+                    float.IsNaN(heat) ? 0 : heat);
             }
 
             rows.Add(new LapLabRow(
@@ -270,6 +275,21 @@ public sealed class LapLabTracker
             ? "no reference yet"
             : $"ref {refName} {FmtTime(refLap, Math.Max(dec, 2))}";
         return new LapLabSnapshot(true, refText, headers, rows, warnChip, warnChip.Length > 0 ? warnSev : -1);
+    }
+
+    /// <summary>Percentage-band heat. Within Good% of the reference split: quiet (on pace —
+    /// improving that needs telemetry at the desk, not a glowing cell). Good→Full%: ramps to
+    /// full red — the focus band, the time findable on track. At or above Ignore%: a mistake
+    /// or traffic, not pace — returns NaN and the cell renders dim instead of screaming.
+    /// Gains ramp green, saturating at −Good%.</summary>
+    internal static float HeatOf(double pctOff, LapLabConfig c)
+    {
+        double good = Math.Max(0.1, c.HeatGoodPct);
+        if (pctOff < 0) return (float)Math.Clamp(pctOff / good, -1, 0);
+        if (pctOff <= good) return 0;
+        if (pctOff >= Math.Max(good + 0.2, c.HeatIgnorePct)) return float.NaN;
+        double full = Math.Max(good + 0.1, c.HeatFullPct);
+        return (float)Math.Clamp((pctOff - good) / (full - good), 0, 1);
     }
 
     private float[] _turnBounds = [];

@@ -138,6 +138,7 @@ public class LapLabTests
     {
         var rig = new Rig(1, "Offline Testing");
         rig.AddCar(0, 2, 25f);
+        rig.Cfg.LapLab.HideSlowLaps = false;   // the 26.5 lap is 6% off — keep its full row
         var clock = NewClock();
         var tracker = new LapLabTracker();
 
@@ -153,9 +154,12 @@ public class LapLabTests
         Assert.True(snap.Rows[0].IsSessionBest);
         Assert.StartsWith("ref best", snap.RefText);
         Assert.Equal(LapLabTracker.FmtDelta(0, 2), snap.Rows[0].Delta.Text);
-        // The 26.5 lap re-based against 25.0 → ≈ +1.5 lost, red.
+        // The 26.5 lap re-based against 25.0 → +1.50; at 6% off that's in the ignore band (dim).
         Assert.Equal(LapLabTracker.FmtDelta(1.5, 2), snap.Rows[1].Delta.Text);
-        Assert.Equal(1, snap.Rows[1].Delta.Sign);
+        Assert.Equal(4, snap.Rows[1].Delta.Sign);
+        // The 26.0 lap (+1.00 = 4%) sits inside the heat range → red.
+        Assert.Equal(LapLabTracker.FmtDelta(1.0, 2), snap.Rows[2].Delta.Text);
+        Assert.Equal(1, snap.Rows[2].Delta.Sign);
     }
 
     [Fact]
@@ -197,6 +201,20 @@ public class LapLabTests
         // The clean 25.0 lap (older row) must read RED in S1 — the optimal's S1 came from
         // the faster dirty lap. Under clean-laps-only semantics this cell was neutral.
         Assert.Equal(1, snap.Rows[1].Sectors[0].Sign);
+    }
+
+    [Fact]
+    public void HeatBandsFollowPercentOfReference()
+    {
+        var c = new StandingsOverlay.Config.LapLabConfig();   // Good 1% · Full 2% · Ignore 4.5%
+        Assert.Equal(0, LapLabTracker.HeatOf(0.4, c));         // on pace: quiet
+        Assert.Equal(0, LapLabTracker.HeatOf(1.0, c));
+        Assert.Equal(0.5f, LapLabTracker.HeatOf(1.5, c), 2);   // focus band ramps
+        Assert.Equal(1f, LapLabTracker.HeatOf(2.0, c), 2);
+        Assert.Equal(1f, LapLabTracker.HeatOf(3.5, c), 2);     // stays full red until Ignore
+        Assert.True(float.IsNaN(LapLabTracker.HeatOf(4.5, c)));// mistake territory: dim, not red
+        Assert.Equal(-0.5f, LapLabTracker.HeatOf(-0.5, c), 2); // gains ramp green
+        Assert.Equal(-1f, LapLabTracker.HeatOf(-2.0, c), 2);
     }
 
     [Fact]
