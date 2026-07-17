@@ -3,8 +3,10 @@ using StandingsOverlay.Config;
 namespace StandingsOverlay.Data;
 
 /// <summary>One table cell. Sign: 0 neutral · 1 slower than ref (red) · 2 faster than ref
-/// (purple) · 3 dirty (amber) · 4 dim (untimed / not applicable).</summary>
-public readonly record struct LapLabCell(string Text, int Sign);
+/// (purple) · 3 dirty (amber) · 4 dim (untimed / not applicable). Heat is the signed
+/// magnitude (-1..+1, delta / HeatScale) that drives the cell's background — the at-a-glance
+/// "where am I losing it" channel while driving.</summary>
+public readonly record struct LapLabCell(string Text, int Sign, float Heat = 0);
 
 public sealed record LapLabRow(
     string LapText,
@@ -12,12 +14,14 @@ public sealed record LapLabRow(
     IReadOnlyList<LapLabCell> Sectors,
     string TimeText,
     bool TimeDim,           // dirty laps: time shown muted
-    LapLabCell Delta)       // lap delta vs ref, or the dirty reason ("off S2" / "pit" / "AR")
+    LapLabCell Delta,       // lap delta vs ref — always the number, even on dirty laps
+    LapLabCell Status)      // "off S2" / "pit" / "AR" / "slow"; empty when clean
 {
     public bool VisuallyEquals(LapLabRow o)
     {
         if (LapText != o.LapText || IsSessionBest != o.IsSessionBest || TimeText != o.TimeText ||
-            TimeDim != o.TimeDim || Delta != o.Delta || Sectors.Count != o.Sectors.Count) return false;
+            TimeDim != o.TimeDim || Delta != o.Delta || Status != o.Status ||
+            Sectors.Count != o.Sectors.Count) return false;
         for (int i = 0; i < Sectors.Count; i++)
             if (Sectors[i] != o.Sectors[i]) return false;
         return true;
@@ -180,7 +184,7 @@ public sealed class LapLabTracker
             bool wantOptimal = mode.Equals("SessionOptimal", StringComparison.OrdinalIgnoreCase);
             if (wantOptimal)
             {
-                refSecs = turnView ? OptimalFor(bounds)
+                refSecs = turnView ? OptimalFor(bounds, clock.Bounds)
                     : _optimal.Length == n && !_optimal.Any(double.IsNaN) ? _optimal : null;
                 if (refSecs is not null) refName = "optimal";
             }
@@ -198,9 +202,33 @@ public sealed class LapLabTracker
 
         var rows = new List<LapLabRow>();
         int maxRows = Math.Clamp(cfg.LapLab.MaxRows, 1, 30);
+        float heatScale = (float)Math.Max(0.05, cfg.LapLab.HeatScale);
+        // 107% rule: a lap this far off the pace is traffic or a trip through the gravel —
+        // it collapses to one quiet line instead of a row of screaming red.
+        double slowAt = 1.07 * (_bestIdx >= 0 ? _laps[_bestIdx].LapTime : refSecs is not null ? refLap : double.MaxValue);
         for (int li = _laps.Count - 1; li >= 0 && rows.Count < maxRows; li--)
         {
             var lap = _laps[li];
+            bool clean = lap.Dirt == LapDirt.Clean;
+            string reason = lap.Dirt switch
+            {
+                LapDirt.Clean => "",
+                LapDirt.Off => lap.DirtSector >= 0 ? $"off S{lap.DirtSector + 1}" : "off",
+                LapDirt.Pit => "pit",
+                LapDirt.Reset => "AR",
+                _ => "tow",
+            };
+            string timeText = FmtTime(lap.LapTime, Math.Max(dec, 2));
+
+            if (cfg.LapLab.HideSlowLaps && lap.LapTime > slowAt)
+            {
+                var quiet = new LapLabCell("", 0);
+                rows.Add(new LapLabRow(lap.Number.ToString(), false,
+                    Enumerable.Repeat(quiet, n).ToArray(), timeText, true, quiet,
+                    new LapLabCell(reason.Length > 0 ? reason : "slow", 4)));
+                continue;
+            }
+
             double[] splits = turnView ? LapRef.SplitsOf(lap.TimeAtPct, lap.LapTime, bounds) : lap.Sectors;
             var cells = new LapLabCell[n];
             for (int i = 0; i < n; i++)
@@ -216,40 +244,26 @@ public sealed class LapLabTracker
                 {
                     double delta = s - refSecs[i];
                     int sign = dirty ? 3 : delta <= -eps ? 2 : delta >= eps ? 1 : 0;
-                    cells[i] = new LapLabCell(FmtDelta(delta, dec), sign);
+                    float heat = dirty ? 0 : (float)Math.Clamp(delta / heatScale, -1, 1);
+                    cells[i] = new LapLabCell(FmtDelta(delta, dec), sign, heat);
                 }
             }
 
-            bool clean = lap.Dirt == LapDirt.Clean;
-            LapLabCell deltaCell;
-            if (!clean)
-            {
-                string reason = lap.Dirt switch
-                {
-                    LapDirt.Off => lap.DirtSector >= 0 ? $"off S{lap.DirtSector + 1}" : "off",
-                    LapDirt.Pit => "pit",
-                    LapDirt.Reset => "AR",
-                    _ => "tow",
-                };
-                deltaCell = new LapLabCell(reason, 3);
-            }
-            else if (refSecs is not null)
+            LapLabCell deltaCell = new("", 0);
+            if (refSecs is not null)
             {
                 double delta = lap.LapTime - refLap;
                 deltaCell = new LapLabCell(FmtDelta(delta, dec), delta <= -eps ? 2 : delta >= eps ? 1 : 0);
-            }
-            else
-            {
-                deltaCell = new LapLabCell("", 0);
             }
 
             rows.Add(new LapLabRow(
                 LapText: lap.Number.ToString(),
                 IsSessionBest: li == _bestIdx,
                 Sectors: cells,
-                TimeText: FmtTime(lap.LapTime, Math.Max(dec, 2)),
+                TimeText: timeText,
                 TimeDim: !clean,
-                Delta: deltaCell));
+                Delta: deltaCell,
+                Status: clean ? new LapLabCell("", 0) : new LapLabCell(reason, 3)));
         }
 
         string refText = refSecs is null
@@ -285,19 +299,22 @@ public sealed class LapLabTracker
         return _turnBounds;
     }
 
-    /// <summary>Per-zone best over the session's clean laps — the turn-view optimal.</summary>
-    private double[]? OptimalFor(float[] bounds)
+    /// <summary>Per-zone best — the turn-view optimal. Same semantics as the sector optimal:
+    /// non-dirty zones from any honestly timed lap; null until every zone has a sample.</summary>
+    private double[]? OptimalFor(float[] bounds, float[] secBounds)
     {
         double[]? opt = null;
         foreach (var lap in _laps)
         {
-            if (lap.Dirt != LapDirt.Clean || lap.TimeAtPct.Length == 0) continue;
+            if (lap.Dirt >= LapDirt.Reset || lap.TimeAtPct.Length == 0) continue;
             var s = LapRef.SplitsOf(lap.TimeAtPct, lap.LapTime, bounds);
-            if (opt is null) { opt = s; continue; }
+            opt ??= Enumerable.Repeat(double.NaN, bounds.Length).ToArray();
             for (int i = 0; i < opt.Length; i++)
-                if (s[i] < opt[i]) opt[i] = s[i];
+                if (!TurnDirty(lap, bounds, i, secBounds) &&
+                    (double.IsNaN(opt[i]) || s[i] < opt[i]))
+                    opt[i] = s[i];
         }
-        return opt;
+        return opt is not null && !opt.Any(double.IsNaN) ? opt : null;
     }
 
     /// <summary>Off-track/pit attribution is recorded per official sector — a turn zone is
@@ -320,16 +337,23 @@ public sealed class LapLabTracker
     {
         var lap = _laps[li];
         bool fullyTimed = !lap.Sectors.Any(double.IsNaN);
-        if (lap.Dirt == LapDirt.Clean && fullyTimed)
+        if (lap.Dirt == LapDirt.Clean && fullyTimed &&
+            (_bestIdx < 0 || lap.LapTime < _laps[_bestIdx].LapTime))
+            _bestIdx = li;
+
+        // Optimal composites the best NON-DIRTY sectors from any honestly timed lap — same
+        // semantics as iRacing's own optimal, so a great S1 on a lap that ended in the gravel
+        // still counts. Only teleport-broken laps (Reset/Tow gaps) are excluded outright.
+        if (lap.Dirt < LapDirt.Reset)
         {
-            if (_bestIdx < 0 || lap.LapTime < _laps[_bestIdx].LapTime) _bestIdx = li;
             if (_optimal.Length != lap.Sectors.Length)
             {
                 _optimal = new double[lap.Sectors.Length];
                 Array.Fill(_optimal, double.NaN);
             }
             for (int i = 0; i < lap.Sectors.Length; i++)
-                if (!lap.SectorDirty[i] && (double.IsNaN(_optimal[i]) || lap.Sectors[i] < _optimal[i]))
+                if (!lap.SectorDirty[i] && !double.IsNaN(lap.Sectors[i]) &&
+                    (double.IsNaN(_optimal[i]) || lap.Sectors[i] < _optimal[i]))
                     _optimal[i] = lap.Sectors[i];
         }
 

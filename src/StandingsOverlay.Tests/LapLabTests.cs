@@ -181,6 +181,63 @@ public class LapLabTests
     }
 
     [Fact]
+    public void OptimalUsesCleanSectorsFromDirtyLaps()
+    {
+        // iRacing's optimal composites best sectors from ANY valid lap — a fast S1 on a lap
+        // that went off in S2 must count. Lap 3 is faster everywhere but dirty in S2.
+        var rig = new Rig(1, "Offline Testing");
+        rig.AddCar(0, 2, 25f);
+        rig.Cfg.LapLab.Reference = "SessionOptimal";
+        var clock = NewClock();
+        Drive(clock, [25, 25.0, 24.0],
+            (lap, tf) => (lap == 2 && tf is > 0.45 and < 0.55 ? 0 : 3, false, 0));
+
+        var snap = new LapLabTracker().Build(rig.Tick, clock, rig.Roster, new LapRefStore(), rig.Cfg);
+        Assert.StartsWith("ref optimal", snap.RefText);
+        // The clean 25.0 lap (older row) must read RED in S1 — the optimal's S1 came from
+        // the faster dirty lap. Under clean-laps-only semantics this cell was neutral.
+        Assert.Equal(1, snap.Rows[1].Sectors[0].Sign);
+    }
+
+    [Fact]
+    public void SlowLapsCollapseToOneQuietLine()
+    {
+        var rig = new Rig(1, "Offline Testing");
+        rig.AddCar(0, 2, 25f);
+        var clock = NewClock();
+        Drive(clock, [25, 25.0, 28.0]);   // 28.0 > 107% of 25.0
+
+        var snap = new LapLabTracker().Build(rig.Tick, clock, rig.Roster, new LapRefStore(), rig.Cfg);
+        var slow = snap.Rows[0];
+        Assert.Equal("slow", slow.Status.Text);
+        Assert.All(slow.Sectors, c => Assert.Equal("", c.Text));
+        Assert.Equal("", slow.Delta.Text);
+
+        rig.Cfg.LapLab.HideSlowLaps = false;
+        var clock2 = NewClock();
+        Drive(clock2, [25, 25.0, 28.0]);
+        var snap2 = new LapLabTracker().Build(rig.Tick, clock2, rig.Roster, new LapRefStore(), rig.Cfg);
+        Assert.NotEqual("", snap2.Rows[0].Sectors[0].Text);   // full row when the filter is off
+    }
+
+    [Fact]
+    public void DirtyLap_DeltaAndStatusAreSeparateColumns()
+    {
+        var rig = new Rig(1, "Offline Testing");
+        rig.AddCar(0, 2, 25f);
+        var clock = NewClock();
+        Drive(clock, [25, 25.0, 25.0],
+            (lap, tf) => (lap == 2 && tf is > 0.45 and < 0.55 ? 0 : 3, false, 0));
+
+        var snap = new LapLabTracker().Build(rig.Tick, clock, rig.Roster, new LapRefStore(), rig.Cfg);
+        var dirty = snap.Rows[0];
+        Assert.Equal("off S2", dirty.Status.Text);
+        Assert.StartsWith("+", dirty.Delta.Text);   // the number survives alongside the reason
+        Assert.True(dirty.TimeDim);
+        Assert.Equal("", snap.Rows[1].Status.Text); // clean rows keep the column empty
+    }
+
+    [Fact]
     public void HiddenInRaces_EmptyBeforeBoundaries()
     {
         var rig = new Rig(1, "Race");

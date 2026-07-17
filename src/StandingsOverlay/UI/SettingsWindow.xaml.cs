@@ -446,9 +446,13 @@ public partial class SettingsWindow : Window
             () => l.MaxRows, v => l.MaxRows = (int)v, v => $"{v:0}"));
         body.Children.Add(Slider("Gap decimals", null, 1, 3, 1,
             () => l.Decimals, v => l.Decimals = (int)v, v => $"{v:0}"));
-        body.Children.Add(Segmented("Columns", "Official sectors, or turn zones detected from the reference lap's speed trace (a chicane or esses complex counts as one T).",
+        body.Children.Add(Segmented("Columns", "Official sectors, or turn zones detected from the reference lap's speed trace (a chicane or esses complex counts as one T). Switch freely — laps always record both.",
             new[] { ("Sectors", "Sectors"), ("Turns", "Turns") },
             () => l.View, v => Apply(() => l.View = v)));
+        body.Children.Add(Slider("Heat range", "Cell backgrounds reach full color at this much time lost or gained — the glance-while-driving channel.", 0.05, 1.0, 0.05,
+            () => l.HeatScale, v => l.HeatScale = v, v => $"±{v:0.00}s"));
+        body.Children.Add(Toggle("Hide 107% laps", "Laps slower than 107% of your best collapse to one quiet line — traffic, spins, offs.",
+            () => l.HideSlowLaps, v => l.HideSlowLaps = v));
 
         body.Children.Add(Subhead("Reference lap"));
         body.Children.Add(Segmented("Reference", "Fastest full lap · best sectors combined · your saved best from an earlier session · an imported telemetry lap.",

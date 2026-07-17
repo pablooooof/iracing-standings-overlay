@@ -241,6 +241,8 @@ public sealed class LapLabConfig
     // Columns: official sectors, or turn zones auto-detected from the reference's speed
     // trace (falls back to sectors when no trace segments cleanly).
     public string View { get; set; } = "Sectors";             // Sectors | Turns
+    public bool HideSlowLaps { get; set; } = true;    // >107% of best → one quiet line (traffic/spin)
+    public double HeatScale { get; set; } = 0.25;     // seconds lost for a fully saturated cell background
     // SessionBest | SessionOptimal | PreviousBest | File
     public string Reference { get; set; } = "SessionBest";
     public string ReferenceFile { get; set; } = "";       // .ibt path used when Reference = File

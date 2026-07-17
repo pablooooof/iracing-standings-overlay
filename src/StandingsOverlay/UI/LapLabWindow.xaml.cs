@@ -93,7 +93,7 @@ public partial class LapLabWindow : Window
         Table.ColumnDefinitions.Clear();
         Table.RowDefinitions.Clear();
 
-        int cols = 1 + s.SectorHeaders.Count + 2;   // LAP · S1..Sn · TIME · Δ
+        int cols = 1 + s.SectorHeaders.Count + 3;   // LAP · S1..Sn · TIME · Δ · status
         for (int c = 0; c < cols; c++)
             Table.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         for (int r = 0; r <= s.Rows.Count; r++)
@@ -101,18 +101,19 @@ public partial class LapLabWindow : Window
 
         Header(0, "LAP", left: true);
         for (int i = 0; i < s.SectorHeaders.Count; i++) Header(1 + i, s.SectorHeaders[i]);
-        Header(cols - 2, "TIME");
-        Header(cols - 1, "Δ");
+        Header(cols - 3, "TIME");
+        Header(cols - 2, "Δ");
 
         for (int r = 0; r < s.Rows.Count; r++)
         {
             var row = s.Rows[r];
             Cell(r + 1, 0, row.LapText, row.IsSessionBest ? BestBrush : DimBrush, left: true, bold: row.IsSessionBest);
             for (int i = 0; i < row.Sectors.Count; i++)
-                Cell(r + 1, 1 + i, row.Sectors[i].Text, SignBrush(row.Sectors[i].Sign));
-            Cell(r + 1, cols - 2, row.TimeText,
+                Cell(r + 1, 1 + i, row.Sectors[i].Text, SignBrush(row.Sectors[i].Sign), heat: row.Sectors[i].Heat);
+            Cell(r + 1, cols - 3, row.TimeText,
                  row.IsSessionBest ? BestBrush : row.TimeDim ? FaintBrush : TextBrush, bold: row.IsSessionBest);
-            Cell(r + 1, cols - 1, row.Delta.Text, SignBrush(row.Delta.Sign));
+            Cell(r + 1, cols - 2, row.Delta.Text, SignBrush(row.Delta.Sign));
+            Cell(r + 1, cols - 1, row.Status.Text, SignBrush(row.Status.Sign));
         }
     }
 
@@ -138,18 +139,42 @@ public partial class LapLabWindow : Window
         Table.Children.Add(tb);
     }
 
-    private void Cell(int row, int col, string text, Brush brush, bool left = false, bool bold = false)
+    private void Cell(int row, int col, string text, Brush brush, bool left = false,
+                      bool bold = false, float heat = 0)
     {
         var tb = new TextBlock
         {
             Text = text, Foreground = brush, FontFamily = new FontFamily("Consolas"),
-            FontSize = 12, Margin = new Thickness(left ? 0 : 10, 0, 0, 0),
+            FontSize = 12,
             TextAlignment = left ? TextAlignment.Left : TextAlignment.Right,
             FontWeight = bold ? FontWeights.Bold : FontWeights.Normal,
         };
-        Grid.SetRow(tb, row);
-        Grid.SetColumn(tb, col);
-        Table.Children.Add(tb);
+
+        FrameworkElement cell = tb;
+        if (Math.Abs(heat) > 0.02f && text.Length > 0)
+        {
+            // The heatmap channel: background saturation ∝ time lost (red) / gained (green),
+            // readable in peripheral vision at speed where the digits are not.
+            byte alpha = (byte)(Math.Min(1f, Math.Abs(heat)) * 0x62);
+            var color = heat > 0 ? Color.FromArgb(alpha, 0xD6, 0x45, 0x45)
+                                 : Color.FromArgb(alpha, 0x2E, 0x9E, 0x63);
+            var bg = new SolidColorBrush(color);
+            bg.Freeze();
+            cell = new Border
+            {
+                Background = bg, CornerRadius = new CornerRadius(2),
+                Padding = new Thickness(3, 0, 3, 0), Child = tb,
+            };
+            cell.Margin = new Thickness(7, 0, -3, 0);   // aligns digits with unheated cells
+        }
+        else
+        {
+            cell.Margin = new Thickness(left ? 0 : 10, 0, 0, 0);
+        }
+
+        Grid.SetRow(cell, row);
+        Grid.SetColumn(cell, col);
+        Table.Children.Add(cell);
     }
 
     public bool EditMode
@@ -185,11 +210,11 @@ public partial class LapLabWindow : Window
             SectorHeaders: ["S1", "S2", "S3"],
             Rows:
             [
-                new LapLabRow("9", false, [new("+0.16", 1), new("+0.53", 1), new("−0.03", 2)], "2:00.14", false, new("+0.66", 1)),
-                new LapLabRow("8", true, [new("+0.09", 1), new("+0.44", 1), new("+0.11", 1)], "2:00.12", false, new("+0.64", 1)),
-                new LapLabRow("7", false, [new("+0.14", 1), new("+1.32", 3), new("+0.10", 1)], "2:01.04", true, new("off S2", 3)),
-                new LapLabRow("6", false, [new("+0.11", 1), new("+0.48", 1), new("+0.15", 1)], "2:00.22", false, new("+0.74", 1)),
-                new LapLabRow("5", false, [new("+0.22", 1), new("+0.71", 1), new("+0.09", 1)], "2:00.50", false, new("+1.02", 1)),
+                new LapLabRow("9", false, [new("+0.16", 1, 0.6f), new("+0.53", 1, 1f), new("−0.03", 2, -0.15f)], "2:00.14", false, new("+0.66", 1), new("", 0)),
+                new LapLabRow("8", true, [new("+0.09", 1, 0.35f), new("+0.44", 1, 1f), new("+0.11", 1, 0.45f)], "2:00.12", false, new("+0.64", 1), new("", 0)),
+                new LapLabRow("7", false, [new("+0.14", 1, 0.55f), new("+1.32", 3), new("+0.10", 1, 0.4f)], "2:01.04", true, new("+1.56", 1), new("off S2", 3)),
+                new LapLabRow("6", false, [new("+0.11", 1, 0.45f), new("+0.48", 1, 1f), new("+0.15", 1, 0.6f)], "2:00.22", false, new("+0.74", 1), new("", 0)),
+                new LapLabRow("5", false, [new("", 0), new("", 0), new("", 0)], "2:09.50", true, new("", 0), new("slow", 4)),
             ]));
     }
 }

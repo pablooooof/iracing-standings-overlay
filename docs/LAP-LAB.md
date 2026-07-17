@@ -85,6 +85,17 @@ one mergeable pair → 7 zones).
 beat the ref sector, amber = dirty, green lap number + time = session best. Before any clean
 lap exists, cells show absolute sector times instead of deltas.
 
+Glance channels (2026-07-16 UX round): split cells carry a **heatmap background** — red/green
+saturation ∝ delta magnitude, full color at `HeatScale` (default ±0.25 s) — readable in
+peripheral vision at speed. The Δ column always shows the number (even on dirty laps); the
+dirty reason ("off S2" / "pit" / "AR") lives in its own trailing status column. Laps slower
+than **107 % of the session best** collapse to one quiet line ("slow") — traffic/spins don't
+scream red (`HideSlowLaps`, on by default). Gray time = lap not clean.
+
+**Optimal semantics** match iRacing: the composite takes the best NON-DIRTY split from any
+honestly timed lap (teleport-broken laps excluded) — a fast S1 on a lap that ended in the
+gravel still counts. Clean-laps-only was ~0.3 s pessimistic vs the sim's own optimal.
+
 Config: `LapLab` section — `Enabled`, `Decimals` (1-3, default 2), `MaxRows`, `Reference`
 ("SessionBest" | "SessionOptimal" | "PreviousBest" | "File"), `ReferenceFile`,
 `SaveSessionBest`, `WarnTrackTempDelta`, `Scale`, `X/Y`. Settings window: "Lap Lab" section
