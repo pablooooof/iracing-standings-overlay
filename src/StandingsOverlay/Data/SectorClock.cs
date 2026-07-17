@@ -14,7 +14,9 @@ public sealed record SectorLap(
     LapDirt Dirt,
     int DirtSector,         // first dirty sector (0-based) for the reason chip; -1
     float[] TimeAtPct,      // seconds since lap start at pct k/LapRef.GridSize
-    float[] SpeedAtPct);    // m/s on the same grid; empty when the source had no speed
+    float[] SpeedAtPct,     // m/s on the same grid; empty when the source had no speed
+    float[] BrakeAtPct,     // 0..1 pedal grids — feed the turn-zone detector; empty when absent
+    float[] ThrottleAtPct);
 
 /// <summary>
 /// Times the player's laps and official sectors from LapDistPct boundary crossings. iRacing
@@ -39,8 +41,13 @@ public sealed class SectorClock
     // Feeds previous-best saving and phase 3's corner segmentation.
     private readonly double[] _gridT = new double[LapRef.GridSize];
     private readonly float[] _gridV = new float[LapRef.GridSize];
+    private readonly float[] _gridB = new float[LapRef.GridSize];
+    private readonly float[] _gridTh = new float[LapRef.GridSize];
     private bool _hasSpeed;
+    private bool _hasPedals;
     private float _prevSpeed = float.NaN;
+    private float _prevBrake = float.NaN;
+    private float _prevThrottle = float.NaN;
 
     private readonly List<SectorLap> _done = [];
     private bool _armed;                // lap started with a real S/F crossing
@@ -97,8 +104,10 @@ public sealed class SectorClock
 
     /// <summary>One telemetry sample of the player. <paramref name="surface"/> is
     /// irsdk_TrkLoc: -1 not in world · 0 off track · 1 pit stall · 2 approaching pits · 3 on track.
-    /// <paramref name="speed"/> (m/s) is optional — it only feeds the reference speed grid.</summary>
-    public void Sample(float pct, double time, int surface, bool onPitRoad, float speed = float.NaN)
+    /// <paramref name="speed"/> (m/s) and the pedals (0..1) are optional — they only feed the
+    /// reference grids that the turn-zone detector segments.</summary>
+    public void Sample(float pct, double time, int surface, bool onPitRoad,
+                       float speed = float.NaN, float brake = float.NaN, float throttle = float.NaN)
     {
         if (_bounds.Length < 2) return;
 
@@ -109,10 +118,10 @@ public sealed class SectorClock
             return;
         }
 
-        if (_prevPct < 0) { _prevPct = pct; _prevTime = time; _prevSpeed = speed; return; }
+        if (_prevPct < 0) { _prevPct = pct; _prevTime = time; RememberPedals(speed, brake, throttle); return; }
 
         double dt = time - _prevTime;
-        if (dt <= 0) { _prevPct = pct; _prevTime = time; _prevSpeed = speed; return; }   // paused / clock resync
+        if (dt <= 0) { _prevPct = pct; _prevTime = time; RememberPedals(speed, brake, throttle); return; }   // paused / clock resync
 
         float d = pct - _prevPct;
         bool wrapped = d < -0.5f;                 // forward across S/F
@@ -123,7 +132,7 @@ public sealed class SectorClock
             if (_armed) { _armed = false; ResetCount++; }
             _prevPct = pct;
             _prevTime = time;
-            _prevSpeed = speed;
+            RememberPedals(speed, brake, throttle);
             return;
         }
 
@@ -143,16 +152,20 @@ public sealed class SectorClock
         {
             double span = wrapped ? 1 - _prevPct + pct : d;
             double tWrap = _prevTime + dt * (1 - _prevPct) / span;
-            float vWrap = float.IsNaN(_prevSpeed) || float.IsNaN(speed)
-                ? speed
-                : _prevSpeed + (speed - _prevSpeed) * (float)((1 - _prevPct) / span);
+            float wf = (float)((1 - _prevPct) / span);
+            float vWrap = Lerp(_prevSpeed, speed, wf);
+            float bWrap = Lerp(_prevBrake, brake, wf);
+            float thWrap = Lerp(_prevThrottle, throttle, wf);
             if (_armed && !float.IsNaN(speed)) _hasSpeed = true;
+            if (_armed && !float.IsNaN(brake) && !float.IsNaN(throttle)) _hasPedals = true;
 
             // Grid the pre-wrap segment against the CLOSING lap (Cross(0) emits it), the
             // post-wrap segment against the fresh one.
             if (_armed)
-                FillGrid(_prevPct, wrapped ? 1f : pct, _prevTime,
-                         wrapped ? tWrap : time, _prevSpeed, wrapped ? vWrap : speed);
+                FillGrid(_prevPct, wrapped ? 1f : pct, _prevTime, wrapped ? tWrap : time,
+                         _prevSpeed, wrapped ? vWrap : speed,
+                         _prevBrake, wrapped ? bWrap : brake,
+                         _prevThrottle, wrapped ? thWrap : throttle);
 
             // Boundaries in (prevPct, 1) first, then — if we wrapped — [0, pct] in order.
             for (int bi = 1; bi < _bounds.Length; bi++)
@@ -171,26 +184,39 @@ public sealed class SectorClock
                     if (at > span) break;
                     Cross(bi, _prevTime + dt * at / span);
                 }
-                if (_armed) FillGrid(0f, pct, tWrap, time, vWrap, speed);
+                if (_armed) FillGrid(0f, pct, tWrap, time, vWrap, speed, bWrap, brake, thWrap, throttle);
             }
         }
 
         _prevPct = pct;
         _prevTime = time;
-        _prevSpeed = speed;
+        RememberPedals(speed, brake, throttle);
     }
 
+    private void RememberPedals(float speed, float brake, float throttle)
+    {
+        _prevSpeed = speed;
+        _prevBrake = brake;
+        _prevThrottle = throttle;
+    }
+
+    private static float Lerp(float a, float b, float f) =>
+        float.IsNaN(a) || float.IsNaN(b) ? b : a + (b - a) * f;
+
     /// <summary>Fill grid bins covered by one sample step (bin 0 is the lap start itself).</summary>
-    private void FillGrid(float fromPct, float toPct, double tA, double tB, float vA, float vB)
+    private void FillGrid(float fromPct, float toPct, double tA, double tB,
+                          float vA, float vB, float bA, float bB, float thA, float thB)
     {
         int from = Math.Max(1, (int)(fromPct * LapRef.GridSize) + 1);
         int to = Math.Min(LapRef.GridSize - 1, (int)(toPct * LapRef.GridSize));
         double span = toPct - fromPct;
         for (int k = from; k <= to; k++)
         {
-            double frac = span <= 0 ? 0 : ((double)k / LapRef.GridSize - fromPct) / span;
+            float frac = span <= 0 ? 0 : (float)(((double)k / LapRef.GridSize - fromPct) / span);
             _gridT[k] = tA + (tB - tA) * frac;
-            _gridV[k] = float.IsNaN(vA) || float.IsNaN(vB) ? float.NaN : (float)(vA + (vB - vA) * frac);
+            _gridV[k] = float.IsNaN(vA) || float.IsNaN(vB) ? float.NaN : vA + (vB - vA) * frac;
+            _gridB[k] = float.IsNaN(bA) || float.IsNaN(bB) ? float.NaN : bA + (bB - bA) * frac;
+            _gridTh[k] = float.IsNaN(thA) || float.IsNaN(thB) ? float.NaN : thA + (thB - thA) * frac;
         }
     }
 
@@ -224,17 +250,13 @@ public sealed class SectorClock
             float lastT = 0;
             for (int k = 1; k < LapRef.GridSize; k++)
                 gridT[k] = double.IsNaN(_gridT[k]) ? lastT : lastT = (float)(_gridT[k] - _crossT[0]);
-            float[] gridV = [];
-            if (_hasSpeed)
-            {
-                gridV = new float[LapRef.GridSize];
-                float lastV = 0;
-                for (int k = 0; k < LapRef.GridSize; k++)
-                    gridV[k] = float.IsNaN(_gridV[k]) ? lastV : lastV = _gridV[k];
-            }
+            float[] gridV = _hasSpeed ? PatchCopy(_gridV) : [];
+            float[] gridB = _hasPedals ? PatchCopy(_gridB) : [];
+            float[] gridTh = _hasPedals ? PatchCopy(_gridTh) : [];
 
             _done.Add(new SectorLap(++_lapCount, t - _crossT[0], sectors,
-                                    (bool[])_sectorDirty.Clone(), dirt, dirtSector, gridT, gridV));
+                                    (bool[])_sectorDirty.Clone(), dirt, dirtSector,
+                                    gridT, gridV, gridB, gridTh));
         }
 
         _armed = true;
@@ -244,8 +266,21 @@ public sealed class SectorClock
         Array.Clear(_sectorDirty);
         Array.Fill(_gridT, double.NaN);
         Array.Fill(_gridV, float.NaN);
+        Array.Fill(_gridB, float.NaN);
+        Array.Fill(_gridTh, float.NaN);
         _hasSpeed = false;
+        _hasPedals = false;
         _crossT[0] = t;
+    }
+
+    /// <summary>Copy a working grid with sampling gaps forward-filled.</summary>
+    private static float[] PatchCopy(float[] grid)
+    {
+        var outGrid = new float[LapRef.GridSize];
+        float last = 0;
+        for (int k = 0; k < LapRef.GridSize; k++)
+            outGrid[k] = float.IsNaN(grid[k]) ? last : last = grid[k];
+        return outGrid;
     }
 
     /// <summary>Extract SplitTimeInfo sector boundaries from the raw session YAML (irsdkSharp's

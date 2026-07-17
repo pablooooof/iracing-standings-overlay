@@ -42,6 +42,49 @@ public class CornerMapTests
     }
 
     [Fact]
+    public void PedalDetector_FindsRegions_MergesChicane()
+    {
+        var brake = new float[LapRef.GridSize];
+        var thr = new float[LapRef.GridSize];
+        for (int k = 0; k < brake.Length; k++)
+            (brake[k], thr[k]) = DemoSource.SynthPedals((float)k / brake.Length);
+
+        var bounds = CornerMap.FromPedals(brake, thr);
+        Assert.Equal(8, bounds.Length);   // [0] + 7 braking onsets (0.475/0.487 stay one zone)
+        Assert.Equal(0f, bounds[0]);
+        for (int i = 1; i < bounds.Length; i++)
+            Assert.True(bounds[i] > bounds[i - 1], "boundaries must ascend");
+
+        int ZoneOf(float pct) { int z = 0; while (z < bounds.Length - 1 && pct >= bounds[z + 1]) z++; return z; }
+        Assert.Equal(ZoneOf(0.475f), ZoneOf(0.487f));    // chicane holds together
+        Assert.NotEqual(ZoneOf(0.487f), ZoneOf(0.60f));  // next corner is its own zone
+
+        // Flat-out pedals (never braking, always full throttle) don't segment.
+        Assert.Empty(CornerMap.FromPedals(new float[LapRef.GridSize],
+                                          Enumerable.Repeat(1f, LapRef.GridSize).ToArray()));
+    }
+
+    [Fact]
+    public void ZoneLabels_UseOfficialNumbers()
+    {
+        var names = new CornerMap.CornerNames
+        {
+            Corners =
+            [
+                new(0.056f, 1, "La Source"),
+                new(0.100f, 2, "Eau Rouge"),
+                new(0.115f, 3, "Raidillon"),
+                new(0.345f, 5, "Les Combes"),
+            ],
+        };
+        float[] bounds = [0f, 0.035f, 0.321f, 0.5f];
+        Assert.Equal("·", names.ZoneLabel(bounds, 0));      // S/F straight fragment: no corner
+        Assert.Equal("T1-3", names.ZoneLabel(bounds, 1));   // complex spans official T1..T3
+        Assert.Equal("T5", names.ZoneLabel(bounds, 2));
+        Assert.Equal("La Source", names.ZoneName(bounds, 1));
+    }
+
+    [Fact]
     public void FlatOrEmptyTraces_FallBack()
     {
         var flat = new float[LapRef.GridSize];

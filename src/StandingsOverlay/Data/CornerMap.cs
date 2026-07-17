@@ -1,3 +1,5 @@
+using System.IO;
+
 namespace StandingsOverlay.Data;
 
 /// <summary>
@@ -16,6 +18,70 @@ public static class CornerMap
     private const float MinDropFrac = 0.12f;    // apex must sit ≥12% below its gate maxima
     public const int MinZones = 4;              // outside this range the detection is
     public const int MaxZones = 24;             // untrustworthy → caller falls back to sectors
+
+    private const float BrakeOn = 0.08f;
+    private const float ThrottleFull = 0.85f;
+    private const int GapCloseBins = 8;     // throttle blips inside a chicane don't split it
+    private const int MinRegionBins = 3;    // shorter "cornering" bursts are pedal noise
+
+    /// <summary>Zone boundaries from the pedal traces — the preferred detector. A corner is
+    /// what a driver says it is: braking onset → back to full throttle. Flat-out kinks that
+    /// never make a speed minimum (Eau Rouge) correctly stay part of their straight, and
+    /// chicanes hold together through internal throttle blips (gap closing). Boundaries sit
+    /// just before each braking onset, so a zone = braking + corner + full exit straight —
+    /// a bad exit bills its whole straight to the zone that caused it.</summary>
+    public static float[] FromPedals(float[] brakeAtPct, float[] throttleAtPct)
+    {
+        int n = Math.Min(brakeAtPct.Length, throttleAtPct.Length);
+        if (n < 100) return [];
+
+        var cornering = new bool[n];
+        bool any = false, all = true;
+        for (int i = 0; i < n; i++)
+        {
+            cornering[i] = brakeAtPct[i] > BrakeOn || throttleAtPct[i] < ThrottleFull;
+            any |= cornering[i];
+            all &= cornering[i];
+        }
+        if (!any || all) return [];
+
+        CloseGaps(cornering, GapCloseBins);
+
+        // Braking onsets (false→true edges, circular), regions under the noise floor dropped.
+        var onsets = new List<int>();
+        for (int i = 0; i < n; i++)
+        {
+            if (!cornering[i] || cornering[(i - 1 + n) % n]) continue;
+            int len = 0;
+            while (len < n && cornering[(i + len) % n]) len++;
+            if (len >= MinRegionBins) onsets.Add(i);
+        }
+        if (onsets.Count < MinZones || onsets.Count > MaxZones) return [];
+
+        var bounds = new List<float> { 0f };
+        foreach (int o in onsets)
+        {
+            float b = (float)((o - 2 + n) % n) / n;
+            if (b > 0.003f) bounds.Add(b);
+        }
+        bounds.Sort();
+        return bounds.Where((b, i) => i == 0 || b > bounds[i - 1] + 0.003f).ToArray();
+    }
+
+    /// <summary>Fill non-cornering gaps of at most <paramref name="maxGap"/> bins (circular).</summary>
+    private static void CloseGaps(bool[] c, int maxGap)
+    {
+        int n = c.Length;
+        for (int i = 0; i < n; i++)
+        {
+            if (c[i] || !c[(i - 1 + n) % n]) continue;   // only gap starts
+            int len = 0;
+            while (len < n && !c[(i + len) % n]) len++;
+            if (len <= maxGap && len < n)
+                for (int k = 0; k < len; k++) c[(i + k) % n] = true;
+            i += len - 1;
+        }
+    }
 
     /// <summary>Zone start pcts (ascending, [0] == 0), or [] when the trace doesn't segment
     /// cleanly (missing speed, oval-flat, detection out of range).</summary>
@@ -75,6 +141,61 @@ public static class CornerMap
             bounds.Add((float)best / n);
         }
         return bounds.Where((b, i) => i == 0 || b > bounds[i - 1] + 0.001f).ToArray();
+    }
+
+    /// <summary>Official corner numbers/names for a track, loaded once per combo from
+    /// <c>corners/{trackId}_{config}.json</c> next to the exe. Zone headers then read the
+    /// official numbering ("T10", "T18-19" for a merged chicane) instead of sequential
+    /// indices that drift once complexes merge. Entirely optional — no file, no change.</summary>
+    public sealed class CornerNames
+    {
+        public sealed record Entry(float Pct, int Num, string Name);
+        public List<Entry> Corners { get; set; } = [];
+
+        private static string _key = "";
+        private static CornerNames? _cached;
+
+        public static CornerNames? For(Roster roster)
+        {
+            string key = $"{roster.TrackId}_{roster.TrackConfig}";
+            if (key == _key) return _cached;
+            _key = key;
+            _cached = null;
+            try
+            {
+                string cfg = roster.TrackConfig.Replace(' ', '-').ToLowerInvariant();
+                foreach (var bad in Path.GetInvalidFileNameChars()) cfg = cfg.Replace(bad.ToString(), "");
+                string path = Path.Combine(AppContext.BaseDirectory, "corners", $"{roster.TrackId}_{cfg}.json");
+                if (File.Exists(path))
+                {
+                    _cached = System.Text.Json.JsonSerializer.Deserialize<CornerNames>(File.ReadAllText(path));
+                    if (_cached is not { Corners.Count: > 0 }) _cached = null;
+                    else Log.Write($"lap lab: {_cached.Corners.Count} corner names loaded (track {key})");
+                }
+            }
+            catch { _cached = null; }
+            return _cached;
+        }
+
+        /// <summary>Header for zone i: the official numbers whose pcts fall inside it —
+        /// "T10", "T18-19", or "·" for a zone with no corner (straight fragment at S/F).</summary>
+        public string ZoneLabel(float[] bounds, int i)
+        {
+            float from = bounds[i], to = i < bounds.Length - 1 ? bounds[i + 1] : 1f;
+            var nums = Corners.Where(c => c.Pct >= from && c.Pct < to)
+                              .Select(c => c.Num).OrderBy(x => x).ToList();
+            return nums.Count == 0 ? "·"
+                 : nums.Count == 1 ? $"T{nums[0]}"
+                 : $"T{nums[0]}-{nums[^1]}";
+        }
+
+        /// <summary>First corner name inside zone i, for the log map ("T10 Pouhon").</summary>
+        public string ZoneName(float[] bounds, int i)
+        {
+            float from = bounds[i], to = i < bounds.Length - 1 ? bounds[i + 1] : 1f;
+            return Corners.Where(c => c.Pct >= from && c.Pct < to)
+                          .OrderBy(c => c.Pct).FirstOrDefault()?.Name ?? "";
+        }
     }
 
     /// <summary>Prominence gate of a minimum: walking each way, the highest speed reached

@@ -92,7 +92,9 @@ public sealed class IRacingSource : ITelemetrySource
             int surf = _sdk.GetData("PlayerTrackSurface") is int sf ? sf : 3;
             bool pit = _sdk.GetData("OnPitRoad") is bool pr && pr;
             float spd = _sdk.GetData("Speed") is float sv ? sv : float.NaN;
-            try { _sectorClock.Sample(labPct, labTime, surf, pit, spd); }
+            float brk = _sdk.GetData("Brake") is float bv ? bv : float.NaN;
+            float thr = _sdk.GetData("Throttle") is float tv ? tv : float.NaN;
+            try { _sectorClock.Sample(labPct, labTime, surf, pit, spd, brk, thr); }
             catch { /* never let lap timing break the tick */ }
         }
 

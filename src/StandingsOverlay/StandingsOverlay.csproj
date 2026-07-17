@@ -27,4 +27,9 @@
     <PackageReference Include="MinVer" Version="6.0.0" PrivateAssets="All" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Official corner numbers/names per track (Lap Lab turn view), keyed {trackId}_{config}. -->
+    <Content Include="corners\**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

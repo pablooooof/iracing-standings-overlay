@@ -1,0 +1,23 @@
+{
+  "Corners": [
+    { "Pct": 0.056, "Num": 1, "Name": "La Source" },
+    { "Pct": 0.100, "Num": 2, "Name": "Eau Rouge" },
+    { "Pct": 0.115, "Num": 3, "Name": "Raidillon" },
+    { "Pct": 0.128, "Num": 4, "Name": "Raidillon Top" },
+    { "Pct": 0.345, "Num": 5, "Name": "Les Combes" },
+    { "Pct": 0.358, "Num": 6, "Name": "Les Combes 2" },
+    { "Pct": 0.385, "Num": 7, "Name": "Malmedy" },
+    { "Pct": 0.441, "Num": 8, "Name": "Bruxelles" },
+    { "Pct": 0.470, "Num": 9, "Name": "Speaker's" },
+    { "Pct": 0.548, "Num": 10, "Name": "Pouhon" },
+    { "Pct": 0.560, "Num": 11, "Name": "Pouhon 2" },
+    { "Pct": 0.645, "Num": 12, "Name": "Fagnes" },
+    { "Pct": 0.655, "Num": 13, "Name": "Fagnes 2" },
+    { "Pct": 0.708, "Num": 14, "Name": "Campus" },
+    { "Pct": 0.733, "Num": 15, "Name": "Paul Frère" },
+    { "Pct": 0.842, "Num": 16, "Name": "Blanchimont" },
+    { "Pct": 0.888, "Num": 17, "Name": "Blanchimont 2" },
+    { "Pct": 0.968, "Num": 18, "Name": "Bus Stop" },
+    { "Pct": 0.978, "Num": 19, "Name": "Bus Stop 2" }
+  ]
+}

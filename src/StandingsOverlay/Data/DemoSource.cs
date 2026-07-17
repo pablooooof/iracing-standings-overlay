@@ -366,7 +366,8 @@ public sealed class DemoSource : ITelemetrySource
                     // the turn detector rightly refuses to call a corner map.
                     float speed = _lab ? SynthSpeed(pct)
                         : dtSub > 0 ? (float)(dp * TrackLenM / dtSub) : float.NaN;
-                    _sectorClock.Sample(pct, tm, playerSurf, _tick.OnPitRoad[PlayerIdx], speed);
+                    var (brk, thr) = _lab ? SynthPedals(pct) : (float.NaN, float.NaN);
+                    _sectorClock.Sample(pct, tm, playerSurf, _tick.OnPitRoad[PlayerIdx], speed, brk, thr);
                     prevPct2 = pct;
                 }
             }
@@ -421,6 +422,25 @@ public sealed class DemoSource : ITelemetrySource
             v -= depth[i] * MathF.Exp(-d * d / (2 * 0.012f * 0.012f));
         }
         return v;
+    }
+
+    /// <summary>Synthetic lab-mode pedal traces, consistent with SynthSpeed's apexes: full
+    /// braking ~1.2% before each apex, throttle low through it, recovering ~0.6% after. The
+    /// merged pair (0.475/0.487) never sees full throttle in between — the pedal detector
+    /// must keep it one zone.</summary>
+    internal static (float Brake, float Throttle) SynthPedals(float pct)
+    {
+        ReadOnlySpan<float> apex = [0.06f, 0.19f, 0.335f, 0.475f, 0.487f, 0.60f, 0.74f, 0.88f];
+        float brake = 0, throttle = 1;
+        foreach (var a in apex)
+        {
+            float d = pct - a;
+            if (d > 0.5f) d -= 1;
+            else if (d < -0.5f) d += 1;
+            if (d is >= -0.014f and <= -0.002f) brake = 1;
+            if (d is >= -0.014f and <= 0.006f) throttle = 0.2f;
+        }
+        return (brake, throttle);
     }
 
     /// <summary>Scripted lab-mode player pace: a repeating per-lap loss factor over the middle

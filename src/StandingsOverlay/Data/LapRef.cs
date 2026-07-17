@@ -34,6 +34,8 @@ public sealed class LapRef
     public double LapTime { get; set; }
     public float[] TimeAtPct { get; set; } = [];   // seconds since lap start at pct k/GridSize
     public float[] SpeedAtPct { get; set; } = [];  // m/s; empty when the source had no speed
+    public float[] BrakeAtPct { get; set; } = [];  // 0..1 pedal grids — preferred input for
+    public float[] ThrottleAtPct { get; set; } = []; // turn-zone segmentation; may be empty
     public RefConditions? Conditions { get; set; }
 
     /// <summary>Time since lap start at a lap fraction, linearly interpolated on the grid.</summary>

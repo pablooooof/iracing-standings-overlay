@@ -96,7 +96,14 @@ reference lap; corner-level "biggest losses" panel later. Spec: `docs/LAP-LAB.md
 - [x] **Phase 3a (2026-07-16)** — turn-by-turn view: `CornerMap` segments the reference speed
   trace (prominence-gated apexes, merge <1.5%, boundaries at inter-apex maxima); `LapLab.View`
   toggle Sectors ↔ Turns, splits from the recorded time grids, sector fallback when no trace.
+- [x] **Turn detection v2 (2026-07-16)** — pedal-based segmentation (braking onset → throttle
+  recovery; flat-out corners stay in their straight; chicanes gap-closed) + official corner
+  numbering via `corners/{trackId}_{config}.json` (Spa GP shipped, calibrated against a real
+  992 Cup lap: 11 zones, apexes within ±0.005). Speed minima remain the fallback.
 - [ ] **Phase 3b** — "biggest losses" panel with erratic/repeatable spread badges.
+- [ ] **turns.svg auto-naming** — iRacing's member API serves per-track SVG layers incl. official
+  turn labels; projecting labels onto the track path would generate corners/*.json for every
+  track automatically. Needs iRacing web auth — deferred (hand-authored files cover current use).
 - [ ] **Phase 4** — active-reset run mode: rows = attempts between resets, span timing, delta
   vs best run. (.blap/.olap parsing cut: proprietary format; G61 API pull = v2 candidate.)
 

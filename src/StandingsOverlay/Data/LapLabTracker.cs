@@ -73,6 +73,7 @@ public sealed class LapLabTracker
         _turnBounds = [];
         _turnSrcRef = null;
         _turnSrcLap = -1;
+        _loggedZoneMap = "";
     }
 
     public LapLabSnapshot Build(RawTick t, SectorClock clock, Roster roster, LapRefStore store, OverlayConfig cfg)
@@ -95,6 +96,8 @@ public sealed class LapLabTracker
                     LapTime = b.LapTime,
                     TimeAtPct = b.TimeAtPct,
                     SpeedAtPct = b.SpeedAtPct,
+                    BrakeAtPct = b.BrakeAtPct,
+                    ThrottleAtPct = b.ThrottleAtPct,
                     Conditions = new RefConditions(
                         roster.TrackId, roster.TrackConfig, roster.TrackName,
                         roster.PlayerCarPath, roster.PlayerCarName,
@@ -198,7 +201,20 @@ public sealed class LapLabTracker
         }
 
         var headers = new string[n];
-        for (int i = 0; i < n; i++) headers[i] = turnView ? $"T{i + 1}" : $"S{i + 1}";
+        var names = turnView ? CornerMap.CornerNames.For(roster) : null;
+        for (int i = 0; i < n; i++)
+            headers[i] = !turnView ? $"S{i + 1}"
+                : names?.ZoneLabel(bounds, i) ?? $"T{i + 1}";
+        if (names is not null && turnView)
+        {
+            string map = string.Join(" · ", Enumerable.Range(0, n)
+                .Select(i => $"{headers[i]} {names.ZoneName(bounds, i)}".TrimEnd()));
+            if (map != _loggedZoneMap)
+            {
+                _loggedZoneMap = map;
+                Log.Write($"lap lab: zones [{map}]");
+            }
+        }
 
         var rows = new List<LapLabRow>();
         int maxRows = Math.Clamp(cfg.LapLab.MaxRows, 1, 30);
@@ -295,26 +311,44 @@ public sealed class LapLabTracker
     private float[] _turnBounds = [];
     private LapRef? _turnSrcRef;
     private int _turnSrcLap = -1;
+    private string _loggedZoneMap = "";
 
-    /// <summary>Turn-zone boundaries from the active reference's speed trace, falling back to
-    /// the session best's own. Cached per source lap, so zones stay stable across the session
-    /// and segmentation only reruns when the source actually changes.</summary>
+    /// <summary>Turn-zone boundaries from the active reference's traces, falling back to the
+    /// session best's own. Pedals are the preferred detector (a corner = braking onset →
+    /// throttle recovery); speed minima cover older refs recorded without pedal grids.
+    /// Cached per source lap, so zones stay stable across the session and segmentation only
+    /// reruns when the source actually changes.</summary>
     private float[] TurnBounds(LapRef? ext)
     {
-        float[] speed = [];
+        float[] speed = [], brake = [], thr = [];
         LapRef? srcRef = null;
         int srcLap = -1;
-        if (ext is { SpeedAtPct.Length: > 0 }) { speed = ext.SpeedAtPct; srcRef = ext; }
-        else if (_bestIdx >= 0 && _laps[_bestIdx].SpeedAtPct.Length > 0)
-        { speed = _laps[_bestIdx].SpeedAtPct; srcLap = _bestIdx; }
-        if (speed.Length == 0) return [];
+        if (ext is not null && (ext.SpeedAtPct.Length > 0 || ext.BrakeAtPct.Length > 0))
+        {
+            srcRef = ext;
+            speed = ext.SpeedAtPct; brake = ext.BrakeAtPct; thr = ext.ThrottleAtPct;
+        }
+        else if (_bestIdx >= 0 &&
+                 (_laps[_bestIdx].SpeedAtPct.Length > 0 || _laps[_bestIdx].BrakeAtPct.Length > 0))
+        {
+            srcLap = _bestIdx;
+            var b = _laps[_bestIdx];
+            speed = b.SpeedAtPct; brake = b.BrakeAtPct; thr = b.ThrottleAtPct;
+        }
+        else return [];
 
         if (ReferenceEquals(srcRef, _turnSrcRef) && srcLap == _turnSrcLap) return _turnBounds;
         _turnSrcRef = srcRef;
         _turnSrcLap = srcLap;
-        _turnBounds = CornerMap.FromSpeed(speed);
+        string how = "pedals";
+        _turnBounds = brake.Length > 0 && thr.Length > 0 ? CornerMap.FromPedals(brake, thr) : [];
+        if (_turnBounds.Length == 0 && speed.Length > 0)
+        {
+            how = "speed";
+            _turnBounds = CornerMap.FromSpeed(speed);
+        }
         Log.Write(_turnBounds.Length >= CornerMap.MinZones
-            ? $"lap lab: {_turnBounds.Length} turn zones [{string.Join(" ", _turnBounds.Select(b => b.ToString("0.###")))}]"
+            ? $"lap lab: {_turnBounds.Length} turn zones via {how} [{string.Join(" ", _turnBounds.Select(b => b.ToString("0.###")))}]"
             : "lap lab: turn detection found no usable zones — falling back to sectors");
         return _turnBounds;
     }

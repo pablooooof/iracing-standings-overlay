@@ -67,16 +67,28 @@ Phase 4: active-reset run mode (rows = attempts between resets).
 ## Turn view (phase 3a)
 
 `LapLab.View: "Turns"` swaps the sector columns for auto-detected turn zones. iRacing has no
-corner channel — `Data/CornerMap` segments the **reference lap's speed trace** (smoothed
-minima = apexes, prominence-gated ≥12% drop; apexes closer than 1.5% of a lap merge, so a
-chicane/esses complex is ONE numbered T; boundaries at the fastest point between apexes).
+corner channel — `Data/CornerMap` segments the reference lap, **pedals first**
+(`FromPedals`: a corner = braking onset → back to full throttle, exactly how a driver
+defines one; throttle blips inside a chicane are gap-closed so the complex stays ONE zone;
+flat-out corners like Eau Rouge correctly remain part of their straight; boundaries sit just
+before each braking onset so a zone = braking + corner + full exit). Speed-minima
+(`FromSpeed`, prominence-gated) covers refs recorded before pedal grids existed. Verified
+against a real Spa 992 Cup lap: 11 pedal zones, every measured apex within ±0.005 of the
+real corner (66 km/h @ 0.056 = La Source … 69 km/h @ 0.973 = Bus Stop), including the
+driver's own Blanchimont-2 brake tap.
+
+**Official numbering**: optional `corners/{trackId}_{config}.json` next to the exe (shipped:
+Spa GP `523_grand-prix.json`, calibrated against that lap; demo `990001_demo.json`) maps
+corner pcts → official numbers/names. Zone headers then read "T8", "T10-11", "T18-19"
+instead of drifting sequential indices; a zone with no corner (the S/F straight fragment)
+shows "·". The zone→name map logs once (`lap lab: zones [T1 La Source · …]`).
+
 Zone splits come from the recorded time-at-pct grids (`LapRef.SplitsOf`) — no extra 60 Hz
-work. Segmentation source: the external ref's trace, else the session best's own; cached per
-source so zones stay stable. Detection outside 4–24 zones (ovals, missing speed) falls back
-to sectors with a log line. T-numbers are sequential per braking zone — close to the track
-map until complexes merge. Off-track/pit attribution maps from the official sectors
-(conservative amber). `--demo lab` feeds a synthetic 8-apex profile (`DemoSource.SynthSpeed`,
-one mergeable pair → 7 zones).
+work. Segmentation source: the external ref's traces, else the session best's own; cached
+per source so zones stay stable. Detection outside 4–24 zones (ovals, missing channels)
+falls back to sectors with a log line. Off-track/pit attribution maps from the official
+sectors (conservative amber). `--demo lab` feeds synthetic speed + pedal profiles
+(`SynthSpeed`/`SynthPedals`, one mergeable pair → 8 zones incl. the "·" fragment).
 
 ## Display
 

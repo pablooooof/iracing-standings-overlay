@@ -70,6 +70,9 @@ public static class IbtLap
                 !vars.TryGetValue("LapDistPct", out var vPct))
             { error = "missing SessionTime/LapDistPct channels"; return null; }
             vars.TryGetValue("Speed", out var vSpeed);
+            vars.TryGetValue("Brake", out var vBrake);
+            vars.TryGetValue("Throttle", out var vThrottle);
+            bool pedals = vBrake is not null && vThrottle is not null;
             vars.TryGetValue("PlayerTrackSurface", out var vSurf);
             vars.TryGetValue("OnPitRoad", out var vPit);
             vars.TryGetValue("TrackWetness", out var vWet);
@@ -135,10 +138,15 @@ public static class IbtLap
             // ---- pass 2: grid the chosen lap ------------------------------
             var gridT = new float[LapRef.GridSize];
             var gridV = vSpeed is not null ? new float[LapRef.GridSize] : [];
+            var gridB = pedals ? new float[LapRef.GridSize] : [];
+            var gridTh = pedals ? new float[LapRef.GridSize] : [];
             Array.Fill(gridT, float.NaN);
             if (gridV.Length > 0) Array.Fill(gridV, float.NaN);
+            if (pedals) { Array.Fill(gridB, float.NaN); Array.Fill(gridTh, float.NaN); }
 
-            double t0 = -1; prevPct = -1; prevT = 0; float prevV = 0;
+            double t0 = -1; prevPct = -1; prevT = 0;
+            Span<float> prev = stackalloc float[3];   // speed, brake, throttle
+            Span<float> curr = stackalloc float[3];
             double lapTime = best.LapTime;
             fs.Position = bufOffset + best.FirstRow * bufLen;
             for (long r = best.FirstRow; r <= Math.Min(best.LastRow, recordCount - 1); r++)
@@ -146,8 +154,10 @@ public static class IbtLap
                 if (fs.Read(row, 0, bufLen) != bufLen) break;
                 double t = BitConverter.ToDouble(row, vTime.Offset);
                 float pct = BitConverter.ToSingle(row, vPct.Offset);
-                float v = vSpeed is not null ? BitConverter.ToSingle(row, vSpeed.Offset) : 0;
-                if (prevPct < 0) { prevPct = pct; prevT = t; prevV = v; continue; }
+                curr[0] = vSpeed is not null ? BitConverter.ToSingle(row, vSpeed.Offset) : 0;
+                curr[1] = pedals ? BitConverter.ToSingle(row, vBrake!.Offset) : 0;
+                curr[2] = pedals ? BitConverter.ToSingle(row, vThrottle!.Offset) : 0;
+                if (prevPct < 0) { prevPct = pct; prevT = t; curr.CopyTo(prev); continue; }
 
                 float d = pct - prevPct;
                 if (d < -0.5f)   // the S/F crossing that starts (or ends) the lap
@@ -156,7 +166,7 @@ public static class IbtLap
                     if (t0 < 0)
                     {
                         t0 = tCross;
-                        FillBins(gridT, gridV, 0, pct, tCross, t, prevV, v, t0);
+                        FillBins(gridT, gridV, gridB, gridTh, 0, pct, tCross, t, prev, curr, t0);
                     }
                     else
                     {
@@ -166,13 +176,14 @@ public static class IbtLap
                 }
                 else if (t0 >= 0 && d > 0)
                 {
-                    FillBins(gridT, gridV, prevPct, pct, prevT, t, prevV, v, t0);
+                    FillBins(gridT, gridV, gridB, gridTh, prevPct, pct, prevT, t, prev, curr, t0);
                 }
-                prevPct = pct; prevT = t; prevV = v;
+                prevPct = pct; prevT = t; curr.CopyTo(prev);
             }
             gridT[0] = 0;
             PatchGaps(gridT, (float)lapTime);
             if (gridV.Length > 0) PatchGaps(gridV, gridV.LastOrDefault(x => !float.IsNaN(x), 0));
+            if (pedals) { PatchGaps(gridB, 0); PatchGaps(gridTh, 1); }
 
             // ---- conditions from the embedded YAML ------------------------
             RefConditions? cond = null;
@@ -210,6 +221,8 @@ public static class IbtLap
                 LapTime = lapTime,
                 TimeAtPct = gridT,
                 SpeedAtPct = gridV,
+                BrakeAtPct = gridB,
+                ThrottleAtPct = gridTh,
                 Conditions = cond,
             };
         }
@@ -221,18 +234,21 @@ public static class IbtLap
     }
 
     /// <summary>Fill grid bins covered by one sample step, linearly interpolating time (as
-    /// an offset from lap start <paramref name="t0"/>) and speed.</summary>
-    private static void FillBins(float[] gridT, float[] gridV, float pctA, float pctB,
-                                 double tA, double tB, float vA, float vB, double t0)
+    /// an offset from lap start <paramref name="t0"/>), speed and the pedals.</summary>
+    private static void FillBins(float[] gridT, float[] gridV, float[] gridB, float[] gridTh,
+                                 float pctA, float pctB, double tA, double tB,
+                                 ReadOnlySpan<float> a, ReadOnlySpan<float> b, double t0)
     {
         int from = Math.Max(0, (int)(pctA * LapRef.GridSize) + (pctA <= 0 ? 0 : 1));
         int to = Math.Min(LapRef.GridSize - 1, (int)(pctB * LapRef.GridSize));
         double span = pctB - pctA;
         for (int k = from; k <= to; k++)
         {
-            double frac = span <= 0 ? 0 : ((double)k / LapRef.GridSize - pctA) / span;
+            float frac = span <= 0 ? 0 : (float)(((double)k / LapRef.GridSize - pctA) / span);
             gridT[k] = (float)(tA + (tB - tA) * frac - t0);
-            if (gridV.Length > 0) gridV[k] = (float)(vA + (vB - vA) * frac);
+            if (gridV.Length > 0) gridV[k] = a[0] + (b[0] - a[0]) * frac;
+            if (gridB.Length > 0) gridB[k] = a[1] + (b[1] - a[1]) * frac;
+            if (gridTh.Length > 0) gridTh[k] = a[2] + (b[2] - a[2]) * frac;
         }
     }
 

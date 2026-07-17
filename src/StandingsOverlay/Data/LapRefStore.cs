@@ -44,7 +44,8 @@ public sealed class LapRefStore
                 if (!File.Exists(path)) { _fileError = "file not found"; return; }
 
                 // Parse cache: keyed by name + mtime so a re-exported file re-parses.
-                string cacheName = $"cache_{Path.GetFileNameWithoutExtension(path)}_{File.GetLastWriteTimeUtc(path).Ticks}.json";
+                // Prefix bumps when the LapRef payload grows (cache2: + pedal grids).
+                string cacheName = $"cache2_{Path.GetFileNameWithoutExtension(path)}_{File.GetLastWriteTimeUtc(path).Ticks}.json";
                 string cachePath = Path.Combine(_dir, cacheName);
                 var cached = LapRef.Load(cachePath);
                 if (cached is not null)
