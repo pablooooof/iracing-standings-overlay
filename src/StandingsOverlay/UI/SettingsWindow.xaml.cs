@@ -43,7 +43,10 @@ public partial class SettingsWindow : Window
         // Edits go to whichever profile is active when the window opens; make that visible.
         if (cfg.Spectating) Title += " — spectate profile";
 
-        _saveTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(140) };
+        // Normal priority (a plain DispatcherTimer defaults to Background): the overlay widgets
+        // dispatch their repaints at Background, so a Background save timer would be starved by a
+        // busy race and your setting changes would never flush. Keep this above them.
+        _saveTimer = new DispatcherTimer(DispatcherPriority.Normal) { Interval = TimeSpan.FromMilliseconds(140) };
         _saveTimer.Tick += (_, _) => Flush();
 
         // Section pages capture the profile objects in closures, so a profile swap (or an

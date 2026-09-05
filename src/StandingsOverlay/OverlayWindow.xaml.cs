@@ -46,10 +46,17 @@ public partial class OverlayWindow : Window
     private IReadOnlyList<string>? _visibleCellHeaders;
     private bool _editMode;
 
+    // Rows are created once and updated in place each tick (see Render). _highlight/_accent are
+    // cached here so Render doesn't allocate a fresh brush per frame; ApplyConfig refreshes them.
+    private readonly System.Collections.ObjectModel.ObservableCollection<RowViewModel> _rows = new();
+    private Brush _highlight = Brushes.Transparent;
+    private Brush _accent = Brushes.Cyan;
+
     public OverlayWindow(ConfigService configService)
     {
         InitializeComponent();
         _configService = configService;
+        RowsControl.ItemsSource = _rows;
 
         SourceInitialized += (_, _) => Win32.ApplyOverlayStyle(this, clickThrough: true);
         MouseLeftButtonDown += (_, e) =>
@@ -89,8 +96,17 @@ public partial class OverlayWindow : Window
         var accent = RowViewModel.TryBrush(cfg.AccentColor) ?? Brushes.Cyan;
         HeaderLeft.Foreground = accent;
         EditHint.Foreground = accent;
+        _accent = accent;
+
+        // Player-row highlight, cached (a fresh frozen brush per config change, not per frame).
+        var highlightBase = RowViewModel.TryBrush(cfg.HighlightColor) is SolidColorBrush hb ? hb.Color : Colors.Orange;
+        var highlight = new SolidColorBrush(highlightBase) { Opacity = 0.30 };
+        highlight.Freeze();
+        _highlight = highlight;
 
         ColumnHeader.Visibility = cfg.ShowColumnHeader ? Visibility.Visible : Visibility.Collapsed;
+        // The config.Changed handler calls Render(_lastSnapshot) right after this, which re-applies
+        // the cached _highlight/_accent to every row — no need to re-tint here.
     }
 
     /// <summary>Called from the telemetry thread; skips the dispatch entirely when nothing changed.</summary>
@@ -145,12 +161,24 @@ public partial class OverlayWindow : Window
         WetPill.Visibility = s.WetDeclared ? Visibility.Visible : Visibility.Collapsed;
         SetHeaderAlert(s.HeaderAlert);
 
-        var highlightBase = RowViewModel.TryBrush(cfg.HighlightColor) is SolidColorBrush hb ? hb.Color : Colors.Orange;
-        var highlight = new SolidColorBrush(highlightBase) { Opacity = 0.30 };
-        highlight.Freeze();
-        var accent = RowViewModel.TryBrush(cfg.AccentColor) ?? Brushes.Cyan;
-
-        RowsControl.ItemsSource = s.Rows.Select(r => RowViewModel.From(r, highlight, accent)).ToList();
+        // Update rows in place instead of rebuilding the ItemsSource: mutate the existing
+        // RowViewModels (INotifyPropertyChanged) and only grow/shrink the collection when the row
+        // count changes. WPF then re-renders just the cells that ticked, instead of tearing down
+        // and re-measuring 50+ rows through the 23-column SharedSize grid every frame (which pegged
+        // the shared UI thread and made the settings window lag). _highlight/_accent are cached in
+        // ApplyConfig.
+        var rows = s.Rows;
+        for (int i = 0; i < rows.Count; i++)
+        {
+            if (i < _rows.Count) _rows[i].Update(rows[i], _highlight, _accent);
+            else
+            {
+                var vm = new RowViewModel();
+                vm.Update(rows[i], _highlight, _accent);
+                _rows.Add(vm);
+            }
+        }
+        for (int i = _rows.Count - 1; i >= rows.Count; i--) _rows.RemoveAt(i);
     }
 
     private string _headerAlert = "";
