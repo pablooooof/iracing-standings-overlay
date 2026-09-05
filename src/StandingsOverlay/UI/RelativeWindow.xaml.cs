@@ -201,7 +201,7 @@ public partial class RelativeWindow : Window
         bool same = snapshot.VisuallyEquals(_last);
         _last = snapshot;
         if (same || _editMode) return;
-        Dispatcher.BeginInvoke(() => Render(snapshot));
+        Dispatcher.BeginInvoke(() => Render(snapshot), System.Windows.Threading.DispatcherPriority.Background);
     }
 
     private void Render(RelativeSnapshot s)

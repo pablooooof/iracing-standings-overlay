@@ -98,7 +98,10 @@ public partial class OverlayWindow : Window
     {
         if (SnapshotsEqual(snapshot, _lastSnapshot)) return;
         _lastSnapshot = snapshot;
-        Dispatcher.BeginInvoke(() => Render(snapshot));
+        // Below Input priority: a busy race repaints this list constantly (a full row rebuild),
+        // and at the default Normal priority those repaints starve mouse/keyboard input on the
+        // shared UI thread — freezing the settings window. Background priority lets input win.
+        Dispatcher.BeginInvoke(() => Render(snapshot), System.Windows.Threading.DispatcherPriority.Background);
     }
 
     /// <summary>Value comparison including rows (record Equals alone compares the list by reference).</summary>

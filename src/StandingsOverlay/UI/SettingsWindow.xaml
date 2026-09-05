@@ -5,8 +5,7 @@
         Width="780" Height="620" MinWidth="620" MinHeight="460"
         WindowStartupLocation="CenterScreen"
         Background="#16161C" Foreground="#E8E9EE"
-        FontFamily="Segoe UI" FontSize="13" ShowInTaskbar="True"
-        Topmost="True">
+        FontFamily="Segoe UI" FontSize="13" ShowInTaskbar="True">
 
     <Window.Resources>
         <!-- Palette matches the overlays: dark panel, cyan accent, dim secondary text. -->
