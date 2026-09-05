@@ -1,3 +1,5 @@
+using System.ComponentModel;
+using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -7,19 +9,73 @@ using StandingsOverlay.Interop;
 
 namespace StandingsOverlay.UI;
 
-/// <summary>Display-ready relative row: strings + frozen brushes for the template.</summary>
-public sealed record RelativeRowViewModel(
-    string Pos, string CarNumber, string Brand, string Name, string Status,
-    string License, string IRating, string Stint, string LastLap, string Pace, string Gap,
-    Brush PosBrush, Brush NumBrush, Brush ClassBarBrush, Brush TyreBrush, Brush TyreOldBrush,
-    Brush NameBrush, FontWeight NameWeight,
-    Brush StatusBrush, Brush StatusBg, Brush LicBrush, Brush LicTextBrush, Brush StintBrush, Brush PaceBrush,
-    Brush GapBrush, Brush BattleBrush, Brush RowBackground,
-    Visibility NumVisibility, Visibility TyreVisibility, Visibility TyreSwitchVisibility,
-    Visibility IrVisibility, Visibility LicVisibility, Visibility BattleVisibility,
-    Visibility FlagVisibility, Brush FlagBodyBrush, Brush FlagStrokeBrush,
-    Brush FlagDotBrush, Visibility FlagDotVisibility)
+/// <summary>Display-ready relative row: strings + frozen brushes for the template. Mutable +
+/// <see cref="INotifyPropertyChanged"/> so <see cref="RelativeWindow"/> updates rows in place each
+/// tick instead of rebuilding the ItemsSource (same reason as <see cref="RowViewModel"/>).</summary>
+public sealed class RelativeRowViewModel : INotifyPropertyChanged
 {
+    private string _pos = "", _carNumber = "", _brand = "", _name = "", _status = "";
+    private string _license = "", _iRating = "", _stint = "", _lastLap = "", _pace = "", _gap = "";
+    public string Pos { get => _pos; set => Set(ref _pos, value); }
+    public string CarNumber { get => _carNumber; set => Set(ref _carNumber, value); }
+    public string Brand { get => _brand; set => Set(ref _brand, value); }
+    public string Name { get => _name; set => Set(ref _name, value); }
+    public string Status { get => _status; set => Set(ref _status, value); }
+    public string License { get => _license; set => Set(ref _license, value); }
+    public string IRating { get => _iRating; set => Set(ref _iRating, value); }
+    public string Stint { get => _stint; set => Set(ref _stint, value); }
+    public string LastLap { get => _lastLap; set => Set(ref _lastLap, value); }
+    public string Pace { get => _pace; set => Set(ref _pace, value); }
+    public string Gap { get => _gap; set => Set(ref _gap, value); }
+
+    private Brush _posBrush = Brushes.Gray, _numBrush = Brushes.White, _classBarBrush = Brushes.Transparent;
+    private Brush _tyreBrush = Brushes.Gray, _tyreOldBrush = Brushes.Gray, _nameBrush = Brushes.White;
+    private Brush _statusBrush = Brushes.Orange, _statusBg = Brushes.Transparent, _licBrush = Brushes.Gray;
+    private Brush _licTextBrush = Brushes.White, _stintBrush = Brushes.Gray, _paceBrush = Brushes.White;
+    private Brush _gapBrush = Brushes.White, _battleBrush = Brushes.Cyan, _rowBackground = Brushes.Transparent;
+    private Brush _flagBodyBrush = Brushes.Black, _flagStrokeBrush = Brushes.Gray, _flagDotBrush = Brushes.Transparent;
+    public Brush PosBrush { get => _posBrush; set => Set(ref _posBrush, value); }
+    public Brush NumBrush { get => _numBrush; set => Set(ref _numBrush, value); }
+    public Brush ClassBarBrush { get => _classBarBrush; set => Set(ref _classBarBrush, value); }
+    public Brush TyreBrush { get => _tyreBrush; set => Set(ref _tyreBrush, value); }
+    public Brush TyreOldBrush { get => _tyreOldBrush; set => Set(ref _tyreOldBrush, value); }
+    public Brush NameBrush { get => _nameBrush; set => Set(ref _nameBrush, value); }
+    public Brush StatusBrush { get => _statusBrush; set => Set(ref _statusBrush, value); }
+    public Brush StatusBg { get => _statusBg; set => Set(ref _statusBg, value); }
+    public Brush LicBrush { get => _licBrush; set => Set(ref _licBrush, value); }
+    public Brush LicTextBrush { get => _licTextBrush; set => Set(ref _licTextBrush, value); }
+    public Brush StintBrush { get => _stintBrush; set => Set(ref _stintBrush, value); }
+    public Brush PaceBrush { get => _paceBrush; set => Set(ref _paceBrush, value); }
+    public Brush GapBrush { get => _gapBrush; set => Set(ref _gapBrush, value); }
+    public Brush BattleBrush { get => _battleBrush; set => Set(ref _battleBrush, value); }
+    public Brush RowBackground { get => _rowBackground; set => Set(ref _rowBackground, value); }
+    public Brush FlagBodyBrush { get => _flagBodyBrush; set => Set(ref _flagBodyBrush, value); }
+    public Brush FlagStrokeBrush { get => _flagStrokeBrush; set => Set(ref _flagStrokeBrush, value); }
+    public Brush FlagDotBrush { get => _flagDotBrush; set => Set(ref _flagDotBrush, value); }
+
+    private FontWeight _nameWeight = FontWeights.Normal;
+    public FontWeight NameWeight { get => _nameWeight; set => Set(ref _nameWeight, value); }
+
+    private Visibility _numVis = Visibility.Collapsed, _tyreVis = Visibility.Collapsed, _tyreSwitchVis = Visibility.Collapsed;
+    private Visibility _irVis = Visibility.Collapsed, _licVis = Visibility.Collapsed, _battleVis = Visibility.Collapsed;
+    private Visibility _flagVis = Visibility.Collapsed, _flagDotVis = Visibility.Collapsed;
+    public Visibility NumVisibility { get => _numVis; set => Set(ref _numVis, value); }
+    public Visibility TyreVisibility { get => _tyreVis; set => Set(ref _tyreVis, value); }
+    public Visibility TyreSwitchVisibility { get => _tyreSwitchVis; set => Set(ref _tyreSwitchVis, value); }
+    public Visibility IrVisibility { get => _irVis; set => Set(ref _irVis, value); }
+    public Visibility LicVisibility { get => _licVis; set => Set(ref _licVis, value); }
+    public Visibility BattleVisibility { get => _battleVis; set => Set(ref _battleVis, value); }
+    public Visibility FlagVisibility { get => _flagVis; set => Set(ref _flagVis, value); }
+    public Visibility FlagDotVisibility { get => _flagDotVis; set => Set(ref _flagDotVis, value); }
+
+    public event PropertyChangedEventHandler? PropertyChanged;
+    private void Set<T>(ref T field, T value, [CallerMemberName] string? name = null)
+    {
+        if (EqualityComparer<T>.Default.Equals(field, value)) return;
+        field = value;
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+    }
+
     private static readonly Brush White = RowViewModel.Frozen("#E8E9EE");
     private static readonly Brush DryTyre = RowViewModel.Frozen("#C9C9CF");
     private static readonly Brush WetTyre = RowViewModel.Frozen("#1E6FFF");
@@ -44,77 +100,83 @@ public sealed record RelativeRowViewModel(
 
     public static RelativeRowViewModel From(RelativeRow r, Brush highlight, Brush accent)
     {
+        var vm = new RelativeRowViewModel();
+        vm.Update(r, highlight, accent);
+        return vm;
+    }
+
+    /// <summary>Refresh this row in place from a snapshot row (every bound property assigned;
+    /// setters no-op when unchanged).</summary>
+    public void Update(RelativeRow r, Brush highlight, Brush accent)
+    {
         // Only PIT dims the name/gap (a stationary car you can ignore); SPUN/TOW/REJOIN/OUT/EXIT/
         // SWAP are all still cars on track, so they keep their normal lap-parity colour.
         bool dimForPit = r.StatusText == "PIT";
-        var nameBrush = r.IsPlayer ? White
-                      : dimForPit ? Dim
-                      : r.LapParity > 0 ? LapsYouRed
-                      : r.LapParity < 0 ? LappedBlue
-                      : White;
-        var gapBrush = r.Battle ? accent
-                     : dimForPit || r.IsPlayer ? Dim
-                     : r.LapParity > 0 ? LapsYouRed
-                     : r.LapParity < 0 ? LappedBlue
-                     : White;
+        NameBrush = r.IsPlayer ? White
+                  : dimForPit ? Dim
+                  : r.LapParity > 0 ? LapsYouRed
+                  : r.LapParity < 0 ? LappedBlue
+                  : White;
+        GapBrush = r.Battle ? accent
+                 : dimForPit || r.IsPlayer ? Dim
+                 : r.LapParity > 0 ? LapsYouRed
+                 : r.LapParity < 0 ? LappedBlue
+                 : White;
         var licChip = RowViewModel.TryBrush(r.LicColor) ?? LicFallback;
         // Penalty chip (TextAndFlags style): same drawn flag as the standings.
         var (flagVis, flagBody, flagStroke, flagDot, dotVis) = RowViewModel.PenaltyFlagVisuals(r.PenaltyText);
 
-        return new RelativeRowViewModel(
-            Pos: r.PosText,
-            CarNumber: r.CarNumber,
-            Brand: r.CarBrand,
-            Name: r.Name,
-            Status: r.StatusText,
-            License: r.LicText,
-            IRating: r.IRatingText,
-            Stint: r.StintText,
-            LastLap: r.LastLapText,
-            Pace: r.PaceText,
-            Gap: r.GapText,
-            PosBrush: RowViewModel.TryBrush(r.ClassColor) ?? Dim,
-            NumBrush: RowViewModel.TryBrush(r.ClassColor) ?? NoClass,
-            ClassBarBrush: RowViewModel.TryBrush(r.ClassColor) ?? Brushes.Transparent,
-            TyreBrush: r.Tyre >= 1 ? WetTyre : DryTyre,
-            TyreOldBrush: r.TyreSwitch > 0 ? DryTyre : WetTyre,
-            NameBrush: nameBrush,
-            NameWeight: r.IsPlayer ? FontWeights.SemiBold : FontWeights.Normal,
-            StatusBrush: r.StatusText switch
-            {
-                "SPUN" or "DQ" => Danger,
-                "TOW" => Meatball,
-                "SWAP" => SwapPurple,
-                "EXIT" => Ink,          // dark text on the bright chip
-                "OUT" => PitExitCyan,
-                "REJOIN" => RejoinGreen,
-                "SLOW" => WarnYellow,
-                "WRN" => WarnYellow,
-                "DMG" => Meatball,
-                "BLK" => White,
-                _ => PitAmber,   // PIT
-            },
-            // A fresh pit exit gets a filled chip so it pops (Spa-24h "who just left the pits").
-            StatusBg: r.StatusText == "EXIT" ? ExitChip : Brushes.Transparent,
-            LicBrush: licChip,
-            LicTextBrush: Brushes.White,
-            StintBrush: StintAmber,
-            PaceBrush: r.PaceSign > 0 ? LossRed : r.PaceSign < 0 ? FreshGreen
-                       : r.PaceText.Length > 0 ? SamePaceYellow : Dim,
-            GapBrush: gapBrush,
-            BattleBrush: accent,
-            RowBackground: r.IsPlayer ? highlight : Brushes.Transparent,
-            NumVisibility: r.CarNumber.Length > 1 ? Visibility.Visible : Visibility.Collapsed,
-            TyreVisibility: r.Tyre >= 0 && r.TyreSwitch == 0 ? Visibility.Visible : Visibility.Collapsed,
-            TyreSwitchVisibility: r.Tyre >= 0 && r.TyreSwitch != 0 ? Visibility.Visible : Visibility.Collapsed,
-            IrVisibility: r.IRatingText.Length > 0 ? Visibility.Visible : Visibility.Collapsed,
-            LicVisibility: r.LicText.Length > 0 ? Visibility.Visible : Visibility.Collapsed,
-            BattleVisibility: r.Battle ? Visibility.Visible : Visibility.Collapsed,
-            FlagVisibility: flagVis,
-            FlagBodyBrush: flagBody,
-            FlagStrokeBrush: flagStroke,
-            FlagDotBrush: flagDot,
-            FlagDotVisibility: dotVis);
+        Pos = r.PosText;
+        CarNumber = r.CarNumber;
+        Brand = r.CarBrand;
+        Name = r.Name;
+        Status = r.StatusText;
+        License = r.LicText;
+        IRating = r.IRatingText;
+        Stint = r.StintText;
+        LastLap = r.LastLapText;
+        Pace = r.PaceText;
+        Gap = r.GapText;
+        PosBrush = RowViewModel.TryBrush(r.ClassColor) ?? Dim;
+        NumBrush = RowViewModel.TryBrush(r.ClassColor) ?? NoClass;
+        ClassBarBrush = RowViewModel.TryBrush(r.ClassColor) ?? Brushes.Transparent;
+        TyreBrush = r.Tyre >= 1 ? WetTyre : DryTyre;
+        TyreOldBrush = r.TyreSwitch > 0 ? DryTyre : WetTyre;
+        NameWeight = r.IsPlayer ? FontWeights.SemiBold : FontWeights.Normal;
+        StatusBrush = r.StatusText switch
+        {
+            "SPUN" or "DQ" => Danger,
+            "TOW" => Meatball,
+            "SWAP" => SwapPurple,
+            "EXIT" => Ink,          // dark text on the bright chip
+            "OUT" => PitExitCyan,
+            "REJOIN" => RejoinGreen,
+            "SLOW" => WarnYellow,
+            "WRN" => WarnYellow,
+            "DMG" => Meatball,
+            "BLK" => White,
+            _ => PitAmber,   // PIT
+        };
+        // A fresh pit exit gets a filled chip so it pops (Spa-24h "who just left the pits").
+        StatusBg = r.StatusText == "EXIT" ? ExitChip : Brushes.Transparent;
+        LicBrush = licChip;
+        LicTextBrush = Brushes.White;
+        StintBrush = StintAmber;
+        PaceBrush = r.PaceSign > 0 ? LossRed : r.PaceSign < 0 ? FreshGreen
+                    : r.PaceText.Length > 0 ? SamePaceYellow : Dim;
+        BattleBrush = accent;
+        RowBackground = r.IsPlayer ? highlight : Brushes.Transparent;
+        NumVisibility = r.CarNumber.Length > 1 ? Visibility.Visible : Visibility.Collapsed;
+        TyreVisibility = r.Tyre >= 0 && r.TyreSwitch == 0 ? Visibility.Visible : Visibility.Collapsed;
+        TyreSwitchVisibility = r.Tyre >= 0 && r.TyreSwitch != 0 ? Visibility.Visible : Visibility.Collapsed;
+        IrVisibility = r.IRatingText.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+        LicVisibility = r.LicText.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+        BattleVisibility = r.Battle ? Visibility.Visible : Visibility.Collapsed;
+        FlagVisibility = flagVis;
+        FlagBodyBrush = flagBody;
+        FlagStrokeBrush = flagStroke;
+        FlagDotBrush = flagDot;
+        FlagDotVisibility = dotVis;
     }
 }
 
@@ -130,11 +192,14 @@ public partial class RelativeWindow : Window
     private bool _editMode;
     private Brush _highlight = Brushes.Transparent;
     private Brush _accent = Brushes.Cyan;
+    // Rows created once, updated in place each tick (see Render) — no per-frame ItemsSource rebuild.
+    private readonly System.Collections.ObjectModel.ObservableCollection<RelativeRowViewModel> _rows = new();
 
     public RelativeWindow(ConfigService configService)
     {
         InitializeComponent();
         _configService = configService;
+        RowsControl.ItemsSource = _rows;
 
         FontFamily = new FontFamily("Segoe UI");
 
@@ -209,7 +274,19 @@ public partial class RelativeWindow : Window
         bool show = s.Rows.Count > 0;
         RootBorder.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
         if (!show) return;
-        RowsControl.ItemsSource = s.Rows.Select(r => RelativeRowViewModel.From(r, _highlight, _accent)).ToList();
+        // Update rows in place; grow/shrink only when the count changes (see RowViewModel).
+        var rows = s.Rows;
+        for (int i = 0; i < rows.Count; i++)
+        {
+            if (i < _rows.Count) _rows[i].Update(rows[i], _highlight, _accent);
+            else
+            {
+                var vm = new RelativeRowViewModel();
+                vm.Update(rows[i], _highlight, _accent);
+                _rows.Add(vm);
+            }
+        }
+        for (int i = _rows.Count - 1; i >= rows.Count; i--) _rows.RemoveAt(i);
     }
 
     public bool EditMode

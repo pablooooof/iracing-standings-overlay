@@ -111,6 +111,13 @@ public sealed class RowViewModel : INotifyPropertyChanged
     public Visibility FlagVisibility { get => _flagVis; set => Set(ref _flagVis, value); }
     public Visibility FlagDotVisibility { get => _flagDotVis; set => Set(ref _flagDotVis, value); }
 
+    // Cache frozen brushes by hex so the same colour always returns the SAME instance. Rows update
+    // in place and compare brushes by reference, so a fresh brush per tick (e.g. a car's fixed
+    // class colour) would defeat the "unchanged ⇒ don't re-render" check and churn the GC.
+    // MUST be declared before the brush constants below — their initializers call Frozen, and
+    // static fields initialize in textual order (a later BrushCache would be null here).
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, Brush> BrushCache = new();
+
     private static readonly Brush PurpleBrush = Frozen("#C77DFF");
     private static readonly Brush GainBrush = Frozen("#4CFF6A");
     private static readonly Brush LossBrush = Frozen("#FF5C5C");
@@ -285,12 +292,12 @@ public sealed class RowViewModel : INotifyPropertyChanged
         catch { return null; }
     }
 
-    public static Brush Frozen(string hex)
+    public static Brush Frozen(string hex) => BrushCache.GetOrAdd(hex, static h =>
     {
-        var b = new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex));
+        var b = new SolidColorBrush((Color)ColorConverter.ConvertFromString(h));
         b.Freeze();
         return b;
-    }
+    });
 
     /// <summary>Per-widget size multiplier as a frozen LayoutTransform (identity at 1.0).
     /// Every overlay window applies this to its root element so one slider scales the whole box.</summary>
