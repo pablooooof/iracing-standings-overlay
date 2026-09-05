@@ -203,6 +203,14 @@ public partial class SettingsWindow : Window
         PageBody.Children.Add(Slider("Refresh rate", "Snapshots per second. Rendering still only happens on change.",
             1, 10, 1, () => c.UpdateHz, v => c.UpdateHz = (int)v, v => $"{v:0} Hz"));
 
+        PageBody.Children.Add(Subhead("Visibility"));
+        PageBody.Children.Add(Toggle("Hide when iRacing isn't focused",
+            "Show the overlays only while iRacing is the active window; hide them the moment you tab to another app. Data keeps being collected the whole time.",
+            () => c.AutoHide.Enabled, v => c.AutoHide.Enabled = v));
+        PageBody.Children.Add(Toggle($"Show/hide hotkey  ({c.AutoHide.Hotkey})",
+            "A system-wide shortcut to force the overlays on or off — even inside iRacing, or while in another app. Edit the combo in config.json.",
+            () => c.AutoHide.HotkeyEnabled, v => c.AutoHide.HotkeyEnabled = v));
+
         PageBody.Children.Add(Subhead("Appearance"));
         PageBody.Children.Add(Slider("Opacity", null, 0.1, 1.0, 0.05, () => c.Opacity, v => c.Opacity = v, v => $"{v * 100:0}%"));
         PageBody.Children.Add(Slider("Font size", null, 10, 24, 1, () => c.FontSize, v => c.FontSize = v, v => $"{v:0} px"));

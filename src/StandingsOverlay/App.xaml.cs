@@ -2,6 +2,7 @@ using System.IO;
 using System.Windows;
 using StandingsOverlay.Config;
 using StandingsOverlay.Data;
+using StandingsOverlay.Interop;
 using StandingsOverlay.UI;
 
 namespace StandingsOverlay;
@@ -18,6 +19,14 @@ public partial class App : Application
     private TrafficAudio? _trafficAudio;
     private SettingsWindow? _settings;
     private bool _editMode;
+
+    // Auto-hide: keep the widgets off screen unless iRacing is focused (data still flows), with a
+    // system-wide hotkey to force show/hide. _overlays is every widget window EXCEPT the settings
+    // window (which is the app's chrome and stays put).
+    private readonly OverlayVisibility _visibility = new();
+    private ForegroundWatcher? _foreground;
+    private HotkeyService? _hotkey;
+    private Window[] _overlays = [];
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -108,11 +117,69 @@ public partial class App : Application
         _settings.Show();
         _source.Start();
 
+        SetupAutoHide(demo);
+
         // Update check: notify + link only, the user does the downloading.
         // One request per launch, silent on any failure.
         if (_configService.Current.CheckForUpdates)
             UpdateCheck.Run((tag, url) =>
                 Dispatcher.BeginInvoke(() => _settings?.ShowUpdateAvailable(tag, url)));
+    }
+
+    /// <summary>Wire up auto-hide: the foreground watcher, the force show/hide hotkey, and the
+    /// initial visibility. Demo mode pins the overlays visible so testing never blanks the screen.</summary>
+    private void SetupAutoHide(bool demo)
+    {
+        _overlays = [_window!, _trafficWindow!, _relativeWindow!, _fuelWindow!, _lapLabWindow!];
+
+        var cfg = _configService!.Current;
+        _visibility.Demo = demo;
+        _visibility.EditMode = _editMode;
+        _visibility.AutoHideEnabled = cfg.AutoHide.Enabled;
+        _visibility.IracingFocused = ForegroundWatcher.IsForegroundTarget();
+
+        _foreground = new ForegroundWatcher();
+        _foreground.ForegroundChanged += focused =>
+        {
+            _visibility.IracingFocused = focused;
+            ApplyOverlayVisibility();
+        };
+        _foreground.Start();
+
+        _hotkey = new HotkeyService();
+        _hotkey.Pressed += () =>
+        {
+            _visibility.ToggleOverride();
+            ApplyOverlayVisibility();
+            Log.Write($"auto-hide hotkey: overlays {( _visibility.Resolve() ? "shown" : "hidden")}");
+        };
+        ApplyHotkeyConfig(cfg);
+
+        // React to config edits (settings window or external file): re-read the toggle + re-bind
+        // the hotkey. Changed can arrive on the file-watcher thread, so hop to the UI thread.
+        _configService.Changed += c => Dispatcher.BeginInvoke(() =>
+        {
+            _visibility.AutoHideEnabled = c.AutoHide.Enabled;
+            ApplyHotkeyConfig(c);
+            ApplyOverlayVisibility();
+        });
+
+        ApplyOverlayVisibility();
+    }
+
+    private void ApplyHotkeyConfig(OverlayConfig cfg)
+    {
+        if (cfg.AutoHide.HotkeyEnabled) _hotkey?.Register(cfg.AutoHide.Hotkey);
+        else _hotkey?.Unregister();
+    }
+
+    /// <summary>Push the resolved show/hide decision to every widget window (never the settings
+    /// window). Cheap and idempotent — safe to call on any input change.</summary>
+    private void ApplyOverlayVisibility()
+    {
+        var vis = _visibility.Resolve() ? Visibility.Visible : Visibility.Hidden;
+        foreach (var w in _overlays)
+            if (w.Visibility != vis) w.Visibility = vis;
     }
 
     /// <summary>Single source of truth for "move overlays" mode: the settings toggle routes here,
@@ -127,10 +194,15 @@ public partial class App : Application
         _fuelWindow!.EditMode = on;
         _lapLabWindow!.EditMode = on;
         _settings?.ReflectEditMode(on);
+        // Edit mode force-shows every widget — you can't drag one you can't see.
+        _visibility.EditMode = on;
+        ApplyOverlayVisibility();
     }
 
     protected override void OnExit(ExitEventArgs e)
     {
+        _foreground?.Dispose();
+        _hotkey?.Dispose();
         _source?.Dispose();
         _trafficAudio?.Dispose();
         _configService?.Dispose();

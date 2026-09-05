@@ -101,6 +101,9 @@ public sealed class OverlayConfig
     // Lap Lab: practice lap table, sectors vs a reference lap. Spec: docs/LAP-LAB.md.
     public LapLabConfig LapLab { get; set; } = new();
 
+    // Auto-hide: keep the widgets off screen unless iRacing is the focused app + a manual hotkey.
+    public AutoHideConfig AutoHide { get; set; } = new();
+
     public SessionColumns ColumnsFor(Data.SessionKind kind) => kind switch
     {
         Data.SessionKind.Race => Race,
@@ -139,6 +142,24 @@ public sealed class OverlayConfig
     public OverlayConfig Clone() =>
         JsonSerializer.Deserialize<OverlayConfig>(JsonSerializer.Serialize(this, JsonOpts), JsonOpts)
         ?? new OverlayConfig();
+}
+
+/// <summary>Auto-hide the overlays when you tab away from iRacing (data collection keeps running),
+/// plus a system-wide hotkey to force show/hide. Data flows regardless — this only affects whether
+/// the widgets are painted. Ignored in --demo mode so testing never blanks the screen.</summary>
+public sealed class AutoHideConfig
+{
+    // Hide every widget unless the iRacing sim (or this app's own settings window) is the foreground
+    // app. On by default: the whole point is to get the overlay out of the way when you alt-tab.
+    public bool Enabled { get; set; } = true;
+
+    // System-wide toggle to force the overlays on/off regardless of what's focused — force-show
+    // while you're in another app, or force-hide even inside the sim. The override clears itself
+    // once auto-detect agrees with it again.
+    public bool HotkeyEnabled { get; set; } = true;
+
+    // Combo for that hotkey: "Ctrl"/"Alt"/"Shift"/"Win" modifiers + one key ("H", "F8", "1").
+    public string Hotkey { get; set; } = "Ctrl+Alt+H";
 }
 
 /// <summary>Traffic alerter settings. Detection details in docs/TRAFFIC-ALERTER.md.</summary>

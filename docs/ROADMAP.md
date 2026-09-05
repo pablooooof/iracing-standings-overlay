@@ -80,6 +80,13 @@ strategy phase.
 - **Driver tagging** (friends/rivals with colors), like iOverlay's module.
 - [x] ~~Relative overlay~~ (v0.5 — `RelativeBuilder`/`RelativeWindow`, shared `RelativeGap`
   helper with the traffic alerter; spec in `docs/RELATIVE.md`)
+- [x] ~~Auto-hide the overlays when iRacing isn't the focused app~~ (data collection keeps
+  running — it's purely a paint gate). `ForegroundWatcher` (WinEvent hook on
+  `EVENT_SYSTEM_FOREGROUND`, no polling) matches the `iRacingSim*` process or our own PID;
+  `OverlayVisibility` (pure, unit-tested) reconciles auto-detect + a force show/hide hotkey
+  (`HotkeyService`, default Ctrl+Alt+H) + edit mode; `App` applies the result to every widget
+  window but the settings window. Config `AutoHide` (Enabled on by default, HotkeyEnabled,
+  Hotkey combo). Demo mode pins everything visible so `--demo` testing never blanks the screen.
 
 ## Lap Lab (practice lap table, phased — design draft 2026-07-12)
 
