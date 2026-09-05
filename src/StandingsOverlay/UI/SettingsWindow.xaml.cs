@@ -53,11 +53,26 @@ public partial class SettingsWindow : Window
         _builtAgainst = cfg.Current;
         cfg.Changed += OnProfileMaybeSwapped;
         SourceInitialized += (_, _) => Win32.UseDarkTitleBar(this);
+        // Shown at startup alongside the topmost overlay widgets and (usually) a running,
+        // borderless iRacing — a plain Show() leaves this control panel buried and unreachable.
+        // Pop it to the front once it's up (the tray double-click used to do the equivalent).
+        Loaded += (_, _) => BringToFront();
         Closed += (_, _) => { _cfg.Changed -= OnProfileMaybeSwapped; Flush(); };   // never drop a pending edit
 
         foreach (var name in new[] { "General", "Standings", "Relative", "Traffic", "Fuel", "Lap Lab", "About" })
             Nav.Items.Add(name);
         Nav.SelectedIndex = 0;
+    }
+
+    /// <summary>Pop above the topmost overlay widgets (and a borderless sim) and take focus, then
+    /// drop back to a normal (non-topmost) window so it can be sent behind again like any app.</summary>
+    public void BringToFront()
+    {
+        if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal;
+        Topmost = true;
+        Activate();
+        Topmost = false;
+        Focus();
     }
 
     /// <summary>Reflect edit mode toggled elsewhere into the General switch, no re-fire.</summary>
