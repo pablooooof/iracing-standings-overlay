@@ -16,7 +16,6 @@ public partial class App : Application
     private FuelWindow? _fuelWindow;
     private LapLabWindow? _lapLabWindow;
     private TrafficAudio? _trafficAudio;
-    private TrayIcon? _tray;
     private SettingsWindow? _settings;
     private bool _editMode;
 
@@ -68,14 +67,23 @@ public partial class App : Application
         _fuelWindow = new FuelWindow(_configService);
         _lapLabWindow = new LapLabWindow(_configService);
         _trafficAudio = new TrafficAudio();
-        _tray = new TrayIcon(demo);
+
+        // The app's one piece of chrome and its main window: a normal, taskbar-present control
+        // panel. There is no tray icon — closing this window (confirmed) quits the whole app
+        // (ShutdownMode=OnMainWindowClose). Created before the overlays are shown so WPF doesn't
+        // pick a click-through tool-window as MainWindow.
+        _settings = new SettingsWindow(_configService, _editMode);
+        _settings.EditModeChanged += on => SetEditMode(on);
+        MainWindow = _settings;
 
         _source.SnapshotReady += snapshot =>
         {
             _window.OnSnapshot(snapshot);
-            var status = !snapshot.Connected ? "waiting for iRacing"
-                : _configService.Spectating ? "connected · spectate profile" : "connected";
-            Dispatcher.BeginInvoke(() => _tray?.SetStatus(demo ? "demo" : status));
+            var (text, connected) = demo ? ("Demo mode", true)
+                : !snapshot.Connected ? ("Waiting for iRacing…", false)
+                : _configService.Spectating ? ("Connected · spectating", true)
+                : ("Connected", true);
+            Dispatcher.BeginInvoke(() => _settings?.SetStatus(text, connected));
         };
         _source.TrafficReady += traffic =>
         {
@@ -97,56 +105,33 @@ public partial class App : Application
         _relativeWindow.Show();
         _fuelWindow.Show();
         _lapLabWindow.Show();
+        _settings.Show();
         _source.Start();
 
         // Update check: notify + link only, the user does the downloading.
         // One request per launch, silent on any failure.
         if (_configService.Current.CheckForUpdates)
             UpdateCheck.Run((tag, url) =>
-                Dispatcher.BeginInvoke(() => _tray?.ShowUpdateAvailable(tag, url)));
-
-        _tray.EditModeToggled += on => Dispatcher.BeginInvoke(() => SetEditMode(on));
-        _tray.SettingsRequested += () => Dispatcher.BeginInvoke(ShowSettings);
-        _tray.ExitRequested += () => Dispatcher.BeginInvoke(() => Shutdown());
-
-        // --settings opens the settings window on launch (useful as a desktop shortcut target).
-        if (e.Args.Any(a => a.Equals("--settings", StringComparison.OrdinalIgnoreCase)))
-            Dispatcher.BeginInvoke(ShowSettings);
+                Dispatcher.BeginInvoke(() => _settings?.ShowUpdateAvailable(tag, url)));
     }
 
-    /// <summary>Single source of truth for "move overlays" mode: both the tray checkbox and the
-    /// settings toggle route here, and it mirrors the resulting state back to whichever UI is open.</summary>
+    /// <summary>Single source of truth for "move overlays" mode: the settings toggle routes here,
+    /// and it mirrors the resulting state back to the settings switch.</summary>
     private void SetEditMode(bool on)
     {
-        if (_editMode == on) return;   // idempotent: the mirrors below re-enter this harmlessly
+        if (_editMode == on) return;   // idempotent: the mirror below re-enters this harmlessly
         _editMode = on;
         _window!.EditMode = on;
         _trafficWindow!.EditMode = on;
         _relativeWindow!.EditMode = on;
         _fuelWindow!.EditMode = on;
         _lapLabWindow!.EditMode = on;
-        _tray?.ReflectEditMode(on);
         _settings?.ReflectEditMode(on);
-    }
-
-    private void ShowSettings()
-    {
-        if (_settings is not null)
-        {
-            _settings.Activate();
-            return;
-        }
-        _settings = new SettingsWindow(_configService!, _editMode);
-        _settings.EditModeChanged += on => SetEditMode(on);
-        _settings.Closed += (_, _) => _settings = null;
-        _settings.Show();
-        _settings.Activate();
     }
 
     protected override void OnExit(ExitEventArgs e)
     {
         _source?.Dispose();
-        _tray?.Dispose();
         _trafficAudio?.Dispose();
         _configService?.Dispose();
         base.OnExit(e);

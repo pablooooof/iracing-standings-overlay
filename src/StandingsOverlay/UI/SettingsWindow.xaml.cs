@@ -21,6 +21,7 @@ public partial class SettingsWindow : Window
     private static readonly Brush Dim = RowViewModel.Frozen("#9DA0AA");
     private static readonly Brush Line = RowViewModel.Frozen("#2C2C36");
     private static readonly Brush Accent = RowViewModel.Frozen("#00E6C3");
+    private static readonly Brush Amber = RowViewModel.Frozen("#E8B14C");
 
     private readonly ConfigService _cfg;
     private readonly DispatcherTimer _saveTimer;
@@ -59,7 +60,7 @@ public partial class SettingsWindow : Window
         Nav.SelectedIndex = 0;
     }
 
-    /// <summary>Reflect edit mode toggled elsewhere (the tray) into the General switch, no re-fire.</summary>
+    /// <summary>Reflect edit mode toggled elsewhere into the General switch, no re-fire.</summary>
     public void ReflectEditMode(bool on)
     {
         _editMode = on;
@@ -67,6 +68,43 @@ public partial class SettingsWindow : Window
         _suppressEdit = true;
         _editToggle.IsChecked = on;
         _suppressEdit = false;
+    }
+
+    /// <summary>Connection status shown under the brand (this window replaces the old tray tooltip).</summary>
+    public void SetStatus(string text, bool connected)
+    {
+        StatusText.Text = text;
+        StatusText.Foreground = connected ? Text : Dim;
+        StatusDot.Fill = connected ? Accent : Amber;
+    }
+
+    private string? _updateUrl;
+
+    /// <summary>Reveal the "update available" banner in the nav rail (launch update-check found a
+    /// newer release). Replaces the old tray "Update available" menu item.</summary>
+    public void ShowUpdateAvailable(string tag, string url)
+    {
+        _updateUrl = url;
+        UpdateBannerText.Text = $"Update available — {tag}\nClick to open the release page.";
+        UpdateBanner.Visibility = Visibility.Visible;
+    }
+
+    private void OnUpdateBannerClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (_updateUrl is { } url) UpdateCheck.OpenReleasePage(url);
+    }
+
+    /// <summary>This is the app's main window, so closing it quits everything
+    /// (ShutdownMode=OnMainWindowClose) — confirm first, since the overlays go with it.</summary>
+    protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
+    {
+        base.OnClosing(e);
+        if (e.Cancel) return;   // respect a cancel from a base handler
+        var choice = MessageBox.Show(this,
+            "Quit Standings Overlay? This closes the overlays too.",
+            "Quit Standings Overlay",
+            MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No);
+        if (choice != MessageBoxResult.Yes) e.Cancel = true;
     }
 
     // ---- change plumbing -------------------------------------------------
@@ -143,7 +181,7 @@ public partial class SettingsWindow : Window
             AutoStart.IsEnabled, AutoStart.Set));
 
         var c = _cfg.Current;
-        PageBody.Children.Add(Toggle("Check for updates at launch", "One request to GitHub for the latest release; a tray link appears if newer. Never downloads anything.",
+        PageBody.Children.Add(Toggle("Check for updates at launch", "One request to GitHub for the latest release; a banner appears here if newer. Never downloads anything.",
             () => c.CheckForUpdates, v => c.CheckForUpdates = v));
         PageBody.Children.Add(Slider("Refresh rate", "Snapshots per second. Rendering still only happens on change.",
             1, 10, 1, () => c.UpdateHz, v => c.UpdateHz = (int)v, v => $"{v:0} Hz"));
