@@ -504,8 +504,9 @@ public sealed class TrafficDetector
 
         // Blue rows show the raw gap, not a countdown — "the leader is N seconds behind you" is
         // how a spotter calls it, and it stays meaningful at grind-it-out closing rates where
-        // a TTA would read as noise. Traffic rows keep the countdown.
-        double shown = Math.Clamp(isBlue ? gap : tta, 0.1, 99.9);
+        // a TTA would read as noise. Traffic rows show the arrival countdown, or (ShowTimeToArrival
+        // off) the current on-track gap so the number matches the relative box for the same car.
+        double shown = Math.Clamp(isBlue || !tc.ShowTimeToArrival ? gap : tta, 0.1, 99.9);
         double bar = isBlue ? 1 - gap / 10 : 1 - tta / lead;
         return new TrafficRow(
             CarIdx: d.CarIdx,

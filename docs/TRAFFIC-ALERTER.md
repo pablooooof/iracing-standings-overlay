@@ -77,6 +77,10 @@ Add to `ReadTick()` (same 4 Hz tick, three extra `GetData` calls):
      proximity (`gap ≤ 2.5 s`): a leader grinding up at 1–3 s/lap has a rate too small for a
      meaningful countdown — TTA-only blue would only alert with them on the bumper. Blue rows
      display the **gap**, not a countdown ("leader is N seconds behind you", spotter-style).
+     Faster-class rows show the TTA countdown by default; `ShowTimeToArrival = false` switches
+     them to the raw on-track **gap** instead, so the number matches the relative box for the
+     same car (some drivers want one consistent "how far", not a "how soon"). Escalation, sort
+     and the proximity bar stay TTA-based either way — only the printed number changes.
    - → **IMMINENT** when `tta ≤ ImminentSec` (4) or `gapSec ≤ 1.5`. The gap shortcut is
      for traffic only — a blue car closing at 2 s/lap *lives* under 1.5 s of gap, so blue
      escalates on TTA alone (found live in demo: blue went red instantly otherwise)
