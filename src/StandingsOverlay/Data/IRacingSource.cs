@@ -328,6 +328,7 @@ public sealed class IRacingSource : ITelemetrySource
             SessionType = _currentSessionType,
         };
         if (_sdk.GetData("CarLeftRight") is int clr) t.CarLeftRight = clr;
+        if (_sdk.GetData("CamCarIdx") is int cam) t.CamCarIdx = cam;
 
         if (t.Lap.Length == 0 || t.LapDistPct.Length == 0) return null;
 

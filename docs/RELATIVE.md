@@ -61,6 +61,11 @@ cross-class normalization, S/F wrap, pit-zero fallback, skew gate).
 `RelativeBuilder.Build(RawTick, Roster, StintTracker, OverlayConfig)` — pure, same demo/live
 pipeline as everything else — → `RelativeSnapshot` → `RelativeReady` event → `UI/RelativeWindow`.
 
+- Centre car: the player when driving; when **spectating** (out of the car, `IsOnTrack` false) the
+  box re-centres on the **camera car** (`CamCarIdx`), exactly like iRacing's own F3 relative — a
+  spectator cycling cameras must see our box follow the car they're watching, not stay pinned to an
+  assigned car. Driving always centres on the player even if the camera roams to a TV/replay cam.
+  `RelativeBuilder` threads this `focus` index through the gap, parity and ref-lap math.
 - Candidates: everyone in the world (`TrackSurface ≠ −1`), not pace car/spectator. Pit-road cars
   stay listed (dimmed, PIT tag) — you still pass them physically.
 - Sort by signed gap descending, take the nearest `CarsAhead` positives and `CarsBehind`

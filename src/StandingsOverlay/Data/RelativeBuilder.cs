@@ -65,21 +65,32 @@ public static class RelativeBuilder
         // Lone qualifying: every driver runs alone, so any "cars around you" are ghosts from other
         // drivers' separate runs — the relative (and traffic) are meaningless.
         if (t.SessionType.Contains("Lone", StringComparison.OrdinalIgnoreCase)) return RelativeSnapshot.Empty;
-        // In the garage / on the flatbed there is no meaningful "around me".
-        if (t.PlayerCarIdx < t.TrackSurface.Length && t.TrackSurface[t.PlayerCarIdx] == -1)
+
+        // Whose relative is this? When driving, always the player — even if the camera roams to a
+        // TV/replay cam, the driver wants their own car centred. When spectating (out of the car),
+        // follow the CAMERA car, exactly like iRacing's own F3 relative: a spectator cycling cameras
+        // must see our box re-centre on the car they're watching, not stay stuck on an assigned car.
+        int focus = t.PlayerCarIdx;
+        if (!t.IsOnTrack && t.CamCarIdx >= 0 && t.Has(t.CamCarIdx)
+            && !(t.CamCarIdx < t.TrackSurface.Length && t.TrackSurface[t.CamCarIdx] == -1)
+            && roster.Drivers.ContainsKey(t.CamCarIdx))
+            focus = t.CamCarIdx;
+
+        // In the garage / on the flatbed (or a scenic cam on nothing) there is no meaningful "around me".
+        if (focus < t.TrackSurface.Length && t.TrackSurface[focus] == -1)
             return RelativeSnapshot.Empty;
-        if (!roster.Drivers.TryGetValue(t.PlayerCarIdx, out var me)) return RelativeSnapshot.Empty;
+        if (!roster.Drivers.TryGetValue(focus, out var me)) return RelativeSnapshot.Empty;
 
         bool isRace = StandingsSnapshot.KindOf(t.SessionType) == SessionKind.Race;
-        float refLap = RelativeGap.PlayerRefLap(t, roster);
-        double playerTotal = t.Lap[t.PlayerCarIdx] + t.LapDistPct[t.PlayerCarIdx];
-        float? playerPace = stints.RecentPace(t.PlayerCarIdx);
+        float refLap = RelativeGap.RefLapFor(t, roster, focus);
+        double playerTotal = t.Lap[focus] + t.LapDistPct[focus];
+        float? playerPace = stints.RecentPace(focus);
 
         var ahead = new List<(float Gap, DriverEntry D)>();
         var behind = new List<(float Gap, DriverEntry D)>();
         foreach (var d in roster.Drivers.Values)
         {
-            if (d.CarIdx == t.PlayerCarIdx || d.IsPaceCar || d.IsSpectator || !t.Has(d.CarIdx)) continue;
+            if (d.CarIdx == focus || d.IsPaceCar || d.IsSpectator || !t.Has(d.CarIdx)) continue;
             if (d.CarIdx < t.TrackSurface.Length && t.TrackSurface[d.CarIdx] == -1) continue;
             if (t.Lap[d.CarIdx] < 0) continue;
             // A car sat in the pits for a long time is parked (DNF / no driver) — noise, not traffic.
@@ -89,7 +100,7 @@ public static class RelativeBuilder
             // Same convention as the traffic alerter so both show the *same* gap: one shared
             // phase delta decides ahead/behind AND the magnitude; a car behind closes at its
             // own pace (its class lap as the ruler), a car ahead you close on at yours.
-            float ph = RelativeGap.SignedPhase(t, roster, d.CarIdx, t.PlayerCarIdx);  // + = ahead on track
+            float ph = RelativeGap.SignedPhase(t, roster, d.CarIdx, focus);  // + = ahead on track
             float carRef = ph < 0 && d.ClassEstLap > 10 ? d.ClassEstLap : refLap;
             float gap = ph * carRef;
             (gap >= 0 ? ahead : behind).Add((gap, d));
@@ -105,11 +116,11 @@ public static class RelativeBuilder
         for (int i = takeAhead; i < nAhead; i++) rows.Add(RelativeRow.Blank);
         for (int i = takeAhead - 1; i >= 0; i--)   // furthest ahead at the top
             rows.Add(BuildRow(ahead[i].D, ahead[i].Gap, false, t, roster, stints, swap, cfg, isRace,
-                              playerTotal, me.CarClassId, playerPace));
-        rows.Add(BuildRow(me, 0, true, t, roster, stints, swap, cfg, isRace, playerTotal, me.CarClassId, playerPace));
+                              focus, playerTotal, me.CarClassId, playerPace));
+        rows.Add(BuildRow(me, 0, true, t, roster, stints, swap, cfg, isRace, focus, playerTotal, me.CarClassId, playerPace));
         for (int i = 0; i < Math.Min(behind.Count, nBehind); i++)
             rows.Add(BuildRow(behind[i].D, behind[i].Gap, false, t, roster, stints, swap, cfg, isRace,
-                              playerTotal, me.CarClassId, playerPace));
+                              focus, playerTotal, me.CarClassId, playerPace));
         while (rows.Count < nAhead + 1 + nBehind) rows.Add(RelativeRow.Blank);
 
         return new RelativeSnapshot(rows);
@@ -140,7 +151,7 @@ public static class RelativeBuilder
 
     private static RelativeRow BuildRow(DriverEntry d, float gap, bool isPlayer, RawTick t,
         Roster roster, StintTracker stints, DriverSwapTracker swap, OverlayConfig cfg, bool isRace,
-        double playerTotal, int playerClassId, float? playerPace)
+        int focus, double playerTotal, int playerClassId, float? playerPace)
     {
         var rc = cfg.Relative;
         int idx = d.CarIdx;
@@ -158,7 +169,7 @@ public static class RelativeBuilder
         int parity = 0;
         if (isRace && !isPlayer)
             parity = Math.Sign((int)Math.Round(
-                t.Lap[idx] + t.LapDistPct[idx] - playerTotal - RelativeGap.SignedLaps(t, idx)));
+                t.Lap[idx] + t.LapDistPct[idx] - playerTotal - RelativeGap.SignedLaps(t, idx, focus)));
 
         bool battle = isRace && !isPlayer && !inPit && parity == 0 &&
                       d.CarClassId == playerClassId && Math.Abs(gap) <= rc.BattleGapSec;

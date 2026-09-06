@@ -4,6 +4,7 @@ namespace StandingsOverlay.Data;
 public sealed class RawTick
 {
     public int PlayerCarIdx;
+    public int CamCarIdx = -1;           // CamCarIdx: the car the camera is currently following (spectate/replay)
     public int[] Position = [];
     public int[] ClassPosition = [];
     public int[] Lap = [];

@@ -80,11 +80,15 @@ public static class RelativeGap
         => SignedPhase(t, roster, aIdx, bIdx) * refLap;
 
     /// <summary>The player's reference lap: class est lap, else own best, else a safe default.</summary>
-    public static float PlayerRefLap(RawTick t, Roster roster)
+    public static float PlayerRefLap(RawTick t, Roster roster) => RefLapFor(t, roster, t.PlayerCarIdx);
+
+    /// <summary>Reference lap for an arbitrary centre car (the player, or the spectated camera car):
+    /// its class est lap, else its own best, else a safe default.</summary>
+    public static float RefLapFor(RawTick t, Roster roster, int idx)
     {
-        if (roster.Drivers.TryGetValue(t.PlayerCarIdx, out var me) && me.ClassEstLap > 10)
-            return me.ClassEstLap;
-        if (t.BestLap[t.PlayerCarIdx] > 10) return t.BestLap[t.PlayerCarIdx];
+        if (roster.Drivers.TryGetValue(idx, out var d) && d.ClassEstLap > 10)
+            return d.ClassEstLap;
+        if (idx < t.BestLap.Length && t.BestLap[idx] > 10) return t.BestLap[idx];
         return 90f;
     }
 
