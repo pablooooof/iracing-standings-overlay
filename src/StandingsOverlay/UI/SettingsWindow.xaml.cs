@@ -67,9 +67,9 @@ public partial class SettingsWindow : Window
         Nav.SelectedIndex = 0;
     }
 
-    /// <summary>Restore (if minimized) and take focus. The window is <c>Topmost</c>, so it already
-    /// draws above the borderless sim and the overlay widgets — this just gives it keyboard focus,
-    /// which the startup foreground-lock can otherwise withhold while iRacing is the active app.</summary>
+    /// <summary>Restore (if minimized) and take focus/activation. Called on Loaded so this normal,
+    /// non-topmost control panel isn't left buried at startup when the foreground-lock withholds
+    /// activation while iRacing is the active app. It does not force itself above other windows.</summary>
     public void BringToFront()
     {
         if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal;
