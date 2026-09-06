@@ -9,6 +9,7 @@
     <RootNamespace>StandingsOverlay</RootNamespace>
     <AssemblyName>StandingsOverlay</AssemblyName>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>app.ico</ApplicationIcon>
     <!-- Version comes from git tags via MinVer (tag v0.4.0 → version 0.4.0). Never hand-edit. -->
     <MinVerTagPrefix>v</MinVerTagPrefix>
   </PropertyGroup>
