@@ -77,6 +77,7 @@ public class TrafficDetectorTests
         // from 8 s back. Expect exactly one alert episode, first countdown at ~the lead time,
         // and a clean disappearance after the pass.
         var r = new Rig(2, sessionType: "Race");
+        r.Cfg.Traffic.ShowTimeToArrival = true;   // this test asserts on the countdown, not the gap
         r.AddCar(0, 2, 120f);
         r.AddCar(1, 1, 100f, "GTP");
         var progress = new double[] { 20.0, 20.0 - 8.0 / 100 };
@@ -103,6 +104,7 @@ public class TrafficDetectorTests
         // player suddenly goes faster than the GTP. The measured rate collapses; the countdown
         // used to blow up to a literal "99.9" while the alert lingered. It must hold instead.
         var r = new Rig(2, sessionType: "Practice");
+        r.Cfg.Traffic.ShowTimeToArrival = true;   // this test asserts on the countdown, not the gap
         r.AddCar(0, 2, 120f);
         r.AddCar(1, 1, 100f, "GTP");
         var progress = new double[] { 30.0, 30.0 - 6.0 / 100 };

@@ -138,6 +138,11 @@ public sealed class TrafficDetector
 
         double now = t.SessionTime;
         float playerLapTime = RelativeGap.PlayerRefLap(t, roster);
+        // Ruler for the DISPLAYED gap only (blue rows, lapping rows, and the gap-mode number):
+        // the player's real pace, so it matches the relative box exactly. Detection/TTA below keep
+        // the per-class ruler — a countdown is unaffected (gap and rate scale together) and the
+        // multiclass thresholds stay put.
+        float playerRealLap = RelativeGap.ActualLap(stints, t, t.PlayerCarIdx, playerLapTime);
         float? playerPace = stints.RecentPace(t.PlayerCarIdx);
         double playerTotal = t.Lap[t.PlayerCarIdx] + t.LapDistPct[t.PlayerCarIdx];
         bool lappingOn = !tc.Mode.Equals("FasterClassOnly", StringComparison.OrdinalIgnoreCase);
@@ -334,7 +339,9 @@ public sealed class TrafficDetector
             // column would say), else the short-window slope extrapolated to a lap.
             float ratePerLap = lapCatch ?? Math.Max(0, rate) * playerLapTime;
             var (paceText, paceSign) = PaceArrow(stints, d.CarIdx, playerPace);
-            active.Add((BuildRow(d, t, state.Phase, isBlue && !isFaster, shownTta, gap, ratePerLap,
+            // Displayed gap on the player's real ruler (matches the relative); detection used `gap`.
+            float dispGap = Math.Max(0f, -RelativeGap.SignedSeconds(t, roster, d.CarIdx, playerRealLap));
+            active.Add((BuildRow(d, t, state.Phase, isBlue && !isFaster, shownTta, dispGap, ratePerLap,
                                  paceText, paceSign, playerTotal, lead, tc), tta, gap, d.CarClassId));
         }
 
@@ -459,7 +466,10 @@ public sealed class TrafficDetector
         float ratePerLap = history.CatchRatePerLap(d.CarIdx) is float lc
             ? -lc : Math.Max(0, rate) * playerLapTime;
         var (paceText, paceSign) = PaceArrow(stints, d.CarIdx, playerPace);
-        active.Add((BuildLapRow(d, t, s.Phase, gap, ratePerLap, paceText, paceSign, tc),
+        // Displayed gap on the player's real ruler (matches the relative); detection used `gap`.
+        float realLap = RelativeGap.ActualLap(stints, t, t.PlayerCarIdx, playerLapTime);
+        float dispGap = Math.Max(0f, RelativeGap.SignedSeconds(t, roster, d.CarIdx, realLap));
+        active.Add((BuildLapRow(d, t, s.Phase, dispGap, ratePerLap, paceText, paceSign, tc),
                     gap, gap, d.CarClassId));
     }
 

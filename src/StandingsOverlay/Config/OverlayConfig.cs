@@ -178,7 +178,7 @@ public sealed class TrafficConfig
     public int MaxRows { get; set; } = 3;
     public double Scale { get; set; } = 1.0;            // widget size multiplier (LayoutTransform)
     public bool ShowIRating { get; set; } = true;
-    public bool ShowTimeToArrival { get; set; } = true; // true: countdown until the car reaches you; false: current on-track gap (matches the relative box)
+    public bool ShowTimeToArrival { get; set; }         // false (default): current on-track gap, matching the relative box; true: countdown until the car reaches you
     public bool AlongsideBanner { get; set; } = true;   // CarLeftRight banner; fires for alerted traffic only
     public TrafficAudioConfig Audio { get; set; } = new();
 

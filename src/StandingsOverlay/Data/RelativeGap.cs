@@ -82,6 +82,17 @@ public static class RelativeGap
     /// <summary>The player's reference lap: class est lap, else own best, else a safe default.</summary>
     public static float PlayerRefLap(RawTick t, Roster roster) => RefLapFor(t, roster, t.PlayerCarIdx);
 
+    /// <summary>A car's REAL lap time for use as the gap ruler: recent clean-lap pace, else its best
+    /// lap, else the class estimate (before a lap is set). iRacing's relative scales the on-track
+    /// fraction by real pace; the class estimate is an optimistic quali number and reads gaps ~3%
+    /// short. Shared by the relative box and the traffic alerter's displayed gap.</summary>
+    public static float ActualLap(StintTracker stints, RawTick t, int idx, float classLap)
+    {
+        if (stints.RecentPace(idx) is float p && p > 10) return p;
+        if (idx < t.BestLap.Length && t.BestLap[idx] > 10) return t.BestLap[idx];
+        return classLap > 10 ? classLap : 90f;
+    }
+
     /// <summary>Reference lap for an arbitrary centre car (the player, or the spectated camera car):
     /// its class est lap, else its own best, else a safe default.</summary>
     public static float RefLapFor(RawTick t, Roster roster, int idx)

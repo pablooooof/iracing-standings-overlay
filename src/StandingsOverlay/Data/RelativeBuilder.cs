@@ -57,16 +57,6 @@ public static class RelativeBuilder
 {
     private const int FreshTyreLaps = 3;
 
-    /// <summary>A car's real lap time in seconds for use as the gap ruler: recent clean-lap pace,
-    /// else its best lap, else the class estimate (before any lap is set). iRacing's relative scales
-    /// the on-track fraction by real pace — the class estimate is optimistic and reads gaps short.</summary>
-    private static float ActualLap(StintTracker stints, RawTick t, int idx, float classLap)
-    {
-        if (stints.RecentPace(idx) is float p && p > 10) return p;
-        if (idx < t.BestLap.Length && t.BestLap[idx] > 10) return t.BestLap[idx];
-        return classLap > 10 ? classLap : 90f;
-    }
-
     public static RelativeSnapshot Build(RawTick t, Roster roster, StintTracker stints,
         DriverSwapTracker swap, OverlayConfig cfg)
     {
@@ -97,7 +87,7 @@ public static class RelativeBuilder
         // Ruler = the centre car's ACTUAL lap time (recent clean-lap pace, else best), not the
         // optimistic CarClassEstLapTime — iRacing's own relative multiplies the on-track fraction
         // by real pace, and the class estimate runs ~3% quick, so class-lap gaps read short.
-        float refLap = ActualLap(stints, t, focus, me.ClassEstLap);
+        float refLap = RelativeGap.ActualLap(stints, t, focus, me.ClassEstLap);
 
         var ahead = new List<(float Gap, DriverEntry D)>();
         var behind = new List<(float Gap, DriverEntry D)>();
