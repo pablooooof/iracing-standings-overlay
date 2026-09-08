@@ -282,7 +282,13 @@ public sealed class TrafficDetector
             // for a meaningful countdown (TTA math would only alert with them on the bumper) —
             // if they're within BlueGapSec they're a blue-flag situation, closing fast or not.
             bool blueNear = isBlue && !isFaster && gap <= BlueGapSec;
-            bool qualifies = isFaster || isBlue || (allClosing && rate > 0.15f);
+            // Same-class charger: in a single-class pack nothing is "faster class", so a genuinely
+            // quicker car coming up behind (fresh tyres / an alien on a flyer) would never alert.
+            // Gate it on the lap-measured catch rate (not the noisy instantaneous slope) so ordinary
+            // drafting-pace cars in the pack don't trip it — only a real, sustained charge does.
+            bool sameClassCharging = tc.WarnSameClassClosing && d.CarClassId == playerClassId && !isBlue
+                                     && lapCatch is float scc && scc >= (float)tc.SameClassClosingRate;
+            bool qualifies = isFaster || isBlue || sameClassCharging || (allClosing && rate > 0.15f);
             bool inRange = qualifies && (trigger <= lead || blueNear);
 
             if (!state.Alerting)

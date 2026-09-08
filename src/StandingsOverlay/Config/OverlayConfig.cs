@@ -175,6 +175,8 @@ public sealed class TrafficConfig
     public double ImminentSec { get; set; } = 4;
     public bool WarnLapping { get; set; } = true;       // alert on slower/lapped traffic AHEAD you're about to lap
     public double LapTrafficGapSec { get; set; } = 5;   // gap at which the "lapping" alert fires
+    public bool WarnSameClassClosing { get; set; } = true;  // heads-up when a same-class car BEHIND is genuinely charging (single-class packs have no "faster class")
+    public double SameClassClosingRate { get; set; } = 0.5; // …only if it's catching you faster than this (s/lap), so pack drafting doesn't trip it
     public int MaxRows { get; set; } = 3;
     public double Scale { get; set; } = 1.0;            // widget size multiplier (LayoutTransform)
     public bool ShowIRating { get; set; } = true;

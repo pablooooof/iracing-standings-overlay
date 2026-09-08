@@ -58,6 +58,11 @@ Add to `ReadTick()` (same 4 Hz tick, three extra `GetData` calls):
    - *Being lapped (blue):* same class, `carTotal − playerTotal ≥ ~0.9` laps
      (`total = Lap + LapDistPct`); the player's flag bit `0x0020` (blue) is a cross-check,
      not the trigger (fires too late).
+   - *Same-class charger (`WarnSameClassClosing`, default on):* same class, same-lap (not blue),
+     BEHIND, and the **lap-measured** catch rate (`GapHistory.CatchRatePerLap`, not the noisy
+     instantaneous slope) ≥ `SameClassClosingRate` (0.5 s/lap). This is the only same-class threat
+     cue in a single-class pack, where nothing is "faster class" — gated on a sustained catch so
+     ordinary drafting-pace cars don't trip it.
    - Skip pace car, spectators, `OnPitRoad`, `TrackSurface == NotInWorld`.
 3. **Closing rate / TTA.** Per candidate, ring buffer of `(sessionTime, gapSec)` — ~13
    samples ≈ 3.2 s at 4 Hz. Rate = **least-squares slope** over the buffer (an endpoint

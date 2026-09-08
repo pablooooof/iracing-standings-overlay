@@ -214,4 +214,39 @@ public class TrafficDetectorTests
         Assert.False(first!.Rows[0].IsBlue);
         Assert.InRange(ParseTta(first.Rows[0].TtaText), 9, 13);   // appeared at ~the 12 s gap, shows the gap
     }
+
+    [Fact]
+    public void SameClassCharger_GenuinelyCatching_Alerts_WhenNothingElseWould()
+    {
+        // Single-class pack: a same-class car behind laps ~1 s quicker and reels the player in.
+        // Nothing is "faster class" and it isn't lapping anyone, so only the same-class-charger cue
+        // (default on) can catch it. Short laps so several complete inside the run (catch rate needs
+        // a few clean laps).
+        var r = new Rig(2, sessionType: "Race");
+        r.AddCar(0, 2, 20f);
+        r.AddCar(1, 2, 20f);                        // same class
+        var progress = new double[] { 5.0, 5.0 - 15.0 / 20 };   // ~15 s behind
+        r.Place(0, progress[0]);
+        r.Place(1, progress[1]);
+
+        var snaps = Run(r, new TrafficDetector(), progress, _ => [20.0, 19.0], seconds: 200);
+
+        Assert.Contains(snaps, s => s.Rows.Count > 0 && !s.Rows[0].IsBlue);
+    }
+
+    [Fact]
+    public void SameClassCarHoldingStation_DoesNotTripTheChargerCue()
+    {
+        // Same class, matching pace, 5 s back — pack drafting, not a charge. Must stay silent.
+        var r = new Rig(2, sessionType: "Race");
+        r.AddCar(0, 2, 20f);
+        r.AddCar(1, 2, 20f);
+        var progress = new double[] { 5.0, 5.0 - 5.0 / 20 };
+        r.Place(0, progress[0]);
+        r.Place(1, progress[1]);
+
+        var snaps = Run(r, new TrafficDetector(), progress, _ => [20.0, 20.0], seconds: 200);
+
+        Assert.All(snaps, s => Assert.Empty(s.Rows));
+    }
 }

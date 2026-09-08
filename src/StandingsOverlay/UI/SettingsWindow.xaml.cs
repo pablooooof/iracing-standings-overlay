@@ -394,6 +394,10 @@ public partial class SettingsWindow : Window
             () => t.WarnLapping, v => t.WarnLapping = v));
         body.Children.Add(Slider("Lapping gap", "Gap at which the lapping alert fires.", 2, 10, 1,
             () => t.LapTrafficGapSec, v => t.LapTrafficGapSec = v, v => $"{v:0}s"));
+        body.Children.Add(Toggle("Warn same-class charger", "Heads-up when a same-class car behind is genuinely catching you — the only same-class threat cue in a single-class pack.",
+            () => t.WarnSameClassClosing, v => t.WarnSameClassClosing = v));
+        body.Children.Add(Slider("Charger rate", "…only when it's catching faster than this, so drafting-pace cars don't trip it.", 0.2, 1.5, 0.1,
+            () => t.SameClassClosingRate, v => t.SameClassClosingRate = v, v => $"{v:0.0}/L"));
         body.Children.Add(Toggle("Show iRating", null, () => t.ShowIRating, v => t.ShowIRating = v));
         body.Children.Add(Toggle("Alongside banner", "Left/right marker when alerted traffic is beside you.",
             () => t.AlongsideBanner, v => t.AlongsideBanner = v));
