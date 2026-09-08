@@ -24,7 +24,9 @@ public sealed record RelativeRow(
     int PaceSign,
     string GapText,          // "+2.3" ahead · "-0.8" behind · "—" on the player row
     int TyreSwitch = 0,      // 0 none · +1 just switched to wets · -1 to slicks (inline o→o)
-    string PenaltyText = "") // penalty flag chip (DQ/BLK/DMG/WRN); empty in "Text" status style
+    string PenaltyText = "", // penalty flag chip (DQ/BLK/DMG/WRN); empty in "Text" status style
+    string ClosingText = "", // gap-to-you closing rate in s/lap when a car is meaningfully converging
+    int ClosingKind = 0)     // 0 none · 1 a car BEHIND is catching you (amber) · 2 you're catching one AHEAD (green)
 {
     public static readonly RelativeRow Blank =
         new(false, "", "", -1, "", "", "", 0, "", false, "", "", "", "", false, "", "", 0, "");
@@ -58,7 +60,7 @@ public static class RelativeBuilder
     private const int FreshTyreLaps = 3;
 
     public static RelativeSnapshot Build(RawTick t, Roster roster, StintTracker stints,
-        DriverSwapTracker swap, OverlayConfig cfg)
+        DriverSwapTracker swap, GapHistory history, OverlayConfig cfg)
     {
         var rc = cfg.Relative;
         if (!rc.Enabled || !t.Has(t.PlayerCarIdx)) return RelativeSnapshot.Empty;
@@ -118,11 +120,11 @@ public static class RelativeBuilder
         int takeAhead = Math.Min(ahead.Count, nAhead);
         for (int i = takeAhead; i < nAhead; i++) rows.Add(RelativeRow.Blank);
         for (int i = takeAhead - 1; i >= 0; i--)   // furthest ahead at the top
-            rows.Add(BuildRow(ahead[i].D, ahead[i].Gap, false, t, roster, stints, swap, cfg, isRace,
+            rows.Add(BuildRow(ahead[i].D, ahead[i].Gap, false, t, roster, stints, swap, history, cfg, isRace,
                               focus, playerTotal, me.CarClassId, playerPace));
-        rows.Add(BuildRow(me, 0, true, t, roster, stints, swap, cfg, isRace, focus, playerTotal, me.CarClassId, playerPace));
+        rows.Add(BuildRow(me, 0, true, t, roster, stints, swap, history, cfg, isRace, focus, playerTotal, me.CarClassId, playerPace));
         for (int i = 0; i < Math.Min(behind.Count, nBehind); i++)
-            rows.Add(BuildRow(behind[i].D, behind[i].Gap, false, t, roster, stints, swap, cfg, isRace,
+            rows.Add(BuildRow(behind[i].D, behind[i].Gap, false, t, roster, stints, swap, history, cfg, isRace,
                               focus, playerTotal, me.CarClassId, playerPace));
         while (rows.Count < nAhead + 1 + nBehind) rows.Add(RelativeRow.Blank);
 
@@ -153,8 +155,8 @@ public static class RelativeBuilder
     }
 
     private static RelativeRow BuildRow(DriverEntry d, float gap, bool isPlayer, RawTick t,
-        Roster roster, StintTracker stints, DriverSwapTracker swap, OverlayConfig cfg, bool isRace,
-        int focus, double playerTotal, int playerClassId, float? playerPace)
+        Roster roster, StintTracker stints, DriverSwapTracker swap, GapHistory history, OverlayConfig cfg,
+        bool isRace, int focus, double playerTotal, int playerClassId, float? playerPace)
     {
         var rc = cfg.Relative;
         int idx = d.CarIdx;
@@ -218,6 +220,23 @@ public static class RelativeBuilder
             else { pace = "►"; }
         }
 
+        // Closing rate to YOU: the observed per-lap change in the gap to the player (the same clean-
+        // lap deltas the standings shows), turned into "how fast are we converging". Only meaningful
+        // movers show, so a 60-car pack stays quiet: amber = a car behind is catching you (defend),
+        // green = you're reeling in a car ahead (prepare to pass). Holding-station cars stay blank.
+        string closingText = "";
+        int closingKind = 0;
+        if (rc.ShowClosing && !isPlayer && history.CatchRatePerLap(idx) is float catchRate)
+        {
+            bool behind = gap < 0;
+            float converging = behind ? catchRate : -catchRate;   // >0 = the gap is shrinking
+            if (converging >= 0.15f)
+            {
+                closingText = converging.ToString("0.0");
+                closingKind = behind ? 1 : 2;
+            }
+        }
+
         float last = idx < t.LastLap.Length ? t.LastLap[idx] : 0;
 
         return new RelativeRow(
@@ -243,7 +262,9 @@ public static class RelativeBuilder
             PaceSign: paceSign,
             // Ahead is unsigned (list order shows it); behind keeps its "-".
             GapText: isPlayer ? "—"
-                : (gap < 0 ? "-" : "") + SnapshotBuilder.FmtGap(Math.Abs(gap), rc.GapPrecision));
+                : (gap < 0 ? "-" : "") + SnapshotBuilder.FmtGap(Math.Abs(gap), rc.GapPrecision),
+            ClosingText: closingText,
+            ClosingKind: closingKind);
     }
 
 }

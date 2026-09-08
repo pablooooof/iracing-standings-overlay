@@ -217,6 +217,7 @@ public sealed class RelativeConfig
     public bool ShowStintAge { get; set; } = true;   // laps since last pit stop; green while fresh
     public bool ShowLastLap { get; set; } = true;
     public bool ShowPace { get; set; } = true;       // ▲/▼/► recent pace vs the player
+    public bool ShowClosing { get; set; } = true;    // per-car closing rate to YOU (gap trend): who's actually catching / being caught, s/lap
 
     // Same-class same-lap cars within this many seconds get the ▸ battle marker + white gap.
     public double BattleGapSec { get; set; } = 1.5;

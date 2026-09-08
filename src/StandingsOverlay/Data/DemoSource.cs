@@ -401,7 +401,7 @@ public sealed class DemoSource : ITelemetrySource
         foreach (int idx in _driverSwap.Update(_tick, _roster)) _stints.NoteDriverSwap(idx);
         SnapshotReady?.Invoke(SnapshotBuilder.Build(_tick, _roster, _history, _stints, _weather, _driverSwap, cfg));
         TrafficReady?.Invoke(_traffic.Update(_tick, _roster, _history, _stints, cfg));
-        RelativeReady?.Invoke(RelativeBuilder.Build(_tick, _roster, _stints, _driverSwap, cfg));
+        RelativeReady?.Invoke(RelativeBuilder.Build(_tick, _roster, _stints, _driverSwap, _history, cfg));
         FuelReady?.Invoke(_planner.Build(_tick, _fuel, cfg));
         LapLabReady?.Invoke(_lapLab.Build(_tick, _sectorClock, _roster, _refStore, cfg));
     }

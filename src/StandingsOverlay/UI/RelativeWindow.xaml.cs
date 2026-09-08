@@ -15,7 +15,7 @@ namespace StandingsOverlay.UI;
 public sealed class RelativeRowViewModel : INotifyPropertyChanged
 {
     private string _pos = "", _carNumber = "", _brand = "", _name = "", _status = "";
-    private string _license = "", _iRating = "", _stint = "", _lastLap = "", _pace = "", _gap = "";
+    private string _license = "", _iRating = "", _stint = "", _lastLap = "", _pace = "", _gap = "", _closing = "";
     public string Pos { get => _pos; set => Set(ref _pos, value); }
     public string CarNumber { get => _carNumber; set => Set(ref _carNumber, value); }
     public string Brand { get => _brand; set => Set(ref _brand, value); }
@@ -27,12 +27,14 @@ public sealed class RelativeRowViewModel : INotifyPropertyChanged
     public string LastLap { get => _lastLap; set => Set(ref _lastLap, value); }
     public string Pace { get => _pace; set => Set(ref _pace, value); }
     public string Gap { get => _gap; set => Set(ref _gap, value); }
+    public string Closing { get => _closing; set => Set(ref _closing, value); }
 
     private Brush _posBrush = Brushes.Gray, _numBrush = Brushes.White, _classBarBrush = Brushes.Transparent;
     private Brush _tyreBrush = Brushes.Gray, _tyreOldBrush = Brushes.Gray, _nameBrush = Brushes.White;
     private Brush _statusBrush = Brushes.Orange, _statusBg = Brushes.Transparent, _licBrush = Brushes.Gray;
     private Brush _licTextBrush = Brushes.White, _stintBrush = Brushes.Gray, _paceBrush = Brushes.White;
     private Brush _gapBrush = Brushes.White, _battleBrush = Brushes.Cyan, _rowBackground = Brushes.Transparent;
+    private Brush _closingBrush = Brushes.Gray;
     private Brush _flagBodyBrush = Brushes.Black, _flagStrokeBrush = Brushes.Gray, _flagDotBrush = Brushes.Transparent;
     public Brush PosBrush { get => _posBrush; set => Set(ref _posBrush, value); }
     public Brush NumBrush { get => _numBrush; set => Set(ref _numBrush, value); }
@@ -47,6 +49,7 @@ public sealed class RelativeRowViewModel : INotifyPropertyChanged
     public Brush StintBrush { get => _stintBrush; set => Set(ref _stintBrush, value); }
     public Brush PaceBrush { get => _paceBrush; set => Set(ref _paceBrush, value); }
     public Brush GapBrush { get => _gapBrush; set => Set(ref _gapBrush, value); }
+    public Brush ClosingBrush { get => _closingBrush; set => Set(ref _closingBrush, value); }
     public Brush BattleBrush { get => _battleBrush; set => Set(ref _battleBrush, value); }
     public Brush RowBackground { get => _rowBackground; set => Set(ref _rowBackground, value); }
     public Brush FlagBodyBrush { get => _flagBodyBrush; set => Set(ref _flagBodyBrush, value); }
@@ -58,7 +61,8 @@ public sealed class RelativeRowViewModel : INotifyPropertyChanged
 
     private Visibility _numVis = Visibility.Collapsed, _tyreVis = Visibility.Collapsed, _tyreSwitchVis = Visibility.Collapsed;
     private Visibility _irVis = Visibility.Collapsed, _licVis = Visibility.Collapsed, _battleVis = Visibility.Collapsed;
-    private Visibility _flagVis = Visibility.Collapsed, _flagDotVis = Visibility.Collapsed;
+    private Visibility _flagVis = Visibility.Collapsed, _flagDotVis = Visibility.Collapsed, _closingVis = Visibility.Collapsed;
+    public Visibility ClosingVisibility { get => _closingVis; set => Set(ref _closingVis, value); }
     public Visibility NumVisibility { get => _numVis; set => Set(ref _numVis, value); }
     public Visibility TyreVisibility { get => _tyreVis; set => Set(ref _tyreVis, value); }
     public Visibility TyreSwitchVisibility { get => _tyreSwitchVis; set => Set(ref _tyreSwitchVis, value); }
@@ -83,6 +87,7 @@ public sealed class RelativeRowViewModel : INotifyPropertyChanged
     private static readonly Brush LapsYouRed = RowViewModel.Frozen("#FF6A6A");
     private static readonly Brush LappedBlue = RowViewModel.Frozen("#63A8FF");
     private static readonly Brush FreshGreen = RowViewModel.Frozen("#4CFF6A");
+    private static readonly Brush CatchAmber = RowViewModel.Frozen("#FFB020");   // a car behind is catching you
     private static readonly Brush LossRed = RowViewModel.Frozen("#FF5C5C");
     private static readonly Brush SamePaceYellow = RowViewModel.Frozen("#FFD34D");
     private static readonly Brush PitAmber = RowViewModel.Frozen("#FFB84D");
@@ -137,6 +142,9 @@ public sealed class RelativeRowViewModel : INotifyPropertyChanged
         LastLap = r.LastLapText;
         Pace = r.PaceText;
         Gap = r.GapText;
+        Closing = r.ClosingText;
+        ClosingBrush = r.ClosingKind == 1 ? CatchAmber : FreshGreen;   // 1 = catching you (amber) · 2 = you catching (green)
+        ClosingVisibility = r.ClosingText.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
         PosBrush = RowViewModel.TryBrush(r.ClassColor) ?? Dim;
         NumBrush = RowViewModel.TryBrush(r.ClassColor) ?? NoClass;
         ClassBarBrush = RowViewModel.TryBrush(r.ClassColor) ?? Brushes.Transparent;

@@ -132,7 +132,7 @@ public sealed class IRacingSource : ITelemetrySource
             foreach (int idx in _driverSwap.Update(t, _roster)) _stints.NoteDriverSwap(idx);
             SnapshotReady?.Invoke(SnapshotBuilder.Build(t, _roster, _history, _stints, _weather, _driverSwap, cfg));
             TrafficReady?.Invoke(_traffic.Update(t, _roster, _history, _stints, cfg));
-            RelativeReady?.Invoke(RelativeBuilder.Build(t, _roster, _stints, _driverSwap, cfg));
+            RelativeReady?.Invoke(RelativeBuilder.Build(t, _roster, _stints, _driverSwap, _history, cfg));
             FuelReady?.Invoke(_planner.Build(t, _fuel, cfg));
             LapLabReady?.Invoke(_lapLab.Build(t, _sectorClock, _roster, _refStore, cfg));
             _emitted = true;

@@ -30,6 +30,7 @@
                                     <ColumnDefinition Width="Auto" SharedSizeGroup="Stint"/>
                                     <ColumnDefinition Width="Auto" SharedSizeGroup="Last"/>
                                     <ColumnDefinition Width="Auto" SharedSizeGroup="Pace"/>
+                                    <ColumnDefinition Width="Auto" SharedSizeGroup="Closing"/>
                                     <ColumnDefinition Width="Auto" SharedSizeGroup="Gap"/>
                                 </Grid.ColumnDefinitions>
 
@@ -119,7 +120,14 @@
                                            Foreground="{Binding PaceBrush}" FontWeight="SemiBold"
                                            Margin="0,0,5,0" VerticalAlignment="Center"/>
 
-                                <TextBlock Grid.Column="12" Text="{Binding Gap}"
+                                <!-- Closing rate to you (s/lap): amber = a car behind catching you,
+                                     green = you catching a car ahead. Blank unless meaningfully converging. -->
+                                <TextBlock Grid.Column="12" Text="{Binding Closing}"
+                                           Foreground="{Binding ClosingBrush}" FontSize="{DynamicResource FontSm}"
+                                           FontWeight="SemiBold" TextAlignment="Right" Margin="0,0,5,0"
+                                           VerticalAlignment="Center" Visibility="{Binding ClosingVisibility}"/>
+
+                                <TextBlock Grid.Column="13" Text="{Binding Gap}"
                                            Foreground="{Binding GapBrush}"
                                            FontWeight="Bold" TextAlignment="Right" MinWidth="34"
                                            VerticalAlignment="Center"/>

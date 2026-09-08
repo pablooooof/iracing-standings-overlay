@@ -347,6 +347,7 @@ public partial class SettingsWindow : Window
             () => _cfg.Current.InferTireChanges, v => _cfg.Current.InferTireChanges = v));
         body.Children.Add(Toggle("Last lap", null, () => r.ShowLastLap, v => r.ShowLastLap = v));
         body.Children.Add(Toggle("Pace arrow", "Their recent pace vs yours.", () => r.ShowPace, v => r.ShowPace = v));
+        body.Children.Add(Toggle("Closing rate", "s/lap the gap to you is closing — amber = a car behind is catching you, green = you're catching one ahead. Only shows real movers.", () => r.ShowClosing, v => r.ShowClosing = v));
 
         body.Children.Add(Subhead("Behavior"));
         body.Children.Add(Segmented("Status style", "Independent of the standings: flag chips + text, or one text badge.",

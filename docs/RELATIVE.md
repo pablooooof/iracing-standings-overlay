@@ -10,6 +10,7 @@ stops there. Things it does not tell you, which decide how you actually drive th
 | Missing in the sim | Why it matters | Our answer |
 |---|---|---|
 | **Pace of the car around you** | Is the car ahead catchable? Is the car behind a threat or just holding on? | LAST lap column + ▲/▼/► pace arrow vs the player (reuses `StintTracker.RecentPace`) |
+| **Closing rate to YOU** | In a 60-car pack, which of these cars is actually *converging* — worth defending / preparing to pass — vs holding station? | Closing column: s/lap the gap to you is shrinking (`GapHistory.CatchRatePerLap`, the same clean-lap deltas the standings shows). Amber = a car behind is catching you, green = you're catching one ahead; blank unless it clears ~0.15 s/lap, so only real movers show. `ShowClosing`. |
 | **Tyre/stint age** | A car behind on 2-lap-old tyres is a different animal than one on a 25-lap stint | Stint-age column (laps since last stop), green while fresh (≤3 laps) |
 | **Class position** | "P14" overall is noise in multiclass; P3 *in class* is the battle | Class position, shown in class color |
 | **Car brand** | Draft/brake references differ per car | 3-letter brand code (same `Brands.Code` as standings) |
@@ -64,7 +65,7 @@ cross-class normalization, S/F wrap, pit-zero fallback, skew gate).
 
 ## Data flow
 
-`RelativeBuilder.Build(RawTick, Roster, StintTracker, OverlayConfig)` — pure, same demo/live
+`RelativeBuilder.Build(RawTick, Roster, StintTracker, DriverSwapTracker, GapHistory, OverlayConfig)` — pure, same demo/live
 pipeline as everything else — → `RelativeSnapshot` → `RelativeReady` event → `UI/RelativeWindow`.
 
 - Centre car: the player when driving; when **spectating** (out of the car, `IsOnTrack` false) the
