@@ -143,6 +143,10 @@ public sealed class TrafficDetector
         // the per-class ruler — a countdown is unaffected (gap and rate scale together) and the
         // multiclass thresholds stay put.
         float playerRealLap = RelativeGap.ActualLap(stints, t, t.PlayerCarIdx, playerLapTime);
+        // Gap mode (default): the WHOLE state machine — appear, escalate, sort — keys off the
+        // on-track gap, so a car alerts by how close it is, exactly like the relative box (the lead
+        // and imminent thresholds read as gap-seconds). Countdown mode keys off time-to-arrival.
+        bool gapMode = !tc.ShowTimeToArrival;
         float? playerPace = stints.RecentPace(t.PlayerCarIdx);
         double playerTotal = t.Lap[t.PlayerCarIdx] + t.LapDistPct[t.PlayerCarIdx];
         bool lappingOn = !tc.Mode.Equals("FasterClassOnly", StringComparison.OrdinalIgnoreCase);
@@ -268,20 +272,25 @@ public sealed class TrafficDetector
 
             float tta = rate > 0.05f ? gap / rate : float.MaxValue;
             double lead = isBlue && !isFaster ? tc.BlueLeadTimeSec : tc.AlertLeadTimeSec;
+            // The relative gap on the player's real pace — exactly what the box (and this alert)
+            // prints. In Gap mode the whole state machine keys off it, so a car appears/escalates/
+            // sorts at the number shown; in Countdown mode the metric is time-to-arrival instead.
+            float relGap = Math.Max(0f, -RelativeGap.SignedSeconds(t, roster, d.CarIdx, playerRealLap));
+            float trigger = gapMode ? relGap : tta;
 
             // Blue also fires on raw gap: a leader grinding up at 1-3 s/lap has a rate too small
             // for a meaningful countdown (TTA math would only alert with them on the bumper) —
             // if they're within BlueGapSec they're a blue-flag situation, closing fast or not.
             bool blueNear = isBlue && !isFaster && gap <= BlueGapSec;
             bool qualifies = isFaster || isBlue || (allClosing && rate > 0.15f);
-            bool inRange = qualifies && (tta <= lead || blueNear);
+            bool inRange = qualifies && (trigger <= lead || blueNear);
 
             if (!state.Alerting)
             {
                 // The re-alert cooldown stops boundary flapping, but must never silence a car
                 // that is actually arriving — a dismissal at ~3 s followed by a fast re-approach
                 // used to fire WATCH only at contact (gap=0.0 in the logs). Urgent = it's here.
-                bool urgent = tta <= tc.ImminentSec || gap <= BlueGapSec;
+                bool urgent = trigger <= tc.ImminentSec || gap <= BlueGapSec;
                 if (!inRange || (!urgent && now - state.DismissedAt < ReAlertCooldownSec)) continue;
                 state.Alerting = true;
                 state.Phase = TrafficPhase.Watch;
@@ -301,7 +310,7 @@ public sealed class TrafficDetector
                     _lastWatchCue = now;
                 }
             }
-            else if (!inRange && !(qualifies && (tta <= lead * 1.3 ||
+            else if (!inRange && !(qualifies && (trigger <= lead * 1.3 ||
                      (isBlue && !isFaster && gap <= BlueGapSec * 1.3))))
             {
                 // Hysteresis: only dismiss after being out of range for a while.
@@ -312,9 +321,10 @@ public sealed class TrafficDetector
                 state.OutOfRangeSince = -1;
             }
 
-            // Blue escalates on TTA only: a leader closing at 2 s/lap lives under 1.5 s of
-            // gap for most of a lap, and a calm alert is the whole point of the blue design.
-            bool imminentNow = tta <= tc.ImminentSec || (!(isBlue && !isFaster) && gap <= 1.5f);
+            // Escalate on the same metric the alert triggered on (gap or countdown); non-blue
+            // traffic also escalates on a raw 1.5 s gap. Blue leaders live under 1.5 s of gap for
+            // most of a lap, so they escalate only on the metric, keeping the alert calm.
+            bool imminentNow = trigger <= tc.ImminentSec || (!(isBlue && !isFaster) && gap <= 1.5f);
             if (state.Phase == TrafficPhase.Watch && imminentNow)
             {
                 state.Phase = TrafficPhase.Imminent;
@@ -339,16 +349,15 @@ public sealed class TrafficDetector
             // column would say), else the short-window slope extrapolated to a lap.
             float ratePerLap = lapCatch ?? Math.Max(0, rate) * playerLapTime;
             var (paceText, paceSign) = PaceArrow(stints, d.CarIdx, playerPace);
-            // Displayed gap on the player's real ruler (matches the relative); detection used `gap`.
-            float dispGap = Math.Max(0f, -RelativeGap.SignedSeconds(t, roster, d.CarIdx, playerRealLap));
-            active.Add((BuildRow(d, t, state.Phase, isBlue && !isFaster, shownTta, dispGap, ratePerLap,
-                                 paceText, paceSign, playerTotal, lead, tc), tta, gap, d.CarClassId));
+            // relGap (player's real pace) is the shown number and, in Gap mode, the sort/train key.
+            active.Add((BuildRow(d, t, state.Phase, isBlue && !isFaster, shownTta, relGap, ratePerLap,
+                                 paceText, paceSign, playerTotal, lead, tc), tta, relGap, d.CarClassId));
         }
 
         // Sweep alerting cars that vanished from the roster loop (e.g. pitted mid-alert).
         // Rows for them simply stop being produced; their state ages out via the pit branch.
 
-        active.Sort((a, b) => a.Tta.CompareTo(b.Tta));
+        active.Sort((a, b) => gapMode ? a.Gap.CompareTo(b.Gap) : a.Tta.CompareTo(b.Tta));
 
         // Same-class train merging: consecutive cars of one class within TrainGapSec.
         var rows = new List<TrafficRow>(active.Count);

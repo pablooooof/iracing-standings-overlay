@@ -38,7 +38,9 @@ public class TrafficDetectorTests
         // Practice: a GTP hovers a constant 5 s behind the GT3 player (matching pace right now).
         // The distance-pct gap breathes with the track section every lap; the phase gap doesn't.
         // The old blend turned that breathing into 0.7+ s/s phantom closing rates → random pop-ups.
+        // Countdown basis: a rate-driven concern (in Gap basis a GTP sitting 5 s back is legit traffic).
         var r = new Rig(2, sessionType: "Practice");
+        r.Cfg.Traffic.ShowTimeToArrival = true;
         r.AddCar(0, 2, 120f);
         r.AddCar(1, 1, 100f, "GTP");
         var progress = new double[] { 10.0, 10.0 - 5.0 / 100 };
@@ -128,7 +130,9 @@ public class TrafficDetectorTests
         // Race: a GTP closes to ~2 s (WATCH), backs off (dismissed), then charges again within
         // the 15 s re-alert cooldown. The cooldown must not swallow the re-approach — the alert
         // has to be back up while the car is still meaningfully behind, not at contact.
+        // Countdown basis: the re-alert cooldown is a rate/TTA dynamic.
         var r = new Rig(2, sessionType: "Race");
+        r.Cfg.Traffic.ShowTimeToArrival = true;
         r.AddCar(0, 2, 120f);
         r.AddCar(1, 1, 100f, "GTP");
         var progress = new double[] { 50.0, 50.0 - 5.0 / 100 };
@@ -188,5 +192,26 @@ public class TrafficDetectorTests
         var blue = snaps.SelectMany(s => s.Rows).Where(row => row.IsBlue).ToList();
         Assert.NotEmpty(blue);
         Assert.All(blue, row => Assert.InRange(ParseTta(row.TtaText), 1.4, 2.6));
+    }
+
+    [Fact]
+    public void GapBasis_FasterClass_AppearsAtTheGapLead_AndPrintsThatGap()
+    {
+        // Default (Gap basis, ShowTimeToArrival off): a GTP closes on the GT3 player from ~18 s of
+        // on-track gap. It must appear when the GAP reaches the lead time (12 s) — not at 18 s, not
+        // only at contact — and the printed number is that gap, matching the relative box.
+        var r = new Rig(2, sessionType: "Race");
+        r.AddCar(0, 2, 120f);
+        r.AddCar(1, 1, 100f, "GTP");
+        var progress = new double[] { 40.0, 40.0 - 18.0 / 120 };   // ~18 s of relative (GT3-pace) gap
+        r.Place(0, progress[0]);
+        r.Place(1, progress[1]);
+
+        var snaps = Run(r, new TrafficDetector(), progress, _ => [120.0, 100.0], seconds: 120);
+
+        var first = snaps.FirstOrDefault(s => s.Rows.Count > 0);
+        Assert.NotNull(first);
+        Assert.False(first!.Rows[0].IsBlue);
+        Assert.InRange(ParseTta(first.Rows[0].TtaText), 9, 13);   // appeared at ~the 12 s gap, shows the gap
     }
 }

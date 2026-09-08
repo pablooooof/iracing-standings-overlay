@@ -378,17 +378,17 @@ public partial class SettingsWindow : Window
             () => t.Mode, v => Apply(() => t.Mode = v)));
 
         body.Children.Add(Subhead("Timing"));
-        body.Children.Add(Slider("Lead time", "Warn this many seconds before traffic arrives.", 4, 30, 1,
-            () => t.AlertLeadTimeSec, v => t.AlertLeadTimeSec = v, v => $"{v:0}s"));
-        body.Children.Add(Slider("Blue-flag lead", "More warning when you're the one being lapped.", 5, 40, 1,
-            () => t.BlueLeadTimeSec, v => t.BlueLeadTimeSec = v, v => $"{v:0}s"));
-        body.Children.Add(Slider("Imminent", "Escalate to the urgent cue inside this window.", 1, 10, 1,
-            () => t.ImminentSec, v => t.ImminentSec = v, v => $"{v:0}s"));
-        body.Children.Add(Slider("Max rows", null, 1, 6, 1, () => t.MaxRows, v => t.MaxRows = (int)v, v => $"{v:0}"));
-        body.Children.Add(Segmented("Number shown", "Gap = on-track seconds, matching the relative box. Countdown = time until the car reaches you. (Alerts appear/escalate on time-to-arrival either way.)",
+        body.Children.Add(Segmented("Alert basis", "Gap: cars appear, escalate, sort and print by on-track gap — the same seconds as the relative box (the lead/imminent sliders read as gap). Countdown: everything by time-to-arrival instead.",
             new[] { ("Gap", "Gap"), ("Countdown", "ETA") },
             () => t.ShowTimeToArrival ? "ETA" : "Gap",
             v => Apply(() => t.ShowTimeToArrival = v == "ETA")));
+        body.Children.Add(Slider("Lead time", "Alert when a car comes within this many seconds — of on-track gap (Gap basis) or arrival time (Countdown).", 4, 30, 1,
+            () => t.AlertLeadTimeSec, v => t.AlertLeadTimeSec = v, v => $"{v:0}s"));
+        body.Children.Add(Slider("Blue-flag lead", "More warning when you're the one being lapped.", 5, 40, 1,
+            () => t.BlueLeadTimeSec, v => t.BlueLeadTimeSec = v, v => $"{v:0}s"));
+        body.Children.Add(Slider("Imminent", "Escalate to the urgent cue inside this many seconds (same basis as above).", 1, 10, 1,
+            () => t.ImminentSec, v => t.ImminentSec = v, v => $"{v:0}s"));
+        body.Children.Add(Slider("Max rows", null, 1, 6, 1, () => t.MaxRows, v => t.MaxRows = (int)v, v => $"{v:0}"));
         body.Children.Add(Toggle("Warn when lapping traffic", "Alert on slower/lapped cars ahead you're about to lap.",
             () => t.WarnLapping, v => t.WarnLapping = v));
         body.Children.Add(Slider("Lapping gap", "Gap at which the lapping alert fires.", 2, 10, 1,
