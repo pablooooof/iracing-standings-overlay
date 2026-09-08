@@ -382,11 +382,13 @@ public sealed class TrafficDetector
         int overflow = Math.Max(0, rows.Count - Math.Max(1, cfg.Traffic.MaxRows));
         if (overflow > 0) rows.RemoveRange(rows.Count - overflow, overflow);
 
-        // Alongside banner: the sim spotter says a car overlaps us AND we have alerted
-        // traffic close enough for it to plausibly be that car (traffic only, per spec).
+        // Alongside banner: the sim spotter says a car overlaps us. By default we only raise it when
+        // alerted traffic is close enough to be that car (multiclass "a faster car is beside you");
+        // AlongsideAnyCar widens it to any overlap, which is what you want in a same-class pack where
+        // the car beside you through the esses is a racing peer, not an "alert".
         var alongside = AlongsideDir.None;
         if (tc.AlongsideBanner && t.CarLeftRight >= 2 &&
-            active.Any(a => a.Gap <= 2.0f))
+            (tc.AlongsideAnyCar || active.Any(a => a.Gap <= 2.0f)))
         {
             alongside = t.CarLeftRight switch
             {

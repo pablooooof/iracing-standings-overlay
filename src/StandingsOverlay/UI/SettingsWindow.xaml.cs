@@ -399,8 +399,10 @@ public partial class SettingsWindow : Window
         body.Children.Add(Slider("Charger rate", "…only when it's catching faster than this, so drafting-pace cars don't trip it.", 0.2, 1.5, 0.1,
             () => t.SameClassClosingRate, v => t.SameClassClosingRate = v, v => $"{v:0.0}/L"));
         body.Children.Add(Toggle("Show iRating", null, () => t.ShowIRating, v => t.ShowIRating = v));
-        body.Children.Add(Toggle("Alongside banner", "Left/right marker when alerted traffic is beside you.",
+        body.Children.Add(Toggle("Alongside banner", "Left/right marker when a car is beside you.",
             () => t.AlongsideBanner, v => t.AlongsideBanner = v));
+        body.Children.Add(Toggle("Alongside: any car", "Show it for ANY car the spotter reports beside you, not just alerted traffic — for constant same-class side-by-side in a pack.",
+            () => t.AlongsideAnyCar, v => t.AlongsideAnyCar = v));
 
         body.Children.Add(Subhead("Audio"));
         var audio = t.Audio;

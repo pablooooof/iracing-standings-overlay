@@ -181,7 +181,8 @@ public sealed class TrafficConfig
     public double Scale { get; set; } = 1.0;            // widget size multiplier (LayoutTransform)
     public bool ShowIRating { get; set; } = true;
     public bool ShowTimeToArrival { get; set; }         // false (default) = Gap basis: appear/escalate/sort AND the number all key off the on-track gap (matches the relative box; lead/imminent read as gap-seconds). true = Countdown basis: all keyed off time-to-arrival.
-    public bool AlongsideBanner { get; set; } = true;   // CarLeftRight banner; fires for alerted traffic only
+    public bool AlongsideBanner { get; set; } = true;   // CarLeftRight banner: a car is overlapping you left/right
+    public bool AlongsideAnyCar { get; set; }           // fire it for ANY spotter-reported overlap (a same-class pack has no "alert" beside you), not just alerted traffic
     public TrafficAudioConfig Audio { get; set; } = new();
 
     // Widget position (DIPs), independent of the standings table; draggable in edit mode.

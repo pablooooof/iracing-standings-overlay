@@ -249,4 +249,39 @@ public class TrafficDetectorTests
 
         Assert.All(snaps, s => Assert.Empty(s.Rows));
     }
+
+    [Fact]
+    public void AlongsideAnyCar_RaisesTheBanner_ForASpotterOverlap_WithNoAlert()
+    {
+        // A same-class car 40 s back (no alert), but the spotter says it's overlapping on the left.
+        // With AlongsideAnyCar on, the side-by-side banner shows anyway — pack awareness.
+        var r = new Rig(2, sessionType: "Race");
+        r.AddCar(0, 2, 120f);
+        r.AddCar(1, 2, 120f);
+        r.Place(0, 5.0);
+        r.Place(1, 5.0 - 40.0 / 120);
+        r.Tick.CarLeftRight = 2;              // spotter: car on the left
+        r.Cfg.Traffic.AlongsideAnyCar = true;
+
+        var snap = new TrafficDetector().Update(r.Tick, r.Roster, new GapHistory(), new StintTracker(), r.Cfg);
+
+        Assert.Equal(AlongsideDir.Left, snap.Alongside);
+        Assert.Empty(snap.Rows);              // banner without any alert row
+    }
+
+    [Fact]
+    public void AlongsideBanner_Default_StaysDark_ForADistantCar()
+    {
+        // Same overlap, but default config (alerted-traffic only) — no alert nearby, so no banner.
+        var r = new Rig(2, sessionType: "Race");
+        r.AddCar(0, 2, 120f);
+        r.AddCar(1, 2, 120f);
+        r.Place(0, 5.0);
+        r.Place(1, 5.0 - 40.0 / 120);
+        r.Tick.CarLeftRight = 2;
+
+        var snap = new TrafficDetector().Update(r.Tick, r.Roster, new GapHistory(), new StintTracker(), r.Cfg);
+
+        Assert.Equal(AlongsideDir.None, snap.Alongside);
+    }
 }

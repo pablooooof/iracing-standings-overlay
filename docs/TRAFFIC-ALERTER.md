@@ -95,7 +95,10 @@ Add to `ReadTick()` (same 4 Hz tick, three extra `GetData` calls):
    - → **IMMINENT** when `tta ≤ ImminentSec` (4) or `gapSec ≤ 1.5`. The gap shortcut is
      for traffic only — a blue car closing at 2 s/lap *lives* under 1.5 s of gap, so blue
      escalates on TTA alone (found live in demo: blue went red instantly otherwise)
-   - → **ALONGSIDE** when `CarLeftRight` reports a car (banner: "◀ CAR LEFT" etc.)
+   - → **ALONGSIDE** when `CarLeftRight` reports a car (banner: "◀ CAR LEFT" etc.). By default only
+     when alerted traffic is within 2 s (so it's "a faster car is beside you"); `AlongsideAnyCar`
+     widens it to any spotter overlap — how you want it in a same-class pack, where the car beside
+     you through the esses is a racing peer, not an alert (fires with zero alert rows shown).
    - → **CLEAR** once the car is 0.5 s *ahead*: green flash 0.8 s, then remove
    - Min display 2 s; dismiss only after 3 s out of range (no flicker at thresholds).
 5. **Multi-car stacking.**
