@@ -385,8 +385,10 @@ public partial class SettingsWindow : Window
         body.Children.Add(Slider("Imminent", "Escalate to the urgent cue inside this window.", 1, 10, 1,
             () => t.ImminentSec, v => t.ImminentSec = v, v => $"{v:0}s"));
         body.Children.Add(Slider("Max rows", null, 1, 6, 1, () => t.MaxRows, v => t.MaxRows = (int)v, v => $"{v:0}"));
-        body.Children.Add(Toggle("Arrival countdown", "On: seconds until the car reaches you. Off: the current on-track gap, matching the relative box.",
-            () => t.ShowTimeToArrival, v => t.ShowTimeToArrival = v));
+        body.Children.Add(Segmented("Number shown", "Gap = on-track seconds, matching the relative box. Countdown = time until the car reaches you. (Alerts appear/escalate on time-to-arrival either way.)",
+            new[] { ("Gap", "Gap"), ("Countdown", "ETA") },
+            () => t.ShowTimeToArrival ? "ETA" : "Gap",
+            v => Apply(() => t.ShowTimeToArrival = v == "ETA")));
         body.Children.Add(Toggle("Warn when lapping traffic", "Alert on slower/lapped cars ahead you're about to lap.",
             () => t.WarnLapping, v => t.WarnLapping = v));
         body.Children.Add(Slider("Lapping gap", "Gap at which the lapping alert fires.", 2, 10, 1,
