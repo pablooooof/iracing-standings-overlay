@@ -57,6 +57,16 @@ public static class RelativeBuilder
 {
     private const int FreshTyreLaps = 3;
 
+    /// <summary>A car's real lap time in seconds for use as the gap ruler: recent clean-lap pace,
+    /// else its best lap, else the class estimate (before any lap is set). iRacing's relative scales
+    /// the on-track fraction by real pace — the class estimate is optimistic and reads gaps short.</summary>
+    private static float ActualLap(StintTracker stints, RawTick t, int idx, float classLap)
+    {
+        if (stints.RecentPace(idx) is float p && p > 10) return p;
+        if (idx < t.BestLap.Length && t.BestLap[idx] > 10) return t.BestLap[idx];
+        return classLap > 10 ? classLap : 90f;
+    }
+
     public static RelativeSnapshot Build(RawTick t, Roster roster, StintTracker stints,
         DriverSwapTracker swap, OverlayConfig cfg)
     {
@@ -82,9 +92,12 @@ public static class RelativeBuilder
         if (!roster.Drivers.TryGetValue(focus, out var me)) return RelativeSnapshot.Empty;
 
         bool isRace = StandingsSnapshot.KindOf(t.SessionType) == SessionKind.Race;
-        float refLap = RelativeGap.RefLapFor(t, roster, focus);
         double playerTotal = t.Lap[focus] + t.LapDistPct[focus];
         float? playerPace = stints.RecentPace(focus);
+        // Ruler = the centre car's ACTUAL lap time (recent clean-lap pace, else best), not the
+        // optimistic CarClassEstLapTime — iRacing's own relative multiplies the on-track fraction
+        // by real pace, and the class estimate runs ~3% quick, so class-lap gaps read short.
+        float refLap = ActualLap(stints, t, focus, me.ClassEstLap);
 
         var ahead = new List<(float Gap, DriverEntry D)>();
         var behind = new List<(float Gap, DriverEntry D)>();
@@ -97,12 +110,12 @@ public static class RelativeBuilder
             if (rc.HideParkedCars && d.CarIdx < t.OnPitRoad.Length && t.OnPitRoad[d.CarIdx]
                 && stints.StoppedSeconds(d.CarIdx) > 60) continue;
 
-            // Same convention as the traffic alerter so both show the *same* gap: one shared
-            // phase delta decides ahead/behind AND the magnitude; a car behind closes at its
-            // own pace (its class lap as the ruler), a car ahead you close on at yours.
+            // One ruler for the whole box — the centre car's ACTUAL lap (real pace, not the
+            // optimistic class estimate) — exactly like iRacing's F3 relative. A single ruler keeps
+            // the seconds monotonic with the phase delta, so rows never re-order against iRacing the
+            // way a per-car ruler did (a slightly quicker car behind would jump ahead in the list).
             float ph = RelativeGap.SignedPhase(t, roster, d.CarIdx, focus);  // + = ahead on track
-            float carRef = ph < 0 && d.ClassEstLap > 10 ? d.ClassEstLap : refLap;
-            float gap = ph * carRef;
+            float gap = ph * refLap;
             (gap >= 0 ? ahead : behind).Add((gap, d));
         }
         ahead.Sort((a, b) => a.Gap.CompareTo(b.Gap));    // nearest first

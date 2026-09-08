@@ -37,8 +37,14 @@ est/dist blend "breathed" with track section and fired phantom traffic alerts):
    single-class special case.
 2. `SignedPhase(t, roster, a, b)` = wrapped phase delta in (−0.5, +0.5], positive = `a` ahead.
    This one signed number decides ahead/behind AND the magnitude for every widget.
-3. Gap seconds = phase delta × **refLap of whichever car is closing**: the chaser's class lap
-   for a car behind, the player's for a car ahead (both widgets use this same ruler rule).
+3. Gap seconds = phase delta × the **centre car's ACTUAL lap** (recent clean-lap pace, else best,
+   else the class estimate) — one ruler for the whole box, exactly like iRacing's F3 relative.
+   `CarClassEstLapTime` is an optimistic quali estimate (~3% quick), so a class-lap ruler reads
+   every gap short vs the sim's box; real pace matches it (verified live, single-class practice,
+   2026-09-07). A single ruler also keeps the seconds monotonic with the phase delta, so rows
+   never re-order against iRacing the way a per-car ruler could (a slightly quicker car behind
+   would jump up the list). The traffic alerter still rules by class lap for its TTA — its number
+   is a countdown, not a gap. `RelativeBuilder.ActualLap`.
 4. `LapDistPct` is the per-car fallback, gated by *skew*: if a car's est phase strays more than
    0.12 laps from its distance pct, the est value is broken (pit/tow zeros read as ~half-lap
    skews) and pct wins; if either car of a pair falls back, both do, so a pair always lives in
