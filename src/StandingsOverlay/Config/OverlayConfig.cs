@@ -170,9 +170,10 @@ public sealed class TrafficConfig
     public bool WhileSpectating { get; set; }                   // default: no alerts while out of the car
     public string Style { get; set; } = "Row";                  // Row | Beacon
     public string Mode { get; set; } = "FasterClassAndLapping"; // FasterClassOnly | FasterClassAndLapping | AllClosing
-    public double AlertLeadTimeSec { get; set; } = 12;  // WATCH threshold (time to arrival) for traffic
-    public double BlueLeadTimeSec { get; set; } = 20;   // WATCH threshold when being lapped (planning, not reflexes)
+    public double AlertLeadTimeSec { get; set; } = 8;   // WATCH threshold — gap-seconds (Gap basis) or arrival-seconds (Countdown)
+    public double BlueLeadTimeSec { get; set; } = 12;   // WATCH threshold when being lapped (planning, not reflexes)
     public double ImminentSec { get; set; } = 4;
+    public bool GroupByDirection { get; set; } = true;  // split the list: cars approaching from BEHIND above cars you're catching AHEAD, with a divider
     public bool WarnLapping { get; set; } = true;       // alert on slower/lapped traffic AHEAD you're about to lap
     public double LapTrafficGapSec { get; set; } = 5;   // gap at which the "lapping" alert fires
     public bool WarnSameClassClosing { get; set; } = true;  // heads-up when a same-class car BEHIND is genuinely charging (single-class packs have no "faster class")

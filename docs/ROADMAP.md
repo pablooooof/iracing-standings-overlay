@@ -173,6 +173,15 @@ Ideas and requests captured during rapid iteration so nothing is lost. Roughly o
   imminent pulse is subtler (0.15→0.6) and typed — blue rows pulse BLUE, so the pulse never
   hides which alert it is. Meatball (repair) stops excluded from tire inference — the jack
   lift itself is not in the SDK, so repair time would read as tires.
+- [x] **Traffic direction split + countdown-bar fix (2026-09-12, `GroupByDirection`, default on)** —
+  the alert list is split into a `▲ BEHIND` block (faster class / being lapped / same-class charger)
+  above a `▼ AHEAD` block (traffic you're catching), each with a divider, so at speed you read
+  *which way the threat is* without parsing text; every row and the Beacon headline carry a
+  direction caret, and the Beacon's chevron rain reverses (falls toward YOU for behind, rises for
+  ahead). Toggle off for the old flat list. Fixed: in Gap basis the proximity bar was still counting
+  down on time-to-arrival while the digits showed the gap — bar and number now key off the same
+  metric. Default lead times lowered (AlertLeadTimeSec 12→8, BlueLeadTimeSec 20→12) — the 12 s
+  gap-lead popped cars far too early in Gap basis.
 - [x] **Fuel plan wall clock (2026-07-11)** — the plan line ends with "box HH:mm:ss GMT"
   (or "flag … GMT" when no stops remain): the projected current-stint end from pace +
   strategy, anchored at the lap-crossing replan.

@@ -15,6 +15,7 @@ public sealed record TrafficRow(
     TrafficPhase Phase,
     bool IsBlue,             // being lapped (blue-flag) vs faster-class traffic
     bool IsLapping,          // slower/lapped traffic AHEAD that you're about to lap
+    bool FromBehind,         // true = approaching you from behind (mirrors); false = ahead, you're catching
     string ClassColor,
     string CarNumber,        // headline chip: "P4" (class position), or "#72" when unscored
     string Name,
@@ -363,15 +364,26 @@ public sealed class TrafficDetector
         // Sweep alerting cars that vanished from the roster loop (e.g. pitted mid-alert).
         // Rows for them simply stop being produced; their state ages out via the pit branch.
 
-        active.Sort((a, b) => gapMode ? a.Gap.CompareTo(b.Gap) : a.Tta.CompareTo(b.Tta));
+        // Direction grouping (default): threats approaching from BEHIND (faster class / being
+        // lapped / a same-class charger) sort ahead of cars you're catching AHEAD, so the two
+        // regimes read as separate blocks at a glance instead of one interleaved list. Within a
+        // block the nearest car leads. Off = one flat list sorted purely by the metric.
+        bool group = tc.GroupByDirection;
+        active.Sort((a, b) =>
+        {
+            if (group && a.Row.FromBehind != b.Row.FromBehind)
+                return a.Row.FromBehind ? -1 : 1;
+            return gapMode ? a.Gap.CompareTo(b.Gap) : a.Tta.CompareTo(b.Tta);
+        });
 
-        // Same-class train merging: consecutive cars of one class within TrainGapSec.
+        // Same-class train merging: consecutive cars of one class AND one direction within TrainGapSec.
         var rows = new List<TrafficRow>(active.Count);
         for (int i = 0; i < active.Count; i++)
         {
             int train = 1;
             while (i + train < active.Count &&
                    active[i + train].ClassId == active[i].ClassId &&
+                   active[i + train].Row.FromBehind == active[i].Row.FromBehind &&
                    active[i + train].Gap - active[i + train - 1].Gap <= TrainGapSec)
                 train++;
             rows.Add(active[i].Row with { TrainCount = train });
@@ -496,7 +508,7 @@ public sealed class TrafficDetector
         string chevrons = ratePerLap > 6 ? "▾▾▾" : ratePerLap > 2.5 ? "▾▾" : "▾";
         int cp = d.CarIdx < t.ClassPosition.Length ? t.ClassPosition[d.CarIdx] : 0;
         return new TrafficRow(
-            CarIdx: d.CarIdx, Phase: phase, IsBlue: false, IsLapping: true,
+            CarIdx: d.CarIdx, Phase: phase, IsBlue: false, IsLapping: true, FromBehind: false,
             ClassColor: string.IsNullOrEmpty(d.ClassColor) ? "#9DA0AA" : d.ClassColor,
             CarNumber: cp > 0 ? $"P{cp}" : "#" + d.CarNumber, Name: d.Name,
             IRatingText: tc.ShowIRating && d.IRating > 0 ? $"{d.IRating / 1000.0:0.0}k" : "",
@@ -533,13 +545,19 @@ public sealed class TrafficDetector
         // how a spotter calls it, and it stays meaningful at grind-it-out closing rates where
         // a TTA would read as noise. Traffic rows show the arrival countdown, or (ShowTimeToArrival
         // off) the current on-track gap so the number matches the relative box for the same car.
-        double shown = Math.Clamp(isBlue || !tc.ShowTimeToArrival ? gap : tta, 0.1, 99.9);
-        double bar = isBlue ? 1 - gap / 10 : 1 - tta / lead;
+        // The number and the proximity bar must key off the SAME metric, or the bar "counts down"
+        // on time-to-arrival while the digits show the gap (the countdown-bar bug in gap mode).
+        // Blue always shows gap; traffic shows gap (Gap basis) or the arrival countdown (Countdown).
+        bool showGap = isBlue || !tc.ShowTimeToArrival;
+        double metric = showGap ? gap : tta;
+        double shown = Math.Clamp(metric, 0.1, 99.9);
+        double bar = 1 - metric / lead;   // lead reads as gap-seconds (Gap basis) or arrival-seconds
         return new TrafficRow(
             CarIdx: d.CarIdx,
             Phase: phase,
             IsBlue: isBlue,
             IsLapping: false,
+            FromBehind: true,
             ClassColor: string.IsNullOrEmpty(d.ClassColor) ? "#9DA0AA" : d.ClassColor,
             CarNumber: headline,
             Name: d.Name,

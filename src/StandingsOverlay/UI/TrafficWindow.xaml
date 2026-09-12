@@ -51,7 +51,12 @@
         <ItemsControl x:Name="RowsControl" Visibility="Collapsed">
             <ItemsControl.ItemTemplate>
                 <DataTemplate>
-                    <Grid Height="36" Margin="0,0,0,4">
+                  <StackPanel Margin="0,0,0,4">
+                    <!-- Section divider: "▲ BEHIND" / "▼ AHEAD" on the first row of each block. -->
+                    <TextBlock Text="{Binding SectionLabel}" Foreground="{Binding SectionBrush}"
+                               Visibility="{Binding SectionVisibility}" FontSize="9.5" FontWeight="Bold"
+                               Margin="2,1,0,2" Opacity="0.9"/>
+                    <Grid Height="36">
                         <Border Background="#F0212129" CornerRadius="4" BorderBrush="#34343F" BorderThickness="1"/>
                         <Border CornerRadius="4" BorderBrush="{Binding PulseBrush}" BorderThickness="1.5"
                                 Style="{StaticResource PulseOverlay}"/>
@@ -69,11 +74,17 @@
 
                             <Border Grid.RowSpan="2" Width="4" Background="{Binding StripeBrush}" CornerRadius="3,0,0,3"/>
 
-                            <Border Grid.Column="1" Background="{Binding NumBrush}" CornerRadius="2"
-                                    Padding="5,1" Margin="6,0,0,0" VerticalAlignment="Center">
-                                <TextBlock Text="{Binding CarNumber}" Foreground="#17171D"
-                                           FontFamily="Consolas" FontWeight="Bold" FontSize="12"/>
-                            </Border>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center"
+                                        Margin="6,0,0,0">
+                                <!-- Direction caret: ▲ closing from behind · ▼ ahead, you're catching. -->
+                                <TextBlock Text="{Binding DirGlyph}" Foreground="{Binding DirBrush}"
+                                           FontSize="12" FontWeight="Bold" Margin="0,0,5,0" VerticalAlignment="Center"/>
+                                <Border Background="{Binding NumBrush}" CornerRadius="2"
+                                        Padding="5,1" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding CarNumber}" Foreground="#17171D"
+                                               FontFamily="Consolas" FontWeight="Bold" FontSize="12"/>
+                                </Border>
+                            </StackPanel>
 
                             <StackPanel Grid.Column="2" VerticalAlignment="Center" Margin="8,0,4,0">
                                 <StackPanel Orientation="Horizontal">
@@ -118,6 +129,7 @@
                             </Grid>
                         </Grid>
                     </Grid>
+                  </StackPanel>
                 </DataTemplate>
             </ItemsControl.ItemTemplate>
         </ItemsControl>

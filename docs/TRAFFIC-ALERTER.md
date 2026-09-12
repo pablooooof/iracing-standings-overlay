@@ -118,13 +118,26 @@ Separate widget window/element, own draggable position via existing edit mode
 **class color = what's coming · catch-rate chevrons = how fast · red pulse = it's here.**
 Chevron scale from the closing-rate buffer: `▾` < 2.5 s/lap · `▾▾` 2.5–6 · `▾▾▾` > 6.
 
+### Direction grouping (`GroupByDirection`, default on)
+
+The single most important thing to read at speed is *which way the threat is*, so rows are split
+into two blocks: cars **closing from BEHIND** (faster class, being lapped, a same-class charger)
+sort above cars you're **catching AHEAD** (lapping traffic), separated by a `▲ BEHIND` / `▼ AHEAD`
+divider. Every row also carries a direction caret next to its number chip (`▲` behind amber / `▼`
+ahead green / `▲` blue when being lapped). Trains never merge across directions. Turn the toggle
+off for one flat list sorted purely by the metric (the old behaviour). In the Beacon the headline
+carries the same caret and the chevron **rain reverses** — falling toward YOU for a car behind,
+rising away for a car ahead. The proximity bar and the printed number always key off the *same*
+metric now (both the gap in Gap basis, both the countdown in Countdown basis) — previously the bar
+counted down on TTA while the digits showed the gap.
+
 ### Faster class vs. being lapped (must never be confused)
 
 |  | Faster class (traffic) | Being lapped (blue) |
 |---|---|---|
 | Color | car's iRacing class color | always blue-flag blue + striped blue/yellow `BLUE` tag |
 | Chevrons | usually ▾▾/▾▾▾ | usually ▾ (leader grinds, doesn't fly) |
-| Lead time | WATCH at TTA ≤ 12 s | WATCH at TTA ≤ 20 s (planning, not reflexes) |
+| Lead time | WATCH at ≤ 8 s (gap or TTA per basis) | WATCH at ≤ 12 s (planning, not reflexes) |
 | Audio | rising chirp; urgent double-beep imminent | single calm two-tone, never escalates |
 
 ### Style A — "Row" (data driver)
@@ -175,8 +188,9 @@ in the artifact (WebAudio, same envelopes).
   "Enabled": true,
   "Style": "Beacon",                 // Row | Beacon | Halo
   "Mode": "FasterClassAndLapping",   // FasterClassOnly | AllClosing
-  "AlertLeadTimeSec": 12,
-  "BlueLeadTimeSec": 20,
+  "GroupByDirection": true,          // split the list: cars closing from BEHIND above cars you're catching AHEAD, with a "▲ BEHIND" / "▼ AHEAD" divider
+  "AlertLeadTimeSec": 8,             // gap-seconds (Gap basis) or arrival-seconds (Countdown)
+  "BlueLeadTimeSec": 12,
   "ImminentSec": 4,
   "MaxRows": 3,
   "ShowIRating": true,

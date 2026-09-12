@@ -377,6 +377,8 @@ public partial class SettingsWindow : Window
         body.Children.Add(Segmented("Trigger", "Which cars raise an alert.",
             new[] { ("Faster class", "FasterClassOnly"), ("+ Lapping", "FasterClassAndLapping"), ("All closing", "AllClosing") },
             () => t.Mode, v => Apply(() => t.Mode = v)));
+        body.Children.Add(Toggle("Split by direction", "Group cars closing from BEHIND above cars you're catching AHEAD, with a divider — instead of one interleaved list.",
+            () => t.GroupByDirection, v => Apply(() => t.GroupByDirection = v)));
 
         body.Children.Add(Subhead("Timing"));
         body.Children.Add(Segmented("Alert basis", "Gap: cars appear, escalate, sort and print by on-track gap — the same seconds as the relative box (the lead/imminent sliders read as gap). Countdown: everything by time-to-arrival instead.",

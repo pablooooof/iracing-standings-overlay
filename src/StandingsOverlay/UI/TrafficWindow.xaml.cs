@@ -12,17 +12,23 @@ namespace StandingsOverlay.UI;
 /// <summary>Display-ready row for the Row style's ItemsControl template.</summary>
 public sealed record TrafficRowViewModel(
     Brush StripeBrush, Brush NumBrush, Brush TtaBrush, Brush BlueTagBrush,
-    Brush PaceBrush, Brush PulseBrush,
+    Brush PaceBrush, Brush PulseBrush, Brush DirBrush, Brush SectionBrush,
+    string DirGlyph, string SectionLabel,
     string CarNumber, string Name, string IRatingText, string SubText,
     string TtaText, string PaceText, string Chevrons, string TrainText,
-    Visibility BlueTagVisibility, Visibility TrainVisibility,
+    Visibility BlueTagVisibility, Visibility TrainVisibility, Visibility SectionVisibility,
     bool IsImminent, GridLength BarStar, GridLength BarRestStar)
 {
-    public static TrafficRowViewModel From(TrafficRow r)
+    /// <summary>Build a row VM. <paramref name="section"/> is a non-empty header label ("▲ BEHIND"
+    /// / "▼ AHEAD") on the first row of each direction block, "" otherwise.</summary>
+    public static TrafficRowViewModel From(TrafficRow r, string section = "")
     {
         var classBrush = Frozen(r.ClassColor);
         var ttaBrush = r.Phase == TrafficPhase.Imminent ? DangerBrush
                      : r.IsBlue ? BlueBrush : r.IsLapping ? GainBrush : WarnBrush;
+        // Direction color: what kind of threat and which way. Blue = being lapped (yield),
+        // amber = faster/charger closing from behind, green = a slower car ahead you're catching.
+        var dirBrush = r.IsBlue ? BlueBrush : r.FromBehind ? WarnBrush : GainBrush;
         return new TrafficRowViewModel(
             StripeBrush: r.IsBlue ? BlueBrush : r.IsLapping ? GainBrush : classBrush,
             NumBrush: classBrush,
@@ -32,6 +38,11 @@ public sealed record TrafficRowViewModel(
             // Blue rows pulse BLUE at imminence — an all-red pulse used to hide what kind of
             // alert was underneath.
             PulseBrush: r.IsBlue ? BlueBrush : DangerBrush,
+            DirBrush: dirBrush,
+            SectionBrush: r.FromBehind ? WarnBrush : GainBrush,
+            // ▲ = coming up behind you (mirrors) · ▼ = ahead, you're reeling it in.
+            DirGlyph: r.FromBehind ? "▲" : "▼",
+            SectionLabel: section,
             CarNumber: r.CarNumber,
             Name: r.Name,
             IRatingText: r.IRatingText,
@@ -42,6 +53,7 @@ public sealed record TrafficRowViewModel(
             TrainText: $"×{r.TrainCount}",
             BlueTagVisibility: r.IsBlue ? Visibility.Visible : Visibility.Collapsed,
             TrainVisibility: r.TrainCount > 1 ? Visibility.Visible : Visibility.Collapsed,
+            SectionVisibility: section.Length > 0 ? Visibility.Visible : Visibility.Collapsed,
             IsImminent: r.Phase == TrafficPhase.Imminent,
             BarStar: new GridLength(r.BarPct, GridUnitType.Star),
             BarRestStar: new GridLength(Math.Max(0.001, 1 - r.BarPct), GridUnitType.Star));
@@ -188,7 +200,7 @@ public partial class TrafficWindow : Window
 
         if (showRows && !beacon)
         {
-            RowsControl.ItemsSource = s.Rows.Select(TrafficRowViewModel.From).ToList();
+            RowsControl.ItemsSource = BuildRowVms(s.Rows, tc.GroupByDirection);
             if (s.Overflow > 0) OverflowText.Text = $"+{s.Overflow} more in window";
             StopChevrons();
         }
@@ -202,6 +214,24 @@ public partial class TrafficWindow : Window
         }
     }
 
+    /// <summary>Turn the detector's rows into row VMs, tagging the first row of each direction
+    /// block with a section header ("▲ BEHIND" / "▼ AHEAD") when grouping is on. The detector
+    /// has already sorted behind-first, so the header just marks each boundary.</summary>
+    private static List<TrafficRowViewModel> BuildRowVms(IReadOnlyList<TrafficRow> rows, bool group)
+    {
+        var list = new List<TrafficRowViewModel>(rows.Count);
+        bool? prev = null;
+        foreach (var r in rows)
+        {
+            string section = "";
+            if (group && r.FromBehind != prev)
+                section = r.FromBehind ? "▲  BEHIND" : "▼  AHEAD";
+            prev = r.FromBehind;
+            list.Add(TrafficRowViewModel.From(r, section));
+        }
+        return list;
+    }
+
     private void RenderBeacon(TrafficSnapshot s)
     {
         var head = s.Rows[0];
@@ -211,21 +241,25 @@ public partial class TrafficWindow : Window
                      : head.IsBlue ? TrafficRowViewModel.BlueBrush
                      : head.IsLapping ? TrafficRowViewModel.GainBrush : TrafficRowViewModel.WarnBrush;
 
+        // Direction glyph so a glance says which way the threat is: ▲ = closing from behind
+        // (mirrors), ▼ = ahead and you're catching it.
+        string dir = head.FromBehind ? "▲ " : "▼ ";
+
         // Class name comes from SubText's first segment ("GTP · P2 in class" → "GTP").
         string className = head.SubText.Split('·')[0].Trim();
         if (head.IsBlue)
         {
             BeaconClassBorder.Background = TrafficRowViewModel.BlueBrush;
             BeaconClassText.Foreground = Brushes.White;
-            BeaconClassText.Text = $"{className} · BLUE · {head.CarNumber}";
+            BeaconClassText.Text = $"{dir}{className} · BLUE · {head.CarNumber}";
         }
         else
         {
             BeaconClassBorder.Background = classBrush;
             BeaconClassText.Foreground = TrafficRowViewModel.Frozen("#17171D");
             BeaconClassText.Text = head.TrainCount > 1
-                ? $"{className} ×{head.TrainCount} · {head.CarNumber}"
-                : $"{className} · {head.CarNumber}";
+                ? $"{dir}{className} ×{head.TrainCount} · {head.CarNumber}"
+                : $"{dir}{className} · {head.CarNumber}";
         }
 
         BeaconTta.Text = head.TtaText;
@@ -264,23 +298,28 @@ public partial class TrafficWindow : Window
         BeaconQueue.Visibility = BeaconQueue.Children.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
 
         Pulse(BeaconPulse, on: imminent);
-        StartChevrons(head.Chevrons, ttaBrush);
+        // Rain falls toward the YOU bar for a car closing from behind; for a car ahead it rises
+        // away from YOU (you're the one climbing toward it), so the motion tells the direction too.
+        StartChevrons(head.Chevrons, ttaBrush, rise: !head.FromBehind);
     }
 
-    /// <summary>Chevron rain: three glyphs falling toward the YOU bar, faster when the catch
-    /// rate is higher. The storyboard only restarts when speed bucket or color changes.</summary>
-    private void StartChevrons(string bucket, Brush brush)
+    /// <summary>Chevron rain: three glyphs sliding toward (behind) or away from (ahead) the YOU
+    /// bar, faster when the catch rate is higher. Restarts only when bucket, color or direction
+    /// changes.</summary>
+    private void StartChevrons(string bucket, Brush brush, bool rise)
     {
-        string state = bucket + brush.GetHashCode();
+        string state = bucket + brush.GetHashCode() + (rise ? "^" : "v");
         if (state == _chevronState) return;
         _chevronState = state;
 
         double dur = bucket.Length >= 3 ? 0.55 : bucket.Length == 2 ? 0.8 : 1.15;
+        (double from, double to) = rise ? (40.0, -14.0) : (-14.0, 40.0);
         for (int i = 0; i < _chevrons.Length; i++)
         {
+            _chevrons[i].Text = rise ? "▴" : "▾";
             _chevrons[i].Foreground = brush;
             _chevrons[i].Opacity = 0.9;
-            var anim = new DoubleAnimation(-14, 40, TimeSpan.FromSeconds(dur))
+            var anim = new DoubleAnimation(from, to, TimeSpan.FromSeconds(dur))
             {
                 RepeatBehavior = RepeatBehavior.Forever,
                 BeginTime = TimeSpan.FromSeconds(dur * i / _chevrons.Length),
@@ -343,14 +382,16 @@ public partial class TrafficWindow : Window
         Render(new TrafficSnapshot(
             Rows:
             [
-                new TrafficRow(0, TrafficPhase.Imminent, false, false, "#FFD24D", "P2", "R. Vergne", "4.2k",
+                // Behind block (approaching you): faster class, a train, then a leader lapping you.
+                new TrafficRow(0, TrafficPhase.Imminent, false, false, true, "#FFD24D", "P2", "R. Vergne", "4.2k",
                                "GTP · #07", "3.2", "▲", 1, "▾▾▾", 2, 0.73),
-                new TrafficRow(1, TrafficPhase.Watch, false, false, "#FFD24D", "P3", "S. Okafor", "3.1k",
+                new TrafficRow(1, TrafficPhase.Watch, false, false, true, "#FFD24D", "P3", "S. Okafor", "3.1k",
                                "GTP · #22", "4.5", "▲", 1, "▾▾▾", 1, 0.62),
-                new TrafficRow(3, TrafficPhase.Watch, false, true, "#57C1FF", "P4", "L. Tanaka", "1.9k",
+                new TrafficRow(2, TrafficPhase.Watch, true, false, true, "#FF5FA8", "P1", "M. Rossi", "5.6k",
+                               "GT3 · #11 · +1 lap", "9.0", "►", 0, "▾", 1, 0.30),
+                // Ahead block (you're catching): a slower car you're about to lap.
+                new TrafficRow(3, TrafficPhase.Watch, false, true, false, "#57C1FF", "P4", "L. Tanaka", "1.9k",
                                "GT4 · #88 · lapping", "4.1", "▼", -1, "▾▾", 1, 0.35),
-                new TrafficRow(2, TrafficPhase.Watch, true, false, "#FF5FA8", "P1", "M. Rossi", "5.6k",
-                               "GT3 · #11 · +1 lap", "11.0", "►", 0, "▾", 1, 0.30),
             ],
             Overflow: 0, Alongside: AlongsideDir.None, ClearFlash: false, Cues: TrafficCues.None));
     }

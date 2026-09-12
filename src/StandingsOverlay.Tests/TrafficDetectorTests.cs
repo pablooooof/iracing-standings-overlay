@@ -107,6 +107,7 @@ public class TrafficDetectorTests
         // used to blow up to a literal "99.9" while the alert lingered. It must hold instead.
         var r = new Rig(2, sessionType: "Practice");
         r.Cfg.Traffic.ShowTimeToArrival = true;   // this test asserts on the countdown, not the gap
+        r.Cfg.Traffic.AlertLeadTimeSec = 12;      // timing tuned to a 12 s countdown window (predates the 8 s default)
         r.AddCar(0, 2, 120f);
         r.AddCar(1, 1, 100f, "GTP");
         var progress = new double[] { 30.0, 30.0 - 6.0 / 100 };
@@ -133,6 +134,7 @@ public class TrafficDetectorTests
         // Countdown basis: the re-alert cooldown is a rate/TTA dynamic.
         var r = new Rig(2, sessionType: "Race");
         r.Cfg.Traffic.ShowTimeToArrival = true;
+        r.Cfg.Traffic.AlertLeadTimeSec = 12;   // timing tuned to a 12 s countdown window (predates the 8 s default)
         r.AddCar(0, 2, 120f);
         r.AddCar(1, 1, 100f, "GTP");
         var progress = new double[] { 50.0, 50.0 - 5.0 / 100 };
@@ -198,8 +200,8 @@ public class TrafficDetectorTests
     public void GapBasis_FasterClass_AppearsAtTheGapLead_AndPrintsThatGap()
     {
         // Default (Gap basis, ShowTimeToArrival off): a GTP closes on the GT3 player from ~18 s of
-        // on-track gap. It must appear when the GAP reaches the lead time (12 s) — not at 18 s, not
-        // only at contact — and the printed number is that gap, matching the relative box.
+        // on-track gap. It must appear when the GAP reaches the lead time (8 s default) — not at 18 s,
+        // not only at contact — and the printed number is that gap, matching the relative box.
         var r = new Rig(2, sessionType: "Race");
         r.AddCar(0, 2, 120f);
         r.AddCar(1, 1, 100f, "GTP");
@@ -212,7 +214,7 @@ public class TrafficDetectorTests
         var first = snaps.FirstOrDefault(s => s.Rows.Count > 0);
         Assert.NotNull(first);
         Assert.False(first!.Rows[0].IsBlue);
-        Assert.InRange(ParseTta(first.Rows[0].TtaText), 9, 13);   // appeared at ~the 12 s gap, shows the gap
+        Assert.InRange(ParseTta(first.Rows[0].TtaText), 5, 9);   // appeared at ~the 8 s gap lead, shows the gap
     }
 
     [Fact]
