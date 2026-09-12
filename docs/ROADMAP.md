@@ -182,6 +182,13 @@ Ideas and requests captured during rapid iteration so nothing is lost. Roughly o
   down on time-to-arrival while the digits showed the gap — bar and number now key off the same
   metric. Default lead times lowered (AlertLeadTimeSec 12→8, BlueLeadTimeSec 20→12) — the 12 s
   gap-lead popped cars far too early in Gap basis.
+- [x] **Traffic "me in the middle" + frameless + on-car alongside (2026-09-12)** — fixed YOU line
+  with `SlotsAhead`/`SlotsBehind` (default 3/3) padded by blank spacers so it never moves; widget is
+  transparent/frameless by default (text drop-shadow), `ShowPanel` adds a solid box; alongside marks
+  the specific car's row (bright edge + ◀/▶) via `AlongsideCarIdx` instead of blanking the widget,
+  CLEAR is a slim coexisting chip; same-class car shows when catching ≥ `SameClassClosingRate` (0.3)
+  OR (`PinNearbySameClass`) within `SameClassPinSec` (2 s). Trains only merge in the flat list now.
+  Open: is the YOU marker the best player viz? (car number / avatar are alternatives.)
 - [x] **Fuel plan wall clock (2026-07-11)** — the plan line ends with "box HH:mm:ss GMT"
   (or "flag … GMT" when no stops remain): the projected current-stint end from pace +
   strategy, anchored at the lap-crossing replan.

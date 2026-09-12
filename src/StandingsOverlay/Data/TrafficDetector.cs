@@ -29,13 +29,14 @@ public sealed record TrafficRow(
     double BarPct);          // 0..1 proximity bar fill
 
 public sealed record TrafficSnapshot(
-    IReadOnlyList<TrafficRow> Rows,   // sorted by time-to-arrival, capped at MaxRows
-    int Overflow,                     // alerting cars beyond MaxRows
-    AlongsideDir Alongside,           // active overlap banner (alerted traffic only)
+    IReadOnlyList<TrafficRow> Rows,   // nearest-first per side, capped to the fixed slots (or MaxRows flat)
+    int Overflow,                     // alerting cars beyond the shown slots
+    AlongsideDir Alongside,           // active overlap direction (alerted traffic, or any car)
+    int AlongsideCarIdx,              // the alerted car beside you (-1 = none / any-car overlap)
     bool ClearFlash,                  // brief "CLEAR" confirmation after traffic passes
     TrafficCues Cues)                 // audio requests for this tick (already arbitrated)
 {
-    public static readonly TrafficSnapshot Empty = new([], 0, AlongsideDir.None, false, TrafficCues.None);
+    public static readonly TrafficSnapshot Empty = new([], 0, AlongsideDir.None, -1, false, TrafficCues.None);
 
     public bool IsEmpty => Rows.Count == 0 && Alongside == AlongsideDir.None && !ClearFlash;
 
@@ -44,8 +45,8 @@ public sealed record TrafficSnapshot(
     public bool VisuallyEquals(TrafficSnapshot? o)
     {
         if (o is null) return false;
-        if (Overflow != o.Overflow || Alongside != o.Alongside || ClearFlash != o.ClearFlash ||
-            Rows.Count != o.Rows.Count) return false;
+        if (Overflow != o.Overflow || Alongside != o.Alongside || AlongsideCarIdx != o.AlongsideCarIdx ||
+            ClearFlash != o.ClearFlash || Rows.Count != o.Rows.Count) return false;
         for (int i = 0; i < Rows.Count; i++)
             if (Rows[i] != o.Rows[i]) return false;
         return true;
@@ -283,14 +284,19 @@ public sealed class TrafficDetector
             // for a meaningful countdown (TTA math would only alert with them on the bumper) —
             // if they're within BlueGapSec they're a blue-flag situation, closing fast or not.
             bool blueNear = isBlue && !isFaster && gap <= BlueGapSec;
-            // Same-class charger: in a single-class pack nothing is "faster class", so a genuinely
-            // quicker car coming up behind (fresh tyres / an alien on a flyer) would never alert.
-            // Gate it on the lap-measured catch rate (not the noisy instantaneous slope) so ordinary
-            // drafting-pace cars in the pack don't trip it — only a real, sustained charge does.
-            bool sameClassCharging = tc.WarnSameClassClosing && d.CarClassId == playerClassId && !isBlue
-                                     && lapCatch is float scc && scc >= (float)tc.SameClassClosingRate;
+            // Same-class threat, two ways (either is enough):
+            //  · charging — the lap-measured catch rate (not the noisy slope) is ≥ SameClassClosingRate,
+            //    so a genuinely quicker car (fresh tyres / an alien on a flyer) shows even in a
+            //    single-class pack where nothing is "faster class";
+            //  · nearby (PinNearbySameClass) — it's simply within SameClassPinSec behind, catching or
+            //    not, so a wheel-to-wheel car right on you stays on the widget instead of vanishing
+            //    the moment you match its pace.
+            bool sameClass = d.CarClassId == playerClassId && !isBlue;
+            bool pinNear = sameClass && tc.PinNearbySameClass && relGap <= (float)tc.SameClassPinSec;
+            bool sameClassCharging = tc.WarnSameClassClosing && sameClass &&
+                                     ((lapCatch is float scc && scc >= (float)tc.SameClassClosingRate) || pinNear);
             bool qualifies = isFaster || isBlue || sameClassCharging || (allClosing && rate > 0.15f);
-            bool inRange = qualifies && (trigger <= lead || blueNear);
+            bool inRange = qualifies && (trigger <= lead || blueNear || pinNear);
 
             if (!state.Alerting)
             {
@@ -376,44 +382,72 @@ public sealed class TrafficDetector
             return gapMode ? a.Gap.CompareTo(b.Gap) : a.Tta.CompareTo(b.Tta);
         });
 
-        // Same-class train merging: consecutive cars of one class AND one direction within TrainGapSec.
-        var rows = new List<TrafficRow>(active.Count);
-        for (int i = 0; i < active.Count; i++)
+        List<TrafficRow> rows;
+        int overflow;
+        if (group)
         {
-            int train = 1;
-            while (i + train < active.Count &&
-                   active[i + train].ClassId == active[i].ClassId &&
-                   active[i + train].Row.FromBehind == active[i].Row.FromBehind &&
-                   active[i + train].Gap - active[i + train - 1].Gap <= TrainGapSec)
-                train++;
-            rows.Add(active[i].Row with { TrainCount = train });
-            for (int k = 1; k < train; k++) rows.Add(active[i + k].Row);
-            i += train - 1;
+            // Fixed-slot "me in the middle" layout: each car keeps its own slot (no train merging —
+            // the fixed count already bounds the list), and we keep only the nearest SlotsAhead cars
+            // ahead and SlotsBehind cars behind. `active` is sorted behind-first, each block ascending
+            // by gap, so taking from the front keeps the nearest of each side.
+            var behind = active.Where(a => a.Row.FromBehind).Select(a => a.Row).ToList();
+            var ahead = active.Where(a => !a.Row.FromBehind).Select(a => a.Row).ToList();
+            int nb = Math.Max(0, tc.SlotsBehind), na = Math.Max(0, tc.SlotsAhead);
+            overflow = Math.Max(0, behind.Count - nb) + Math.Max(0, ahead.Count - na);
+            if (behind.Count > nb) behind.RemoveRange(nb, behind.Count - nb);
+            if (ahead.Count > na) ahead.RemoveRange(na, ahead.Count - na);
+            rows = new List<TrafficRow>(behind.Count + ahead.Count);
+            rows.AddRange(behind);
+            rows.AddRange(ahead);   // the window re-splits by FromBehind and slots each side
         }
-
-        int overflow = Math.Max(0, rows.Count - Math.Max(1, cfg.Traffic.MaxRows));
-        if (overflow > 0) rows.RemoveRange(rows.Count - overflow, overflow);
-
-        // Alongside banner: the sim spotter says a car overlaps us. By default we only raise it when
-        // alerted traffic is close enough to be that car (multiclass "a faster car is beside you");
-        // AlongsideAnyCar widens it to any overlap, which is what you want in a same-class pack where
-        // the car beside you through the esses is a racing peer, not an "alert".
-        var alongside = AlongsideDir.None;
-        if (tc.AlongsideBanner && t.CarLeftRight >= 2 &&
-            (tc.AlongsideAnyCar || active.Any(a => a.Gap <= 2.0f)))
+        else
         {
-            alongside = t.CarLeftRight switch
+            // Flat list: same-class train merging (consecutive cars of one class AND one direction
+            // within TrainGapSec collapse to a ×N row), capped at MaxRows.
+            rows = new List<TrafficRow>(active.Count);
+            for (int i = 0; i < active.Count; i++)
             {
-                2 => AlongsideDir.Left,
-                3 => AlongsideDir.Right,
-                4 => AlongsideDir.Both,
-                5 => AlongsideDir.TwoLeft,
-                6 => AlongsideDir.TwoRight,
-                _ => AlongsideDir.None,
-            };
+                int train = 1;
+                while (i + train < active.Count &&
+                       active[i + train].ClassId == active[i].ClassId &&
+                       active[i + train].Row.FromBehind == active[i].Row.FromBehind &&
+                       active[i + train].Gap - active[i + train - 1].Gap <= TrainGapSec)
+                    train++;
+                rows.Add(active[i].Row with { TrainCount = train });
+                for (int k = 1; k < train; k++) rows.Add(active[i + k].Row);
+                i += train - 1;
+            }
+            overflow = Math.Max(0, rows.Count - Math.Max(1, tc.MaxRows));
+            if (overflow > 0) rows.RemoveRange(rows.Count - overflow, overflow);
         }
 
-        return new TrafficSnapshot(rows, overflow, alongside, now < _clearFlashUntil, cues);
+        // Alongside: the sim spotter says a car overlaps us. By default we only raise it when alerted
+        // traffic is close enough to be that car (multiclass "a faster car is beside you");
+        // AlongsideAnyCar widens it to any overlap (same-class pack). We tag the nearest alerted car
+        // within 2 s as the one beside you (AlongsideCarIdx) so the widget marks THAT row rather than
+        // blanking the whole thing.
+        var alongside = AlongsideDir.None;
+        int alongsideCar = -1;
+        if (tc.AlongsideBanner && t.CarLeftRight >= 2)
+        {
+            var near = active.Where(a => a.Gap <= 2.0f).ToList();
+            if (near.Count > 0 || tc.AlongsideAnyCar)
+            {
+                alongside = t.CarLeftRight switch
+                {
+                    2 => AlongsideDir.Left,
+                    3 => AlongsideDir.Right,
+                    4 => AlongsideDir.Both,
+                    5 => AlongsideDir.TwoLeft,
+                    6 => AlongsideDir.TwoRight,
+                    _ => AlongsideDir.None,
+                };
+                if (near.Count > 0)
+                    alongsideCar = near.MinBy(a => a.Gap).Row.CarIdx;
+            }
+        }
+
+        return new TrafficSnapshot(rows, overflow, alongside, alongsideCar, now < _clearFlashUntil, cues);
     }
 
     /// <summary>Returns true if the car should still be shown this tick (grace period).</summary>

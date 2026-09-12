@@ -27,13 +27,14 @@
                 </DataTrigger>
             </Style.Triggers>
         </Style>
-        <!-- One row, shared by the AHEAD and BEHIND lists (Style A). -->
+        <!-- One row, shared by the AHEAD and BEHIND lists (Style A). No per-row background — the
+             widget is transparent by default (a single panel behind it is an opt-in), so the row is
+             just the class stripe, text, and proximity bar. -->
         <DataTemplate x:Key="TrafficRowTemplate">
             <Grid Height="36" Margin="0,0,0,4">
-                <Border Background="#F0212129" CornerRadius="4" BorderBrush="#34343F" BorderThickness="1"/>
                 <Border CornerRadius="4" BorderBrush="{Binding PulseBrush}" BorderThickness="1.5"
                         Style="{StaticResource PulseOverlay}"/>
-                <Grid Margin="1">
+                <Grid Margin="1" Visibility="{Binding ContentVisibility}">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="*"/>
                         <RowDefinition Height="2"/>
@@ -99,42 +100,60 @@
                             <ColumnDefinition Width="{Binding BarRestStar}"/>
                         </Grid.ColumnDefinitions>
                         <Border Background="{Binding TtaBrush}"/>
-                        <Border Grid.Column="1" Background="#18FFFFFF"/>
+                        <Border Grid.Column="1" Background="{Binding BarRestBrush}"/>
                     </Grid>
                 </Grid>
+
+                <!-- Alongside marker: bright edge + a side arrow on the car overlapping you. Overlaid,
+                     so it never resizes the row or blanks the widget. -->
+                <Border CornerRadius="4" BorderBrush="{Binding AlongBrush}" BorderThickness="2"
+                        Visibility="{Binding AlongBorderVisibility}"/>
+                <TextBlock Text="◀" Foreground="{Binding AlongBrush}" FontSize="15" FontWeight="Bold"
+                           HorizontalAlignment="Left" VerticalAlignment="Center" Margin="7,0,0,0"
+                           Visibility="{Binding AlongLeftVisibility}"/>
+                <TextBlock Text="▶" Foreground="{Binding AlongBrush}" FontSize="15" FontWeight="Bold"
+                           HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,7,0"
+                           Visibility="{Binding AlongRightVisibility}"/>
             </Grid>
         </DataTemplate>
     </Window.Resources>
 
-    <StackPanel x:Name="Root" Width="300">
+  <Grid>
+    <!-- Opt-in solid panel behind the whole Row-style widget; default off = fully transparent. -->
+    <Border x:Name="WidgetPanel" Visibility="Collapsed" CornerRadius="7"
+            Background="#E6161A21" BorderBrush="#2EFFFFFF" BorderThickness="1"/>
+
+    <StackPanel x:Name="Root" Width="300" Margin="8,6">
         <TextBlock x:Name="EditHint" Text="TRAFFIC — drag to move" Visibility="Collapsed"
                    FontSize="10" FontWeight="Bold" HorizontalAlignment="Center" Margin="0,0,0,3"/>
 
-        <!-- ALONGSIDE banner: the sim spotter's CarLeftRight, shown only for alerted traffic. -->
-        <Border x:Name="AlongsideBanner" Visibility="Collapsed" Height="36" CornerRadius="4"
-                Background="#F03A1414" BorderBrush="#FF4040" BorderThickness="1.5">
+        <!-- ALONGSIDE fallback chip: only used when the car beside you isn't one of the listed rows
+             (e.g. a same-class pack car with "any car" on). The listed-car case is marked on its row. -->
+        <Border x:Name="AlongsideBanner" Visibility="Collapsed" Height="22" CornerRadius="4" Margin="0,0,0,4"
+                Background="#C83A1414" BorderBrush="#FF6060" BorderThickness="1.2">
             <TextBlock x:Name="AlongsideText" Text="◀   CAR LEFT" Foreground="#FFD7D7"
-                       FontWeight="Bold" FontSize="15" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                       FontWeight="Bold" FontSize="12" HorizontalAlignment="Center" VerticalAlignment="Center"/>
         </Border>
 
-        <!-- CLEAR flash: 0.8 s confirmation that the traffic is through. -->
-        <Border x:Name="ClearBanner" Visibility="Collapsed" Height="32" CornerRadius="4"
-                Background="#F0212129" BorderBrush="#4CFF6A" BorderThickness="1">
-            <TextBlock Text="✓   CLEAR" Foreground="#4CFF6A"
-                       FontWeight="Bold" FontSize="13" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+        <!-- CLEAR flash: 0.8 s confirmation that the traffic is through (slim; coexists with rows). -->
+        <Border x:Name="ClearBanner" Visibility="Collapsed" Height="20" CornerRadius="4" Margin="0,0,0,4"
+                Background="#3C1F3A22" BorderBrush="#4CFF6A" BorderThickness="1">
+            <TextBlock Text="✓   CLEAR" Foreground="#7CFF9A"
+                       FontWeight="Bold" FontSize="11" HorizontalAlignment="Center" VerticalAlignment="Center"/>
         </Border>
 
-        <!-- STYLE A, split layout ("me in the middle"): cars AHEAD above the YOU line, cars
-             BEHIND below it. Both lists share TrafficRowTemplate. When grouping is off, all rows
-             go into RowsControl (flat) and AheadControl + YouDivider are collapsed. -->
+        <!-- STYLE A, split layout ("me in the middle"): fixed slots for cars AHEAD above the YOU line
+             and cars BEHIND below it, so the YOU line never moves. When grouping is off, all rows go
+             into RowsControl (flat) and AheadControl + YouDivider are collapsed. -->
         <ItemsControl x:Name="AheadControl" Visibility="Collapsed"
                       ItemTemplate="{StaticResource TrafficRowTemplate}"/>
 
-        <!-- YOU divider: the player, with traffic arranged around it like a mini relative box. -->
-        <Grid x:Name="YouDivider" Visibility="Collapsed" Margin="0,1,0,4">
-            <Border x:Name="YouLine" Height="2" CornerRadius="1" Opacity="0.85"/>
-            <Border x:Name="YouTag" HorizontalAlignment="Center" CornerRadius="3" Padding="7,0">
-                <TextBlock Text="YOU" Foreground="#17171D" FontSize="9" FontWeight="Bold"/>
+        <!-- YOU divider: the player marker, traffic arranged around it like a mini relative box. -->
+        <Grid x:Name="YouDivider" Visibility="Collapsed" Height="15" Margin="0,1,0,5">
+            <Border x:Name="YouLine" Height="2" CornerRadius="1" VerticalAlignment="Center" Opacity="0.65"/>
+            <Border x:Name="YouTag" HorizontalAlignment="Center" VerticalAlignment="Center"
+                    CornerRadius="7" Padding="10,1">
+                <TextBlock Text="YOU" Foreground="#0B0D11" FontSize="9.5" FontWeight="Bold"/>
             </Border>
         </Grid>
 
@@ -172,4 +191,5 @@
             </Grid>
         </Border>
     </StackPanel>
+  </Grid>
 </Window>

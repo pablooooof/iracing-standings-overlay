@@ -121,17 +121,38 @@ Chevron scale from the closing-rate buffer: `▾` < 2.5 s/lap · `▾▾` 2.5–
 ### Direction split — "me in the middle" (`GroupByDirection`, default on)
 
 The single most important thing to read at speed is *which way the threat is*, so the Row style is
-laid out like a mini relative box: a **YOU line** (accent-colored, centered "YOU" tag) with cars
-you're **catching AHEAD** stacked above it (furthest at the top, nearest just above the line) and
-cars **closing from BEHIND** (faster class, being lapped, a same-class charger) stacked below it
-(nearest just under the line, furthest at the bottom). Position alone tells direction, so the rows
-carry no arrows in this mode. Trains never merge across directions. Turn the toggle off for one flat
-list sorted purely by the metric — there each row regains a `▲`/`▼` caret next to its number chip
-(amber behind / green ahead / blue when being lapped) since there's no line to read against. In the
-Beacon the headline carries a caret and the chevron **rain reverses** — falling toward YOU for a car
-behind, rising away for a car ahead. The proximity bar and the printed number always key off the
-*same* metric now (both the gap in Gap basis, both the countdown in Countdown basis) — previously
-the bar counted down on TTA while the digits showed the gap.
+laid out like a mini relative box: a **fixed YOU line** (accent-colored, centered "YOU" tag) with
+`SlotsAhead` (default 3) fixed rows above it for cars you're **catching AHEAD** (furthest at the top,
+nearest just above the line) and `SlotsBehind` (default 3) fixed rows below it for cars **closing
+from BEHIND** (faster class, being lapped, a same-class charger). The slots are fixed and padded
+with blank spacers, so **the YOU line never moves** — cars fill in toward it. Position alone tells
+direction, so the rows carry no arrows and are not train-merged in this mode. Turn the toggle off for
+one flat metric-sorted list (capped at `MaxRows`, with train merging) where each row regains a `▲`/`▼`
+caret and the `×N` train badge. In the Beacon the headline carries a caret and the chevron **rain
+reverses** — toward YOU for a car behind, away for one ahead. The proximity bar and the printed
+number always key off the *same* metric (gap in Gap basis, countdown in Countdown basis).
+
+### Frame & background (`ShowPanel`, default off = transparent)
+
+The widget is **frameless/transparent by default** — no per-row boxes, just the class stripe, text
+(with a soft drop shadow for legibility over a bright track), and the proximity bar. `ShowPanel`
+draws one solid rounded panel behind the whole widget instead (and drops the text shadow). The
+Beacon keeps its own panel regardless.
+
+### Alongside — on the car, not the whole widget (`AlongsideBanner`)
+
+When the sim spotter reports a car overlapping you (`CarLeftRight`), the detector tags the nearest
+alerted car within 2 s as `AlongsideCarIdx`, and the widget marks **that row** with a bright edge
+and a ◀/▶ side arrow — it no longer blanks the entire widget. A full-width fallback chip appears only
+when the overlapping car isn't one of the listed rows (e.g. `AlongsideAnyCar` in a same-class pack).
+CLEAR is likewise a slim chip that coexists with the rows.
+
+### Same-class threat — charging *or* nearby (`WarnSameClassClosing`, `PinNearbySameClass`)
+
+A same-class car behind qualifies if **either** it's catching you at ≥ `SameClassClosingRate`
+(default 0.3 s/lap) **or** (`PinNearbySameClass`, default on) it's simply within `SameClassPinSec`
+(default 2 s) behind — so a wheel-to-wheel car right on your tail stays on the widget instead of
+dropping off the instant you match its pace.
 
 ### Faster class vs. being lapped (must never be confused)
 
@@ -190,11 +211,15 @@ in the artifact (WebAudio, same envelopes).
   "Enabled": true,
   "Style": "Beacon",                 // Row | Beacon | Halo
   "Mode": "FasterClassAndLapping",   // FasterClassOnly | AllClosing
-  "GroupByDirection": true,          // split the list: cars closing from BEHIND above cars you're catching AHEAD, with a "▲ BEHIND" / "▼ AHEAD" divider
+  "GroupByDirection": true,          // "me in the middle": fixed YOU line, cars AHEAD above / BEHIND below
+  "SlotsAhead": 3, "SlotsBehind": 3, // fixed rows each side of the YOU line (split layout)
+  "ShowPanel": false,                // false = transparent/frameless (text shadow); true = solid panel
   "AlertLeadTimeSec": 8,             // gap-seconds (Gap basis) or arrival-seconds (Countdown)
   "BlueLeadTimeSec": 12,
   "ImminentSec": 4,
-  "MaxRows": 3,
+  "WarnSameClassClosing": true, "SameClassClosingRate": 0.3,
+  "PinNearbySameClass": true, "SameClassPinSec": 2.0,
+  "MaxRows": 3,                      // total cap in the flat (grouping-off) list
   "ShowIRating": true,
   "AlongsideBanner": true,           // traffic only
   "Audio": {

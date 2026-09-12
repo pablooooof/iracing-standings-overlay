@@ -173,16 +173,21 @@ public sealed class TrafficConfig
     public double AlertLeadTimeSec { get; set; } = 8;   // WATCH threshold — gap-seconds (Gap basis) or arrival-seconds (Countdown)
     public double BlueLeadTimeSec { get; set; } = 12;   // WATCH threshold when being lapped (planning, not reflexes)
     public double ImminentSec { get; set; } = 4;
-    public bool GroupByDirection { get; set; } = true;  // split the list: cars approaching from BEHIND above cars you're catching AHEAD, with a divider
+    public bool GroupByDirection { get; set; } = true;  // split the list "me in the middle": cars you're catching AHEAD above a fixed YOU line, cars closing from BEHIND below it
+    public int SlotsAhead { get; set; } = 3;            // fixed slots above the YOU line (split layout); YOU never moves
+    public int SlotsBehind { get; set; } = 3;           // fixed slots below the YOU line (split layout)
+    public bool ShowPanel { get; set; }                 // false (default) = frameless/transparent with text shadow; true = one solid rounded panel behind the widget
     public bool WarnLapping { get; set; } = true;       // alert on slower/lapped traffic AHEAD you're about to lap
     public double LapTrafficGapSec { get; set; } = 5;   // gap at which the "lapping" alert fires
     public bool WarnSameClassClosing { get; set; } = true;  // heads-up when a same-class car BEHIND is genuinely charging (single-class packs have no "faster class")
-    public double SameClassClosingRate { get; set; } = 0.5; // …only if it's catching you faster than this (s/lap), so pack drafting doesn't trip it
-    public int MaxRows { get; set; } = 3;
+    public double SameClassClosingRate { get; set; } = 0.3; // …show it if it's catching faster than this (s/lap) OR (PinNearbySameClass) it's simply within SameClassPinSec
+    public bool PinNearbySameClass { get; set; } = true;    // keep a same-class car on the widget while it's within SameClassPinSec behind, catching or not (wheel-to-wheel awareness)
+    public double SameClassPinSec { get; set; } = 2.0;      // …that "nearby" gap
+    public int MaxRows { get; set; } = 3;               // total cap in the flat (grouping-off) list
     public double Scale { get; set; } = 1.0;            // widget size multiplier (LayoutTransform)
     public bool ShowIRating { get; set; } = true;
     public bool ShowTimeToArrival { get; set; }         // false (default) = Gap basis: appear/escalate/sort AND the number all key off the on-track gap (matches the relative box; lead/imminent read as gap-seconds). true = Countdown basis: all keyed off time-to-arrival.
-    public bool AlongsideBanner { get; set; } = true;   // CarLeftRight banner: a car is overlapping you left/right
+    public bool AlongsideBanner { get; set; } = true;   // CarLeftRight: mark the car overlapping you left/right (on its own row, not blanking the widget)
     public bool AlongsideAnyCar { get; set; }           // fire it for ANY spotter-reported overlap (a same-class pack has no "alert" beside you), not just alerted traffic
     public TrafficAudioConfig Audio { get; set; } = new();
 

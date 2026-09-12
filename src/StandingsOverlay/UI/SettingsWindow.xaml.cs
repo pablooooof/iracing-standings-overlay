@@ -377,8 +377,14 @@ public partial class SettingsWindow : Window
         body.Children.Add(Segmented("Trigger", "Which cars raise an alert.",
             new[] { ("Faster class", "FasterClassOnly"), ("+ Lapping", "FasterClassAndLapping"), ("All closing", "AllClosing") },
             () => t.Mode, v => Apply(() => t.Mode = v)));
-        body.Children.Add(Toggle("Split by direction", "Group cars closing from BEHIND above cars you're catching AHEAD, with a divider — instead of one interleaved list.",
+        body.Children.Add(Toggle("Split by direction", "\"Me in the middle\": a fixed YOU line with cars you're catching AHEAD above it and cars closing from BEHIND below it. Off = one flat list with ▲/▼ arrows.",
             () => t.GroupByDirection, v => Apply(() => t.GroupByDirection = v)));
+        body.Children.Add(Slider("Slots ahead", "Fixed rows above the YOU line (split layout).", 1, 6, 1,
+            () => t.SlotsAhead, v => t.SlotsAhead = (int)v, v => $"{v:0}"));
+        body.Children.Add(Slider("Slots behind", "Fixed rows below the YOU line (split layout).", 1, 6, 1,
+            () => t.SlotsBehind, v => t.SlotsBehind = (int)v, v => $"{v:0}"));
+        body.Children.Add(Toggle("Panel background", "Off (default) = transparent widget with a text shadow. On = one solid rounded box behind it.",
+            () => t.ShowPanel, v => Apply(() => t.ShowPanel = v)));
 
         body.Children.Add(Subhead("Timing"));
         body.Children.Add(Segmented("Alert basis", "Gap: cars appear, escalate, sort and print by on-track gap — the same seconds as the relative box (the lead/imminent sliders read as gap). Countdown: everything by time-to-arrival instead.",
@@ -398,8 +404,12 @@ public partial class SettingsWindow : Window
             () => t.LapTrafficGapSec, v => t.LapTrafficGapSec = v, v => $"{v:0}s"));
         body.Children.Add(Toggle("Warn same-class charger", "Heads-up when a same-class car behind is genuinely catching you — the only same-class threat cue in a single-class pack.",
             () => t.WarnSameClassClosing, v => t.WarnSameClassClosing = v));
-        body.Children.Add(Slider("Charger rate", "…only when it's catching faster than this, so drafting-pace cars don't trip it.", 0.2, 1.5, 0.1,
+        body.Children.Add(Slider("Charger rate", "…show it when catching faster than this (OR the pin below is met).", 0.1, 1.5, 0.1,
             () => t.SameClassClosingRate, v => t.SameClassClosingRate = v, v => $"{v:0.0}/L"));
+        body.Children.Add(Toggle("Pin nearby same-class", "Keep a same-class car on the widget while it's within the gap below — catching or not — so a wheel-to-wheel car doesn't vanish when you match its pace.",
+            () => t.PinNearbySameClass, v => t.PinNearbySameClass = v));
+        body.Children.Add(Slider("Pin within", "That \"nearby\" gap.", 0.5, 5, 0.5,
+            () => t.SameClassPinSec, v => t.SameClassPinSec = v, v => $"{v:0.0}s"));
         body.Children.Add(Toggle("Show iRating", null, () => t.ShowIRating, v => t.ShowIRating = v));
         body.Children.Add(Toggle("Alongside banner", "Left/right marker when a car is beside you.",
             () => t.AlongsideBanner, v => t.AlongsideBanner = v));

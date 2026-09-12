@@ -12,16 +12,28 @@ namespace StandingsOverlay.UI;
 /// <summary>Display-ready row for the Row style's ItemsControl template.</summary>
 public sealed record TrafficRowViewModel(
     Brush StripeBrush, Brush NumBrush, Brush TtaBrush, Brush BlueTagBrush,
-    Brush PaceBrush, Brush PulseBrush, Brush DirBrush,
+    Brush PaceBrush, Brush PulseBrush, Brush DirBrush, Brush BarRestBrush, Brush AlongBrush,
     string DirGlyph,
     string CarNumber, string Name, string IRatingText, string SubText,
     string TtaText, string PaceText, string Chevrons, string TrainText,
-    Visibility BlueTagVisibility, Visibility TrainVisibility, Visibility DirVisibility,
+    Visibility BlueTagVisibility, Visibility TrainVisibility, Visibility DirVisibility, Visibility ContentVisibility,
+    Visibility AlongBorderVisibility, Visibility AlongLeftVisibility, Visibility AlongRightVisibility,
     bool IsImminent, GridLength BarStar, GridLength BarRestStar)
 {
+    /// <summary>An empty fixed-height spacer, so the AHEAD/BEHIND slot count (and the YOU line) stay
+    /// put even when fewer cars are present.</summary>
+    public static readonly TrafficRowViewModel Blank = new(
+        Brushes.Transparent, Brushes.Transparent, Brushes.Transparent, Brushes.Transparent,
+        Brushes.Transparent, Brushes.Transparent, Brushes.Transparent, Brushes.Transparent,
+        Brushes.Transparent, "", "", "", "", "", "", "", "", "",
+        Visibility.Collapsed, Visibility.Collapsed, Visibility.Collapsed, Visibility.Collapsed,
+        Visibility.Collapsed, Visibility.Collapsed, Visibility.Collapsed,
+        false, new GridLength(0, GridUnitType.Star), new GridLength(1, GridUnitType.Star));
+
     /// <summary>Build a row VM. <paramref name="showCaret"/> shows the ▲/▼ direction caret — only in
-    /// the flat (ungrouped) list; the split "me in the middle" layout conveys direction by position.</summary>
-    public static TrafficRowViewModel From(TrafficRow r, bool showCaret)
+    /// the flat (ungrouped) list; the split "me in the middle" layout conveys direction by position.
+    /// <paramref name="along"/> marks this as the car overlapping you (spotter left/right).</summary>
+    public static TrafficRowViewModel From(TrafficRow r, bool showCaret, AlongsideDir along = AlongsideDir.None)
     {
         var classBrush = Frozen(r.ClassColor);
         var ttaBrush = r.Phase == TrafficPhase.Imminent ? DangerBrush
@@ -29,6 +41,8 @@ public sealed record TrafficRowViewModel(
         // Direction color: what kind of threat and which way. Blue = being lapped (yield),
         // amber = faster/charger closing from behind, green = a slower car ahead you're catching.
         var dirBrush = r.IsBlue ? BlueBrush : r.FromBehind ? WarnBrush : GainBrush;
+        bool left = along is AlongsideDir.Left or AlongsideDir.TwoLeft or AlongsideDir.Both;
+        bool right = along is AlongsideDir.Right or AlongsideDir.TwoRight or AlongsideDir.Both;
         return new TrafficRowViewModel(
             StripeBrush: r.IsBlue ? BlueBrush : r.IsLapping ? GainBrush : classBrush,
             NumBrush: classBrush,
@@ -39,6 +53,8 @@ public sealed record TrafficRowViewModel(
             // alert was underneath.
             PulseBrush: r.IsBlue ? BlueBrush : DangerBrush,
             DirBrush: dirBrush,
+            BarRestBrush: BarTrackBrush,
+            AlongBrush: AlongsideMarkBrush,
             // ▲ = coming up behind you (mirrors) · ▼ = ahead, you're reeling it in.
             DirGlyph: r.FromBehind ? "▲" : "▼",
             CarNumber: r.CarNumber,
@@ -52,6 +68,10 @@ public sealed record TrafficRowViewModel(
             BlueTagVisibility: r.IsBlue ? Visibility.Visible : Visibility.Collapsed,
             TrainVisibility: r.TrainCount > 1 ? Visibility.Visible : Visibility.Collapsed,
             DirVisibility: showCaret ? Visibility.Visible : Visibility.Collapsed,
+            ContentVisibility: Visibility.Visible,
+            AlongBorderVisibility: along != AlongsideDir.None ? Visibility.Visible : Visibility.Collapsed,
+            AlongLeftVisibility: left ? Visibility.Visible : Visibility.Collapsed,
+            AlongRightVisibility: right ? Visibility.Visible : Visibility.Collapsed,
             IsImminent: r.Phase == TrafficPhase.Imminent,
             BarStar: new GridLength(r.BarPct, GridUnitType.Star),
             BarRestStar: new GridLength(Math.Max(0.001, 1 - r.BarPct), GridUnitType.Star));
@@ -68,6 +88,8 @@ public sealed record TrafficRowViewModel(
     internal static readonly Brush DimBrush = Frozen("#9DA0AA");
     internal static readonly Brush LossRed = Frozen("#FF5C5C");
     internal static readonly Brush SamePaceYellow = Frozen("#FFD34D");
+    internal static readonly Brush BarTrackBrush = Frozen("#22FFFFFF");   // unfilled part of the proximity bar
+    internal static readonly Brush AlongsideMarkBrush = Frozen("#FFFFFF"); // "car beside you" edge + arrows
 
     /// <summary>The actual blue flag: blue with diagonal yellow stripes.</summary>
     internal static readonly Brush BlueTagStripes = MakeStripes();
@@ -150,14 +172,32 @@ public partial class TrafficWindow : Window
 
     public void ApplyConfig(OverlayConfig cfg)
     {
-        Left = cfg.Traffic.X;
-        Top = cfg.Traffic.Y;
-        Root.LayoutTransform = RowViewModel.ScaleTransformFor(cfg.Traffic.Scale);
+        var tc = cfg.Traffic;
+        Left = tc.X;
+        Top = tc.Y;
+        Root.LayoutTransform = RowViewModel.ScaleTransformFor(tc.Scale);
         var accent = RowViewModel.TryBrush(cfg.AccentColor) ?? Brushes.Cyan;
         YouBar.Background = accent;
         YouLine.Background = accent;
         YouTag.Background = accent;
         EditHint.Foreground = accent;
+
+        // Frameless (default): the widget is transparent; a soft shadow keeps text legible over a
+        // bright track. Panel mode: one solid rounded box behind everything, so no shadow needed.
+        bool panel = tc.ShowPanel && !tc.BeaconStyle;
+        WidgetPanel.Visibility = panel ? Visibility.Visible : Visibility.Collapsed;
+        Root.Effect = panel ? null : _textShadow;
+    }
+
+    private static readonly System.Windows.Media.Effects.DropShadowEffect _textShadow = Freeze();
+    private static System.Windows.Media.Effects.DropShadowEffect Freeze()
+    {
+        var e = new System.Windows.Media.Effects.DropShadowEffect
+        {
+            Color = Colors.Black, ShadowDepth = 0, BlurRadius = 5, Opacity = 0.95,
+        };
+        e.Freeze();
+        return e;
     }
 
     /// <summary>Called from the telemetry thread; skips the dispatch when nothing visual changed.</summary>
@@ -172,10 +212,17 @@ public partial class TrafficWindow : Window
     private void Render(TrafficSnapshot s)
     {
         var tc = _configService.Current.Traffic;
+        bool beacon = tc.BeaconStyle;
+        bool showRows = s.Rows.Count > 0;
+        bool split = !beacon && tc.GroupByDirection;
 
-        bool alongside = s.Alongside != AlongsideDir.None;
-        AlongsideBanner.Visibility = alongside ? Visibility.Visible : Visibility.Collapsed;
-        if (alongside)
+        // The car overlapping you is marked on its own row (below), so the full-width banner is only
+        // a fallback for when that car isn't one of the listed rows (e.g. an "any car" pack overlap).
+        bool alongsideOnRow = s.Alongside != AlongsideDir.None && s.AlongsideCarIdx >= 0 &&
+                              s.Rows.Any(r => r.CarIdx == s.AlongsideCarIdx);
+        bool alongsideBanner = s.Alongside != AlongsideDir.None && !alongsideOnRow;
+        AlongsideBanner.Visibility = alongsideBanner ? Visibility.Visible : Visibility.Collapsed;
+        if (alongsideBanner)
         {
             AlongsideText.Text = s.Alongside switch
             {
@@ -189,40 +236,47 @@ public partial class TrafficWindow : Window
         }
         else Pulse(AlongsideBanner, on: false);
 
-        ClearBanner.Visibility = s.ClearFlash && !alongside ? Visibility.Visible : Visibility.Collapsed;
-
-        bool beacon = tc.BeaconStyle;
-        bool showRows = !alongside && s.Rows.Count > 0;
-        bool split = showRows && !beacon && tc.GroupByDirection;
+        // CLEAR coexists with the rows now (a slim chip), never blanking the widget.
+        ClearBanner.Visibility = s.ClearFlash ? Visibility.Visible : Visibility.Collapsed;
 
         OverflowChip.Visibility = showRows && !beacon && s.Overflow > 0 ? Visibility.Visible : Visibility.Collapsed;
         BeaconPanel.Visibility = showRows && beacon ? Visibility.Visible : Visibility.Collapsed;
 
+        AlongsideDir AlongFor(int carIdx) =>
+            alongsideOnRow && carIdx == s.AlongsideCarIdx ? s.Alongside : AlongsideDir.None;
+
         if (split)
         {
-            // "Me in the middle": cars AHEAD stack above the YOU line (furthest at the top,
-            // nearest just above it); cars BEHIND stack below it (nearest just under the line,
-            // furthest at the bottom) — the same spatial sense as the relative box, so position
-            // alone tells direction and the per-row carets are dropped.
+            // "Me in the middle": fixed slots so the YOU line never moves. Cars AHEAD fill from the
+            // line upward (nearest just above it, blanks pad the top); cars BEHIND fill from the line
+            // downward (nearest just below it, blanks pad the bottom). Direction is read by position,
+            // so the per-row carets are dropped.
+            var aheadCars = s.Rows.Where(r => !r.FromBehind).ToList();   // nearest-first
+            var behindCars = s.Rows.Where(r => r.FromBehind).ToList();   // nearest-first
+            int na = Math.Max(1, tc.SlotsAhead), nb = Math.Max(1, tc.SlotsBehind);
+
             var ahead = new List<TrafficRowViewModel>();
+            for (int i = 0; i < na - aheadCars.Count; i++) ahead.Add(TrafficRowViewModel.Blank);
+            for (int i = Math.Min(aheadCars.Count, na) - 1; i >= 0; i--)   // furthest at top → nearest above line
+                ahead.Add(TrafficRowViewModel.From(aheadCars[i], showCaret: false, AlongFor(aheadCars[i].CarIdx)));
+
             var behind = new List<TrafficRowViewModel>();
-            foreach (var r in s.Rows)
-                (r.FromBehind ? behind : ahead).Add(TrafficRowViewModel.From(r, showCaret: false));
-            ahead.Reverse();   // detector gives nearest-first; on top we want furthest-first
+            for (int i = 0; i < Math.Min(behindCars.Count, nb); i++)       // nearest below line → furthest
+                behind.Add(TrafficRowViewModel.From(behindCars[i], showCaret: false, AlongFor(behindCars[i].CarIdx)));
+            for (int i = 0; i < nb - behindCars.Count; i++) behind.Add(TrafficRowViewModel.Blank);
 
             AheadControl.ItemsSource = ahead;
             RowsControl.ItemsSource = behind;
-            AheadControl.Visibility = ahead.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
-            RowsControl.Visibility = behind.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
-            YouDivider.Visibility = Visibility.Visible;
+            AheadControl.Visibility = RowsControl.Visibility = YouDivider.Visibility = Visibility.Visible;
             if (s.Overflow > 0) OverflowText.Text = $"+{s.Overflow} more in window";
             StopChevrons();
         }
-        else if (showRows && !beacon)
+        else if (!beacon)
         {
             // Flat list (grouping off): one metric-sorted list, each row keeping its ▲/▼ caret.
-            RowsControl.ItemsSource = s.Rows.Select(r => TrafficRowViewModel.From(r, showCaret: true)).ToList();
-            RowsControl.Visibility = Visibility.Visible;
+            RowsControl.ItemsSource = s.Rows.Select(r =>
+                TrafficRowViewModel.From(r, showCaret: true, AlongFor(r.CarIdx))).ToList();
+            RowsControl.Visibility = showRows ? Visibility.Visible : Visibility.Collapsed;
             AheadControl.Visibility = YouDivider.Visibility = Visibility.Collapsed;
             if (s.Overflow > 0) OverflowText.Text = $"+{s.Overflow} more in window";
             StopChevrons();
@@ -389,9 +443,9 @@ public partial class TrafficWindow : Window
         Render(new TrafficSnapshot(
             Rows:
             [
-                // Behind block (approaching you): faster class, a train, then a leader lapping you.
+                // Behind block (approaching you): faster class closing, then a leader lapping you.
                 new TrafficRow(0, TrafficPhase.Imminent, false, false, true, "#FFD24D", "P2", "R. Vergne", "4.2k",
-                               "GTP · #07", "3.2", "▲", 1, "▾▾▾", 2, 0.73),
+                               "GTP · #07", "3.2", "▲", 1, "▾▾▾", 1, 0.73),
                 new TrafficRow(1, TrafficPhase.Watch, false, false, true, "#FFD24D", "P3", "S. Okafor", "3.1k",
                                "GTP · #22", "4.5", "▲", 1, "▾▾▾", 1, 0.62),
                 new TrafficRow(2, TrafficPhase.Watch, true, false, true, "#FF5FA8", "P1", "M. Rossi", "5.6k",
@@ -400,6 +454,7 @@ public partial class TrafficWindow : Window
                 new TrafficRow(3, TrafficPhase.Watch, false, true, false, "#57C1FF", "P4", "L. Tanaka", "1.9k",
                                "GT4 · #88 · lapping", "4.1", "▼", -1, "▾▾", 1, 0.35),
             ],
-            Overflow: 0, Alongside: AlongsideDir.None, ClearFlash: false, Cues: TrafficCues.None));
+            // Mark car #22 (idx 1) as the one overlapping on your left — shown on its own row.
+            Overflow: 0, Alongside: AlongsideDir.Left, AlongsideCarIdx: 1, ClearFlash: false, Cues: TrafficCues.None));
     }
 }
