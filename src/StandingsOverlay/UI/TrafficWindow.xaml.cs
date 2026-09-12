@@ -12,16 +12,16 @@ namespace StandingsOverlay.UI;
 /// <summary>Display-ready row for the Row style's ItemsControl template.</summary>
 public sealed record TrafficRowViewModel(
     Brush StripeBrush, Brush NumBrush, Brush TtaBrush, Brush BlueTagBrush,
-    Brush PaceBrush, Brush PulseBrush, Brush DirBrush, Brush SectionBrush,
-    string DirGlyph, string SectionLabel,
+    Brush PaceBrush, Brush PulseBrush, Brush DirBrush,
+    string DirGlyph,
     string CarNumber, string Name, string IRatingText, string SubText,
     string TtaText, string PaceText, string Chevrons, string TrainText,
-    Visibility BlueTagVisibility, Visibility TrainVisibility, Visibility SectionVisibility,
+    Visibility BlueTagVisibility, Visibility TrainVisibility, Visibility DirVisibility,
     bool IsImminent, GridLength BarStar, GridLength BarRestStar)
 {
-    /// <summary>Build a row VM. <paramref name="section"/> is a non-empty header label ("▲ BEHIND"
-    /// / "▼ AHEAD") on the first row of each direction block, "" otherwise.</summary>
-    public static TrafficRowViewModel From(TrafficRow r, string section = "")
+    /// <summary>Build a row VM. <paramref name="showCaret"/> shows the ▲/▼ direction caret — only in
+    /// the flat (ungrouped) list; the split "me in the middle" layout conveys direction by position.</summary>
+    public static TrafficRowViewModel From(TrafficRow r, bool showCaret)
     {
         var classBrush = Frozen(r.ClassColor);
         var ttaBrush = r.Phase == TrafficPhase.Imminent ? DangerBrush
@@ -39,10 +39,8 @@ public sealed record TrafficRowViewModel(
             // alert was underneath.
             PulseBrush: r.IsBlue ? BlueBrush : DangerBrush,
             DirBrush: dirBrush,
-            SectionBrush: r.FromBehind ? WarnBrush : GainBrush,
             // ▲ = coming up behind you (mirrors) · ▼ = ahead, you're reeling it in.
             DirGlyph: r.FromBehind ? "▲" : "▼",
-            SectionLabel: section,
             CarNumber: r.CarNumber,
             Name: r.Name,
             IRatingText: r.IRatingText,
@@ -53,7 +51,7 @@ public sealed record TrafficRowViewModel(
             TrainText: $"×{r.TrainCount}",
             BlueTagVisibility: r.IsBlue ? Visibility.Visible : Visibility.Collapsed,
             TrainVisibility: r.TrainCount > 1 ? Visibility.Visible : Visibility.Collapsed,
-            SectionVisibility: section.Length > 0 ? Visibility.Visible : Visibility.Collapsed,
+            DirVisibility: showCaret ? Visibility.Visible : Visibility.Collapsed,
             IsImminent: r.Phase == TrafficPhase.Imminent,
             BarStar: new GridLength(r.BarPct, GridUnitType.Star),
             BarRestStar: new GridLength(Math.Max(0.001, 1 - r.BarPct), GridUnitType.Star));
@@ -157,6 +155,8 @@ public partial class TrafficWindow : Window
         Root.LayoutTransform = RowViewModel.ScaleTransformFor(cfg.Traffic.Scale);
         var accent = RowViewModel.TryBrush(cfg.AccentColor) ?? Brushes.Cyan;
         YouBar.Background = accent;
+        YouLine.Background = accent;
+        YouTag.Background = accent;
         EditHint.Foreground = accent;
     }
 
@@ -193,43 +193,50 @@ public partial class TrafficWindow : Window
 
         bool beacon = tc.BeaconStyle;
         bool showRows = !alongside && s.Rows.Count > 0;
+        bool split = showRows && !beacon && tc.GroupByDirection;
 
-        RowsControl.Visibility = showRows && !beacon ? Visibility.Visible : Visibility.Collapsed;
         OverflowChip.Visibility = showRows && !beacon && s.Overflow > 0 ? Visibility.Visible : Visibility.Collapsed;
         BeaconPanel.Visibility = showRows && beacon ? Visibility.Visible : Visibility.Collapsed;
 
-        if (showRows && !beacon)
+        if (split)
         {
-            RowsControl.ItemsSource = BuildRowVms(s.Rows, tc.GroupByDirection);
+            // "Me in the middle": cars AHEAD stack above the YOU line (furthest at the top,
+            // nearest just above it); cars BEHIND stack below it (nearest just under the line,
+            // furthest at the bottom) — the same spatial sense as the relative box, so position
+            // alone tells direction and the per-row carets are dropped.
+            var ahead = new List<TrafficRowViewModel>();
+            var behind = new List<TrafficRowViewModel>();
+            foreach (var r in s.Rows)
+                (r.FromBehind ? behind : ahead).Add(TrafficRowViewModel.From(r, showCaret: false));
+            ahead.Reverse();   // detector gives nearest-first; on top we want furthest-first
+
+            AheadControl.ItemsSource = ahead;
+            RowsControl.ItemsSource = behind;
+            AheadControl.Visibility = ahead.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+            RowsControl.Visibility = behind.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+            YouDivider.Visibility = Visibility.Visible;
+            if (s.Overflow > 0) OverflowText.Text = $"+{s.Overflow} more in window";
+            StopChevrons();
+        }
+        else if (showRows && !beacon)
+        {
+            // Flat list (grouping off): one metric-sorted list, each row keeping its ▲/▼ caret.
+            RowsControl.ItemsSource = s.Rows.Select(r => TrafficRowViewModel.From(r, showCaret: true)).ToList();
+            RowsControl.Visibility = Visibility.Visible;
+            AheadControl.Visibility = YouDivider.Visibility = Visibility.Collapsed;
             if (s.Overflow > 0) OverflowText.Text = $"+{s.Overflow} more in window";
             StopChevrons();
         }
         else if (showRows)
         {
+            RowsControl.Visibility = AheadControl.Visibility = YouDivider.Visibility = Visibility.Collapsed;
             RenderBeacon(s);
         }
         else
         {
+            RowsControl.Visibility = AheadControl.Visibility = YouDivider.Visibility = Visibility.Collapsed;
             StopChevrons();
         }
-    }
-
-    /// <summary>Turn the detector's rows into row VMs, tagging the first row of each direction
-    /// block with a section header ("▲ BEHIND" / "▼ AHEAD") when grouping is on. The detector
-    /// has already sorted behind-first, so the header just marks each boundary.</summary>
-    private static List<TrafficRowViewModel> BuildRowVms(IReadOnlyList<TrafficRow> rows, bool group)
-    {
-        var list = new List<TrafficRowViewModel>(rows.Count);
-        bool? prev = null;
-        foreach (var r in rows)
-        {
-            string section = "";
-            if (group && r.FromBehind != prev)
-                section = r.FromBehind ? "▲  BEHIND" : "▼  AHEAD";
-            prev = r.FromBehind;
-            list.Add(TrafficRowViewModel.From(r, section));
-        }
-        return list;
     }
 
     private void RenderBeacon(TrafficSnapshot s)

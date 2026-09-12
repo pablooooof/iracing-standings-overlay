@@ -27,6 +27,83 @@
                 </DataTrigger>
             </Style.Triggers>
         </Style>
+        <!-- One row, shared by the AHEAD and BEHIND lists (Style A). -->
+        <DataTemplate x:Key="TrafficRowTemplate">
+            <Grid Height="36" Margin="0,0,0,4">
+                <Border Background="#F0212129" CornerRadius="4" BorderBrush="#34343F" BorderThickness="1"/>
+                <Border CornerRadius="4" BorderBrush="{Binding PulseBrush}" BorderThickness="1.5"
+                        Style="{StaticResource PulseOverlay}"/>
+                <Grid Margin="1">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="2"/>
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+
+                    <Border Grid.RowSpan="2" Width="4" Background="{Binding StripeBrush}" CornerRadius="3,0,0,3"/>
+
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center"
+                                Margin="6,0,0,0">
+                        <!-- Direction caret (flat list only; the YOU line conveys it when split). -->
+                        <TextBlock Text="{Binding DirGlyph}" Foreground="{Binding DirBrush}"
+                                   Visibility="{Binding DirVisibility}"
+                                   FontSize="12" FontWeight="Bold" Margin="0,0,5,0" VerticalAlignment="Center"/>
+                        <Border Background="{Binding NumBrush}" CornerRadius="2"
+                                Padding="5,1" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding CarNumber}" Foreground="#17171D"
+                                       FontFamily="Consolas" FontWeight="Bold" FontSize="12"/>
+                        </Border>
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="2" VerticalAlignment="Center" Margin="8,0,4,0">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="12.5"
+                                       Foreground="#E8E9EE" TextTrimming="CharacterEllipsis"/>
+                            <TextBlock Text="{Binding IRatingText}" Foreground="#9DA0AA"
+                                       FontSize="10" Margin="5,2,0,0"/>
+                            <Border Background="{Binding BlueTagBrush}" CornerRadius="2" Padding="4,0"
+                                    Margin="5,1,0,1" Visibility="{Binding BlueTagVisibility}">
+                                <TextBlock Text="BLUE" Foreground="White" FontSize="8.5" FontWeight="Bold"/>
+                            </Border>
+                            <Border Background="#3A3A46" CornerRadius="2" Padding="4,0"
+                                    Margin="5,1,0,1" Visibility="{Binding TrainVisibility}">
+                                <TextBlock Text="{Binding TrainText}" Foreground="#E8E9EE"
+                                           FontSize="9" FontWeight="Bold"/>
+                            </Border>
+                        </StackPanel>
+                        <TextBlock Text="{Binding SubText}" Foreground="#9DA0AA" FontSize="10"/>
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="3" Margin="0,0,9,0" VerticalAlignment="Center">
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                            <TextBlock Text="{Binding TtaText}" Foreground="{Binding TtaBrush}"
+                                       FontFamily="Consolas" FontWeight="Bold" FontSize="15"/>
+                            <TextBlock Text="s" Foreground="#9DA0AA" FontSize="10" Margin="1,4,0,0"/>
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                            <TextBlock Text="{Binding Chevrons}" Foreground="{Binding TtaBrush}"
+                                       FontSize="9" Margin="0,0,3,0"/>
+                            <TextBlock Text="{Binding PaceText}" Foreground="{Binding PaceBrush}"
+                                       FontSize="10" FontWeight="Bold"/>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <Grid Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="3">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="{Binding BarStar}"/>
+                            <ColumnDefinition Width="{Binding BarRestStar}"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Background="{Binding TtaBrush}"/>
+                        <Border Grid.Column="1" Background="#18FFFFFF"/>
+                    </Grid>
+                </Grid>
+            </Grid>
+        </DataTemplate>
     </Window.Resources>
 
     <StackPanel x:Name="Root" Width="300">
@@ -47,92 +124,22 @@
                        FontWeight="Bold" FontSize="13" HorizontalAlignment="Center" VerticalAlignment="Center"/>
         </Border>
 
-        <!-- STYLE A: stacked rows, nearest threat first. -->
-        <ItemsControl x:Name="RowsControl" Visibility="Collapsed">
-            <ItemsControl.ItemTemplate>
-                <DataTemplate>
-                  <StackPanel Margin="0,0,0,4">
-                    <!-- Section divider: "▲ BEHIND" / "▼ AHEAD" on the first row of each block. -->
-                    <TextBlock Text="{Binding SectionLabel}" Foreground="{Binding SectionBrush}"
-                               Visibility="{Binding SectionVisibility}" FontSize="9.5" FontWeight="Bold"
-                               Margin="2,1,0,2" Opacity="0.9"/>
-                    <Grid Height="36">
-                        <Border Background="#F0212129" CornerRadius="4" BorderBrush="#34343F" BorderThickness="1"/>
-                        <Border CornerRadius="4" BorderBrush="{Binding PulseBrush}" BorderThickness="1.5"
-                                Style="{StaticResource PulseOverlay}"/>
-                        <Grid Margin="1">
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="*"/>
-                                <RowDefinition Height="2"/>
-                            </Grid.RowDefinitions>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
+        <!-- STYLE A, split layout ("me in the middle"): cars AHEAD above the YOU line, cars
+             BEHIND below it. Both lists share TrafficRowTemplate. When grouping is off, all rows
+             go into RowsControl (flat) and AheadControl + YouDivider are collapsed. -->
+        <ItemsControl x:Name="AheadControl" Visibility="Collapsed"
+                      ItemTemplate="{StaticResource TrafficRowTemplate}"/>
 
-                            <Border Grid.RowSpan="2" Width="4" Background="{Binding StripeBrush}" CornerRadius="3,0,0,3"/>
+        <!-- YOU divider: the player, with traffic arranged around it like a mini relative box. -->
+        <Grid x:Name="YouDivider" Visibility="Collapsed" Margin="0,1,0,4">
+            <Border x:Name="YouLine" Height="2" CornerRadius="1" Opacity="0.85"/>
+            <Border x:Name="YouTag" HorizontalAlignment="Center" CornerRadius="3" Padding="7,0">
+                <TextBlock Text="YOU" Foreground="#17171D" FontSize="9" FontWeight="Bold"/>
+            </Border>
+        </Grid>
 
-                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center"
-                                        Margin="6,0,0,0">
-                                <!-- Direction caret: ▲ closing from behind · ▼ ahead, you're catching. -->
-                                <TextBlock Text="{Binding DirGlyph}" Foreground="{Binding DirBrush}"
-                                           FontSize="12" FontWeight="Bold" Margin="0,0,5,0" VerticalAlignment="Center"/>
-                                <Border Background="{Binding NumBrush}" CornerRadius="2"
-                                        Padding="5,1" VerticalAlignment="Center">
-                                    <TextBlock Text="{Binding CarNumber}" Foreground="#17171D"
-                                               FontFamily="Consolas" FontWeight="Bold" FontSize="12"/>
-                                </Border>
-                            </StackPanel>
-
-                            <StackPanel Grid.Column="2" VerticalAlignment="Center" Margin="8,0,4,0">
-                                <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="12.5"
-                                               Foreground="#E8E9EE" TextTrimming="CharacterEllipsis"/>
-                                    <TextBlock Text="{Binding IRatingText}" Foreground="#9DA0AA"
-                                               FontSize="10" Margin="5,2,0,0"/>
-                                    <Border Background="{Binding BlueTagBrush}" CornerRadius="2" Padding="4,0"
-                                            Margin="5,1,0,1" Visibility="{Binding BlueTagVisibility}">
-                                        <TextBlock Text="BLUE" Foreground="White" FontSize="8.5" FontWeight="Bold"/>
-                                    </Border>
-                                    <Border Background="#3A3A46" CornerRadius="2" Padding="4,0"
-                                            Margin="5,1,0,1" Visibility="{Binding TrainVisibility}">
-                                        <TextBlock Text="{Binding TrainText}" Foreground="#E8E9EE"
-                                                   FontSize="9" FontWeight="Bold"/>
-                                    </Border>
-                                </StackPanel>
-                                <TextBlock Text="{Binding SubText}" Foreground="#9DA0AA" FontSize="10"/>
-                            </StackPanel>
-
-                            <StackPanel Grid.Column="3" Margin="0,0,9,0" VerticalAlignment="Center">
-                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                                    <TextBlock Text="{Binding TtaText}" Foreground="{Binding TtaBrush}"
-                                               FontFamily="Consolas" FontWeight="Bold" FontSize="15"/>
-                                    <TextBlock Text="s" Foreground="#9DA0AA" FontSize="10" Margin="1,4,0,0"/>
-                                </StackPanel>
-                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                                    <TextBlock Text="{Binding Chevrons}" Foreground="{Binding TtaBrush}"
-                                               FontSize="9" Margin="0,0,3,0"/>
-                                    <TextBlock Text="{Binding PaceText}" Foreground="{Binding PaceBrush}"
-                                               FontSize="10" FontWeight="Bold"/>
-                                </StackPanel>
-                            </StackPanel>
-
-                            <Grid Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="3">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="{Binding BarStar}"/>
-                                    <ColumnDefinition Width="{Binding BarRestStar}"/>
-                                </Grid.ColumnDefinitions>
-                                <Border Background="{Binding TtaBrush}"/>
-                                <Border Grid.Column="1" Background="#18FFFFFF"/>
-                            </Grid>
-                        </Grid>
-                    </Grid>
-                  </StackPanel>
-                </DataTemplate>
-            </ItemsControl.ItemTemplate>
-        </ItemsControl>
+        <ItemsControl x:Name="RowsControl" Visibility="Collapsed"
+                      ItemTemplate="{StaticResource TrafficRowTemplate}"/>
 
         <Border x:Name="OverflowChip" Visibility="Collapsed" HorizontalAlignment="Center"
                 Background="#C0212129" BorderBrush="#34343F" BorderThickness="1" CornerRadius="3" Padding="8,1">

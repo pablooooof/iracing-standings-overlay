@@ -118,18 +118,20 @@ Separate widget window/element, own draggable position via existing edit mode
 **class color = what's coming · catch-rate chevrons = how fast · red pulse = it's here.**
 Chevron scale from the closing-rate buffer: `▾` < 2.5 s/lap · `▾▾` 2.5–6 · `▾▾▾` > 6.
 
-### Direction grouping (`GroupByDirection`, default on)
+### Direction split — "me in the middle" (`GroupByDirection`, default on)
 
-The single most important thing to read at speed is *which way the threat is*, so rows are split
-into two blocks: cars **closing from BEHIND** (faster class, being lapped, a same-class charger)
-sort above cars you're **catching AHEAD** (lapping traffic), separated by a `▲ BEHIND` / `▼ AHEAD`
-divider. Every row also carries a direction caret next to its number chip (`▲` behind amber / `▼`
-ahead green / `▲` blue when being lapped). Trains never merge across directions. Turn the toggle
-off for one flat list sorted purely by the metric (the old behaviour). In the Beacon the headline
-carries the same caret and the chevron **rain reverses** — falling toward YOU for a car behind,
-rising away for a car ahead. The proximity bar and the printed number always key off the *same*
-metric now (both the gap in Gap basis, both the countdown in Countdown basis) — previously the bar
-counted down on TTA while the digits showed the gap.
+The single most important thing to read at speed is *which way the threat is*, so the Row style is
+laid out like a mini relative box: a **YOU line** (accent-colored, centered "YOU" tag) with cars
+you're **catching AHEAD** stacked above it (furthest at the top, nearest just above the line) and
+cars **closing from BEHIND** (faster class, being lapped, a same-class charger) stacked below it
+(nearest just under the line, furthest at the bottom). Position alone tells direction, so the rows
+carry no arrows in this mode. Trains never merge across directions. Turn the toggle off for one flat
+list sorted purely by the metric — there each row regains a `▲`/`▼` caret next to its number chip
+(amber behind / green ahead / blue when being lapped) since there's no line to read against. In the
+Beacon the headline carries a caret and the chevron **rain reverses** — falling toward YOU for a car
+behind, rising away for a car ahead. The proximity bar and the printed number always key off the
+*same* metric now (both the gap in Gap basis, both the countdown in Countdown basis) — previously
+the bar counted down on TTA while the digits showed the gap.
 
 ### Faster class vs. being lapped (must never be confused)
 
