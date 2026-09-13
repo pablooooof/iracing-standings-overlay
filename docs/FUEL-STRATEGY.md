@@ -177,10 +177,12 @@ Target              3.46                 20.92     ← accent-coloured, clickabl
 └───────────────────────────────────────────────────────────┘
 ```
 
-- **Rows** (`FuelModel` rolling stats): `Last` = last non-pit lap; `Last 5`/`Last 10` = rolling
-  averages of the last N non-pit laps; `Stint` = average since the last pit exit. Laps-to-Empty =
-  `fuelNow / usage`. The `Rem (Laps)` header is `fuelNow` over the thriftiest…thirstiest of the
-  last 10 laps. In/out laps are excluded from all of these.
+- **Rows** (`FuelModel` rolling stats, all scoped to the current tank — the Last-N window and the
+  stint accumulator both reset at pit exit): `Last` = last non-pit lap; `Last 5`/`Last 10` =
+  averages of the last N non-pit laps this stint, shown only once ≥2 laps exist and growing 2→N
+  (a single lap never masquerades as an N-lap average); `Stint` = average over the whole stint.
+  Laps-to-Empty = `fuelNow / usage`. The `Rem (Laps)` header is `fuelNow` over the
+  thriftiest…thirstiest of the last 10 laps. In/out laps are excluded from all of these.
 - **Target** = two interlocked numbers tied by the **usable tank**: `TargetLaps` (laps you want
   from a full tank) and `TargetPerLap` (L/lap). Set one and the other follows
   (`perLap = tank / laps`); `TargetMode` records which the driver set last, and that one is
@@ -199,6 +201,11 @@ Target              3.46                 20.92     ← accent-coloured, clickabl
 Config (`FuelTable` section): `Enabled`, `ShowLast5` (default off), `ShowLast10`, `ShowStint`,
 `ShowStatus`, `TargetLaps`, `TargetPerLap`, `TargetMode` ("Laps"|"PerLap"), `Interactive`,
 `Scale`, `X`, `Y`.
+
+**Shared target across profiles**: the target (`TargetLaps` / `TargetPerLap` / `TargetMode`) is a
+race-wide strategy decision, so `ConfigService.MirrorSharedTarget` keeps it identical in the
+driving and spectate profiles — set it in the car and it applies while watching a teammate's stint,
+and vice versa. Everything else about the widget (position, enabled, rows) stays per-profile.
 
 ## Gotchas & non-goals
 

@@ -470,8 +470,29 @@ public sealed class ConfigService : IDisposable
 
     public void Save()
     {
+        MirrorSharedTarget();
         _lastSelfWrite = DateTime.UtcNow;
         Current.Save(Spectating ? _spectatePath : _path);
+    }
+
+    /// <summary>The fuel target (laps / L-per-lap / which drives which) is a race-wide strategy
+    /// decision, not a per-view preference — keep it identical across the driving and spectate
+    /// profiles so setting it in the car also applies while watching a teammate's stint (and vice
+    /// versa). Everything else about the fuel table (position, enabled, which rows) stays
+    /// per-profile. Only writes the other file when a value actually changed.</summary>
+    private void MirrorSharedTarget()
+    {
+        var other = ReferenceEquals(Current, _driving) ? _spectate : _driving;
+        if (other is null || ReferenceEquals(other, Current)) return;
+        var a = Current.FuelTable;
+        var b = other.FuelTable;
+        if (b.TargetLaps == a.TargetLaps && b.TargetPerLap == a.TargetPerLap && b.TargetMode == a.TargetMode)
+            return;
+        b.TargetLaps = a.TargetLaps;
+        b.TargetPerLap = a.TargetPerLap;
+        b.TargetMode = a.TargetMode;
+        _lastSelfWrite = DateTime.UtcNow;
+        other.Save(ReferenceEquals(other, _driving) ? _path : _spectatePath);
     }
 
     /// <summary>Persist an in-app edit (the settings window) and push it to every widget.

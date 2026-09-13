@@ -67,13 +67,14 @@ public sealed class FuelModel
     /// <summary>Session times at which completed player stints started (pit exits).</summary>
     public IReadOnlyList<double> StintBounds => _stintBounds;
 
-    /// <summary>Fuel used on the last completed non-pit lap (L), -1 until one is seen.</summary>
+    /// <summary>Fuel used on the last completed non-pit lap this stint (L), -1 until one is seen.</summary>
     public double LastPerLap => _recent.Count > 0 ? _recent[^1] : -1;
-    /// <summary>Average burn over the last <paramref name="n"/> non-pit laps (L/lap), -1 if none yet.
-    /// Uses fewer if fewer are available.</summary>
+    /// <summary>Average burn over the last <paramref name="n"/> non-pit laps of the current stint
+    /// (L/lap), -1 until at least two laps exist. The window grows with the stint (2 → n), so a
+    /// single lap never masquerades as an N-lap average.</summary>
     public double RecentAvg(int n)
     {
-        if (_recent.Count == 0 || n <= 0) return -1;
+        if (_recent.Count < 2 || n <= 0) return -1;
         int take = Math.Min(n, _recent.Count);
         double sum = 0;
         for (int i = _recent.Count - take; i < _recent.Count; i++) sum += _recent[i];
@@ -101,10 +102,15 @@ public sealed class FuelModel
         WatchRefuel(t, fuel);
 
         // Pit exit = a stint boundary for the past part of the strategy bars, and the start of a
-        // fresh stint for the target tracker (laps/fuel counted from here).
+        // fresh stint for the consumption table: the Last-N rolling window and the stint accumulator
+        // both reset here so every table figure describes the current tank only. (TODO: a tow /
+        // active reset does not pass through pit road, so it does not reset the stint counter — the
+        // garbage laps themselves are discarded by the sanity/missed-crossing guards, only the lap
+        // *count* drifts. Left keyed to pit exit so a single dropped-telemetry lap can't false-reset.)
         if (!onPit && _wasOnPitRoad && t.SessionTime >= 0)
         {
             _stintBounds.Add(t.SessionTime);
+            _recent.Clear();
             _stintUsed = 0;
             _stintLaps = 0;
         }
