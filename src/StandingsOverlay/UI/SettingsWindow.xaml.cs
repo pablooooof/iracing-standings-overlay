@@ -450,6 +450,37 @@ public partial class SettingsWindow : Window
             () => f.PitLaneLossSec, v => f.PitLaneLossSec = v, v => v < 0 ? "auto" : $"{v:0}s"));
         body.Children.Add(Slider("Fill rate", null, -1, 5, 0.1,
             () => f.FillRateLps, v => f.FillRateLps = v, v => v < 0 ? "auto" : $"{v:0.0} L/s"));
+
+        BuildFuelTable();
+    }
+
+    private void BuildFuelTable()
+    {
+        var ft = _cfg.Current.FuelTable;
+        var body = Master("Show fuel table",
+            "A separate widget: Last / last-5 / last-10 / stint / target consumption, laps to empty, and a live target tracker. Works in practice and race.",
+            () => ft.Enabled, v => ft.Enabled = v);
+
+        body.Children.Add(Slider("Size", "Scales the whole fuel table.", 0.6, 2.0, 0.05,
+            () => ft.Scale, v => ft.Scale = v, v => $"{v * 100:0}%"));
+        body.Children.Add(Toggle("Last-5 row", "Average burn over your last 5 laps.",
+            () => ft.ShowLast5, v => ft.ShowLast5 = v));
+        body.Children.Add(Toggle("Last-10 row", null, () => ft.ShowLast10, v => ft.ShowLast10 = v));
+        body.Children.Add(Toggle("Stint row", "Average burn since your last pit stop.",
+            () => ft.ShowStint, v => ft.ShowStint = v));
+        body.Children.Add(Toggle("Target tracker", "The ahead/behind line while a stint is running: how much fuel you've banked or overspent, and the burn you now need to make the target stint.",
+            () => ft.ShowStatus, v => ft.ShowStatus = v));
+        body.Children.Add(Toggle("Clickable on widget", "Drop click-through so the target ▲/▼ (and mouse wheel) work during a session. Off = set the target here only; still clickable while overlays are unlocked.",
+            () => ft.Interactive, v => Apply(() => { ft.Interactive = v; })));
+
+        body.Children.Add(Subhead("Target — the last value you set wins"));
+        body.Children.Add(Segmented("Driven by", "Which number is fixed; the other follows from the usable tank. (Changing a value below also sets this.)",
+            new[] { ("Laps / stint", "Laps"), ("L per lap", "PerLap") },
+            () => ft.TargetMode, v => Apply(() => ft.TargetMode = v)));
+        body.Children.Add(Slider("Target laps", "Laps you want out of a full tank (one stint). Sets the target L/lap from the tank.", 1, 80, 1,
+            () => ft.TargetLaps, v => { ft.TargetLaps = v; ft.TargetMode = "Laps"; }, v => v < 1 ? "—" : $"{v:0}"));
+        body.Children.Add(Slider("Target L/lap", "Litres per lap to aim for. Sets the target laps from the tank.", 0, 8, 0.01,
+            () => ft.TargetPerLap, v => { ft.TargetPerLap = v; ft.TargetMode = "PerLap"; }, v => v < 0.01 ? "—" : $"{v:0.00}"));
     }
 
     private void BuildAbout()

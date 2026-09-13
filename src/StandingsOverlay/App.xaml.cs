@@ -15,6 +15,7 @@ public partial class App : Application
     private TrafficWindow? _trafficWindow;
     private RelativeWindow? _relativeWindow;
     private FuelWindow? _fuelWindow;
+    private FuelTableWindow? _fuelTableWindow;
     private LapLabWindow? _lapLabWindow;
     private TrafficAudio? _trafficAudio;
     private SettingsWindow? _settings;
@@ -74,6 +75,7 @@ public partial class App : Application
         _trafficWindow = new TrafficWindow(_configService);
         _relativeWindow = new RelativeWindow(_configService);
         _fuelWindow = new FuelWindow(_configService);
+        _fuelTableWindow = new FuelTableWindow(_configService);
         _lapLabWindow = new LapLabWindow(_configService);
         _trafficAudio = new TrafficAudio();
 
@@ -101,6 +103,7 @@ public partial class App : Application
         };
         _source.RelativeReady += relative => _relativeWindow.OnRelative(relative);
         _source.FuelReady += fuel => _fuelWindow.OnFuel(fuel);
+        _source.FuelTableReady += ft => _fuelTableWindow.OnFuelTable(ft);
         _source.LapLabReady += lab => _lapLabWindow.OnLapLab(lab);
 
         // In the car vs spectating (team stints, garage): swap the whole config profile so
@@ -113,6 +116,7 @@ public partial class App : Application
         _trafficWindow.Show();
         _relativeWindow.Show();
         _fuelWindow.Show();
+        _fuelTableWindow.Show();
         _lapLabWindow.Show();
         _settings.Show();
         _source.Start();
@@ -130,7 +134,7 @@ public partial class App : Application
     /// initial visibility. Demo mode pins the overlays visible so testing never blanks the screen.</summary>
     private void SetupAutoHide(bool demo)
     {
-        _overlays = [_window!, _trafficWindow!, _relativeWindow!, _fuelWindow!, _lapLabWindow!];
+        _overlays = [_window!, _trafficWindow!, _relativeWindow!, _fuelWindow!, _fuelTableWindow!, _lapLabWindow!];
 
         var cfg = _configService!.Current;
         _visibility.Demo = demo;
@@ -192,6 +196,7 @@ public partial class App : Application
         _trafficWindow!.EditMode = on;
         _relativeWindow!.EditMode = on;
         _fuelWindow!.EditMode = on;
+        _fuelTableWindow!.EditMode = on;
         _lapLabWindow!.EditMode = on;
         _settings?.ReflectEditMode(on);
         // Edit mode force-shows every widget — you can't drag one you can't see.

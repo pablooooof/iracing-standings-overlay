@@ -155,6 +155,51 @@ rules; screenshot only the final look.
 }
 ```
 
+## Fuel consumption table (second widget)
+
+A separate, simpler widget (`Data/FuelTableBuilder` → `FuelTableReady` → `UI/FuelTableWindow`)
+built from the **same** `FuelModel`, for drivers who want the plain consumption numbers rather
+than the Pirelli strategy bars. Works in **both practice and race** (no session gating, no
+strategy-confidence gate — rows fill in as laps complete). Independent enable/position/scale.
+
+Layout (matches the classic fuel-overlay idiom):
+
+```
+FUEL  E [====green====] F   72.4 / 100.9 L        Rem (Laps) 20.9 – 21.4
+                 Usage (L/Lap)        Laps to Empty
+Last                3.39                 21.36
+Last 5              3.42                 21.17     ← optional row, off by default
+Last 10             3.44                 21.05
+Stint               3.47                 20.86
+Target              3.46                 20.92     ← accent-coloured, clickable
+┌───────────────────────────────────────────────────────────┐
+│ Lap 8 / 29 · 0.6L ahead · need 3.44/lap for 21 to go        │  green = ahead, red = behind
+└───────────────────────────────────────────────────────────┘
+```
+
+- **Rows** (`FuelModel` rolling stats): `Last` = last non-pit lap; `Last 5`/`Last 10` = rolling
+  averages of the last N non-pit laps; `Stint` = average since the last pit exit. Laps-to-Empty =
+  `fuelNow / usage`. The `Rem (Laps)` header is `fuelNow` over the thriftiest…thirstiest of the
+  last 10 laps. In/out laps are excluded from all of these.
+- **Target** = two interlocked numbers tied by the **usable tank**: `TargetLaps` (laps you want
+  from a full tank) and `TargetPerLap` (L/lap). Set one and the other follows
+  (`perLap = tank / laps`); `TargetMode` records which the driver set last, and that one is
+  master. E.g. Suzuka 1000 km, 100.88 L tank: 29 laps → 3.48 L/lap, 30 laps → 3.36 L/lap.
+- **Target tracker** (the actionable line): with a target set and a stint underway, compares
+  `stintLaps × targetPerLap` (planned) against the fuel actually burned this stint. Positive =
+  banked fuel (**green, "ahead"**), negative = overspent (**red, "behind"**). `need X/lap` =
+  `fuelNow / lapsLeftInStint` — the average burn that still completes the target stint on the fuel
+  you have (rises when ahead → you can push; falls when behind → save now).
+- **Clickable target**: editable in the settings window (Fuel page → "Show fuel table"), and —
+  when the per-widget `Interactive` toggle is on, or while overlays are unlocked (edit mode) — via
+  ▲/▼ (and the mouse wheel) on the Target row itself. `Interactive` drops click-through for this
+  one widget; it's **off by default** so it never steals clicks from the sim, matching every other
+  overlay. Both paths write the same config, two decimals.
+
+Config (`FuelTable` section): `Enabled`, `ShowLast5` (default off), `ShowLast10`, `ShowStint`,
+`ShowStatus`, `TargetLaps`, `TargetPerLap`, `TargetMode` ("Laps"|"PerLap"), `Interactive`,
+`Scale`, `X`, `Y`.
+
 ## Gotchas & non-goals
 
 - `FuelLevel` on EV/hybrid content reads kWh; unit label follows `PitSvFuel`'s unit. v1

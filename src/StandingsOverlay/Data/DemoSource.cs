@@ -75,6 +75,7 @@ public sealed class DemoSource : ITelemetrySource
     public event Action<TrafficSnapshot>? TrafficReady;
     public event Action<RelativeSnapshot>? RelativeReady;
     public event Action<FuelSnapshot>? FuelReady;
+    public event Action<FuelTableSnapshot>? FuelTableReady;
     public event Action<LapLabSnapshot>? LapLabReady;
 
     public DemoSource(Func<OverlayConfig> cfg, string sessionType = "Race", bool timed = false, bool rain = false)
@@ -403,6 +404,7 @@ public sealed class DemoSource : ITelemetrySource
         TrafficReady?.Invoke(_traffic.Update(_tick, _roster, _history, _stints, cfg));
         RelativeReady?.Invoke(RelativeBuilder.Build(_tick, _roster, _stints, _driverSwap, _history, cfg));
         FuelReady?.Invoke(_planner.Build(_tick, _fuel, cfg));
+        FuelTableReady?.Invoke(FuelTableBuilder.Build(_tick, _fuel, cfg));
         LapLabReady?.Invoke(_lapLab.Build(_tick, _sectorClock, _roster, _refStore, cfg));
     }
 

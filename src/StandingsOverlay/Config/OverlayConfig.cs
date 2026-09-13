@@ -98,6 +98,9 @@ public sealed class OverlayConfig
     // Fuel calculator + endurance strategy bars. Spec: docs/FUEL-STRATEGY.md.
     public FuelConfig Fuel { get; set; } = new();
 
+    // Consumption table (Last / Last-5 / Last-10 / Stint / Target) with a clickable target.
+    public FuelTableConfig FuelTable { get; set; } = new();
+
     // Lap Lab: practice lap table, sectors vs a reference lap. Spec: docs/LAP-LAB.md.
     public LapLabConfig LapLab { get; set; } = new();
 
@@ -262,6 +265,35 @@ public sealed class FuelConfig
     // Widget position (DIPs), draggable in edit mode like every widget.
     public double X { get; set; } = 810;
     public double Y { get; set; } = 130;
+}
+
+/// <summary>The fuel consumption table: rows for the last lap, last-5/last-10 averages, the
+/// current stint, and a driver-set target. Works in both practice and race. The target is two
+/// interlocked numbers — laps per stint and litres per lap — tied together by the usable tank;
+/// whichever the driver set last (<see cref="TargetMode"/>) drives the other. Editable here and,
+/// when <see cref="Interactive"/> is on, clickable on the widget itself.</summary>
+public sealed class FuelTableConfig
+{
+    public bool Enabled { get; set; } = true;
+    public bool ShowLast5 { get; set; } = false;   // off by default (per request); toggle on in settings
+    public bool ShowLast10 { get; set; } = true;
+    public bool ShowStint { get; set; } = true;
+    public bool ShowStatus { get; set; } = true;    // the target-vs-actual "ahead/behind" line
+
+    // The target, as raw driver intent. The builder derives the partner value from the live tank.
+    public double TargetLaps { get; set; } = 0;     // 0 = no target set
+    public double TargetPerLap { get; set; } = 0;   // 0 = no target set
+    public string TargetMode { get; set; } = "Laps"; // "Laps" | "PerLap" — which one the driver set last
+
+    // On = the widget drops click-through so the target's ▲/▼ (and scroll) work during a session.
+    // Off (default) keeps it fully click-through like every other overlay; the target is still
+    // editable in settings and in edit mode.
+    public bool Interactive { get; set; } = false;
+
+    public double Scale { get; set; } = 1.0;
+
+    public double X { get; set; } = 810;
+    public double Y { get; set; } = 300;
 }
 
 /// <summary>Lap Lab: the practice/testing lap table — every lap a row, official sectors as

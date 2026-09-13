@@ -27,6 +27,14 @@ public sealed class FuelModel
     private double _greenEwma = -1;
     private double _yellowEwma = -1;
 
+    // Rolling per-lap usage of the last non-pit laps (green or yellow), newest last — feeds the
+    // consumption table's Last / Last-5 / Last-10 rows and the "laps remaining" range. Kept small.
+    private readonly List<double> _recent = new(24);
+    // Current stint (since the last pit exit / session start): completed racing laps and the fuel
+    // they burned — the honest, lap-quantised basis for the target-vs-actual tracker.
+    private double _stintUsed;
+    private int _stintLaps;
+
     // Pace (seconds, green laps only — the planner's lap-time base).
     private double _paceEwma = -1;
 
@@ -59,6 +67,25 @@ public sealed class FuelModel
     /// <summary>Session times at which completed player stints started (pit exits).</summary>
     public IReadOnlyList<double> StintBounds => _stintBounds;
 
+    /// <summary>Fuel used on the last completed non-pit lap (L), -1 until one is seen.</summary>
+    public double LastPerLap => _recent.Count > 0 ? _recent[^1] : -1;
+    /// <summary>Average burn over the last <paramref name="n"/> non-pit laps (L/lap), -1 if none yet.
+    /// Uses fewer if fewer are available.</summary>
+    public double RecentAvg(int n)
+    {
+        if (_recent.Count == 0 || n <= 0) return -1;
+        int take = Math.Min(n, _recent.Count);
+        double sum = 0;
+        for (int i = _recent.Count - take; i < _recent.Count; i++) sum += _recent[i];
+        return sum / take;
+    }
+    /// <summary>Average burn over the current stint (L/lap), -1 until a full racing lap completes.</summary>
+    public double StintPerLap => _stintLaps > 0 ? _stintUsed / _stintLaps : -1;
+    /// <summary>Completed racing laps in the current stint (since the last pit exit / session start).</summary>
+    public int StintLaps => _stintLaps;
+    /// <summary>The last non-pit lap usages, newest last — for the "laps remaining" best/worst range.</summary>
+    public IReadOnlyList<double> RecentUsage => _recent;
+
     public void Update(RawTick t)
     {
         int p = t.PlayerCarIdx;
@@ -73,8 +100,14 @@ public sealed class FuelModel
 
         WatchRefuel(t, fuel);
 
-        // Pit exit = a stint boundary for the past part of the strategy bars.
-        if (!onPit && _wasOnPitRoad && t.SessionTime >= 0) _stintBounds.Add(t.SessionTime);
+        // Pit exit = a stint boundary for the past part of the strategy bars, and the start of a
+        // fresh stint for the target tracker (laps/fuel counted from here).
+        if (!onPit && _wasOnPitRoad && t.SessionTime >= 0)
+        {
+            _stintBounds.Add(t.SessionTime);
+            _stintUsed = 0;
+            _stintLaps = 0;
+        }
         _wasOnPitRoad = onPit;
 
         // Lap crossing: sample fuel now, classify with the flags gathered over the lap.
@@ -103,8 +136,17 @@ public sealed class FuelModel
                 if (used > 0.05f && used < 60f)   // negative = refueled mid-lap; huge = tow/reset
                 {
                     if (_touchedPit) { }          // in/out laps pollute the per-lap number
-                    else if (_sawYellow) _yellowEwma = Ewma(_yellowEwma, used);
-                    else { _greenEwma = Ewma(_greenEwma, used); GreenLaps++; }
+                    else
+                    {
+                        if (_sawYellow) _yellowEwma = Ewma(_yellowEwma, used);
+                        else { _greenEwma = Ewma(_greenEwma, used); GreenLaps++; }
+                        // Rolling table stats count every racing lap (green or yellow); only
+                        // pit in/out laps are excluded above.
+                        _recent.Add(used);
+                        if (_recent.Count > 20) _recent.RemoveAt(0);
+                        _stintUsed += used;
+                        _stintLaps++;
+                    }
                 }
                 _pendingTime = true;
                 _pendingInOut = _touchedPit;
@@ -188,5 +230,8 @@ public sealed class FuelModel
         _fillRate = _recentFill = _pitLoss = -1;
         _prevInOutTime = 0;
         _stintBounds.Clear();
+        _recent.Clear();
+        _stintUsed = 0;
+        _stintLaps = 0;
     }
 }

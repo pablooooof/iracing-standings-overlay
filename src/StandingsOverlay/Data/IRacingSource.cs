@@ -42,6 +42,7 @@ public sealed class IRacingSource : ITelemetrySource
     public event Action<TrafficSnapshot>? TrafficReady;
     public event Action<RelativeSnapshot>? RelativeReady;
     public event Action<FuelSnapshot>? FuelReady;
+    public event Action<FuelTableSnapshot>? FuelTableReady;
     public event Action<LapLabSnapshot>? LapLabReady;
 
     public IRacingSource(Func<OverlayConfig> cfg) => _cfg = cfg;
@@ -72,6 +73,7 @@ public sealed class IRacingSource : ITelemetrySource
             TrafficReady?.Invoke(TrafficSnapshot.Empty);
             RelativeReady?.Invoke(RelativeSnapshot.Empty);
             FuelReady?.Invoke(FuelSnapshot.Empty);
+            FuelTableReady?.Invoke(FuelTableSnapshot.Empty);
             LapLabReady?.Invoke(LapLabSnapshot.Empty);
         };
         SnapshotReady?.Invoke(StandingsSnapshot.Disconnected);
@@ -134,6 +136,7 @@ public sealed class IRacingSource : ITelemetrySource
             TrafficReady?.Invoke(_traffic.Update(t, _roster, _history, _stints, cfg));
             RelativeReady?.Invoke(RelativeBuilder.Build(t, _roster, _stints, _driverSwap, _history, cfg));
             FuelReady?.Invoke(_planner.Build(t, _fuel, cfg));
+            FuelTableReady?.Invoke(FuelTableBuilder.Build(t, _fuel, cfg));
             LapLabReady?.Invoke(_lapLab.Build(t, _sectorClock, _roster, _refStore, cfg));
             _emitted = true;
 
