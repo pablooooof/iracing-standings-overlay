@@ -10,10 +10,12 @@ namespace StandingsOverlay.UI;
 
 /// <summary>
 /// The one piece of real chrome the app has: a normal (activatable, dark-title-bar) window that
-/// edits <see cref="OverlayConfig"/> live. Every widget already re-applies on
-/// <see cref="ConfigService.Changed"/>, so this just mutates <c>Current</c> and calls
-/// <see cref="ConfigService.SaveAndNotify"/> (debounced). Rows are built from small descriptor
-/// helpers — adding a setting is one line, and every control looks the same.
+/// edits <see cref="OverlayConfig"/> live. A switcher at the top picks which state it edits —
+/// In car (<see cref="ConfigService.Base"/>) or Spectating (<see cref="ConfigService.SpectateEffective"/>,
+/// a sparse override layer over the base) — held in <c>_edit</c>; every Build* method reads/writes it.
+/// Every widget re-applies on <see cref="ConfigService.Changed"/>, so this just mutates <c>_edit</c>
+/// and calls <see cref="ConfigService.SaveProfileAndNotify"/> (debounced). Rows are built from small
+/// descriptor helpers — adding a setting is one line, and every control looks the same.
 /// </summary>
 public partial class SettingsWindow : Window
 {
@@ -35,13 +37,19 @@ public partial class SettingsWindow : Window
 
     private string _section = "General";
 
+    // Which state the settings window is currently EDITING (independent of which is live-active).
+    // The switcher at the top of the page drives it; every Build* method reads/writes _edit.
+    private bool _editingSpectate;
+    private OverlayConfig _edit;
+
     public SettingsWindow(ConfigService cfg, bool editMode)
     {
         InitializeComponent();
         _cfg = cfg;
         _editMode = editMode;
-        // Edits go to whichever profile is active when the window opens; make that visible.
-        if (cfg.Spectating) Title += " — spectate profile";
+        // Open on whichever state is live, so what you see matches the car/spectate context you're in.
+        _editingSpectate = cfg.Spectating;
+        _edit = EditTarget();
 
         // Normal priority (a plain DispatcherTimer defaults to Background): the overlay widgets
         // dispatch their repaints at Background, so a Background save timer would be starved by a
@@ -49,11 +57,11 @@ public partial class SettingsWindow : Window
         _saveTimer = new DispatcherTimer(DispatcherPriority.Normal) { Interval = TimeSpan.FromMilliseconds(140) };
         _saveTimer.Tick += (_, _) => Flush();
 
-        // Section pages capture the profile objects in closures, so a profile swap (or an
-        // external edit replacing Current) would leave the open page editing a stale instance —
-        // rebuild the visible section against the new one. SaveAndNotify keeps the instance,
-        // so ordinary in-app edits don't rebuild.
-        _builtAgainst = cfg.Current;
+        // Section pages capture the edit-target object in closures, so a live state swap (or an
+        // external edit replacing the base) can leave the open page editing a stale instance —
+        // rebuild the visible section against the new one. Ordinary in-app saves keep the instance,
+        // so they don't rebuild.
+        _builtAgainst = _edit;
         cfg.Changed += OnProfileMaybeSwapped;
         SourceInitialized += (_, _) => Win32.UseDarkTitleBar(this);
         // Shown at startup alongside the topmost overlay widgets and (usually) a running,
@@ -62,9 +70,63 @@ public partial class SettingsWindow : Window
         Loaded += (_, _) => BringToFront();
         Closed += (_, _) => { _cfg.Changed -= OnProfileMaybeSwapped; Flush(); };   // never drop a pending edit
 
+        BuildStateSwitch();
+        UpdateInheritBanner();
+
         foreach (var name in new[] { "General", "Standings", "Relative", "Traffic", "Fuel", "Lap Lab", "About" })
             Nav.Items.Add(name);
         Nav.SelectedIndex = 0;
+    }
+
+    // ---- state (in-car / spectating) editing target ---------------------
+
+    /// <summary>The config instance the current state edits: the base while editing In car, the
+    /// effective spectate config (base + overrides) while editing Spectating.</summary>
+    private OverlayConfig EditTarget() => _editingSpectate ? _cfg.SpectateEffective : _cfg.Base;
+
+    private void BuildStateSwitch()
+    {
+        void Add(string text, bool spectate)
+        {
+            var rb = new RadioButton
+            {
+                Style = (Style)FindResource("Segment"), Content = text, GroupName = "statesel",
+                IsChecked = _editingSpectate == spectate,
+            };
+            rb.Checked += (_, _) => SetEditTarget(spectate);
+            StateSwitchHost.Children.Add(rb);
+        }
+        Add("In car", false);
+        Add("Spectating", true);
+    }
+
+    /// <summary>Retarget the whole editor to a state. Flushes pending edits to the OLD target first,
+    /// then rebuilds the visible section against the new one.</summary>
+    private void SetEditTarget(bool spectate)
+    {
+        if (_editingSpectate == spectate) return;
+        Flush();                       // commit anything pending to the state we're leaving
+        _editingSpectate = spectate;
+        _edit = EditTarget();
+        _builtAgainst = _edit;
+        UpdateInheritBanner();
+        OnNavChanged(Nav, null!);      // rebuild against the new target instance
+    }
+
+    private void UpdateInheritBanner()
+    {
+        // Contextual footer reset: defaults while editing In car, inherit-from-In-car while spectating.
+        ResetButton.Content = _editingSpectate ? "Reset section to In car" : "Reset section";
+        if (!_editingSpectate)
+        {
+            InheritBanner.Visibility = Visibility.Collapsed;
+            return;
+        }
+        int n = _cfg.SpectateOverrideCount;
+        InheritBannerText.Text = n == 0
+            ? "Spectating — every setting currently follows In car. Change anything here to override it for spectating only."
+            : $"Spectating — {n} setting{(n == 1 ? "" : "s")} overridden. Everything else follows In car; change In car and these follow along.";
+        InheritBanner.Visibility = Visibility.Visible;
     }
 
     /// <summary>Restore (if minimized) and take focus/activation. Called on Loaded so this normal,
@@ -139,18 +201,24 @@ public partial class SettingsWindow : Window
         _saveTimer.Stop();
         if (!_dirty) return;
         _dirty = false;
-        _cfg.SaveAndNotify();
+        _cfg.SaveProfileAndNotify(_editingSpectate);   // persist to the state we're editing
+        UpdateInheritBanner();                         // override count may have changed
     }
 
     private OverlayConfig? _builtAgainst;
 
+    /// <summary>A live state change (in car ↔ spectating) or an external file edit can replace the
+    /// instance our edit target points at. Our own saves keep the instance, so those don't rebuild;
+    /// a genuine swap does. The edit target itself is user-chosen and does NOT jump with live state.</summary>
     private void OnProfileMaybeSwapped(OverlayConfig cfg)
     {
-        if (ReferenceEquals(cfg, _builtAgainst)) return;
         Dispatcher.BeginInvoke(() =>
         {
-            _builtAgainst = _cfg.Current;
-            Title = "Standings Overlay — Settings" + (_cfg.Spectating ? " — spectate profile" : "");
+            var target = EditTarget();
+            UpdateInheritBanner();
+            if (ReferenceEquals(target, _edit)) return;
+            _edit = target;
+            _builtAgainst = target;
             OnNavChanged(Nav, null!);   // rebuild the visible section against the new instance
         });
     }
@@ -197,11 +265,21 @@ public partial class SettingsWindow : Window
         PageBody.Children.Add(Toggle("Start with Windows", "Launch the overlay automatically when you log in.",
             AutoStart.IsEnabled, AutoStart.Set));
 
-        var c = _cfg.Current;
+        var c = _edit;
         PageBody.Children.Add(Toggle("Check for updates at launch", "One request to GitHub for the latest release; a banner appears here if newer. Never downloads anything.",
             () => c.CheckForUpdates, v => c.CheckForUpdates = v));
         PageBody.Children.Add(Slider("Refresh rate", "Snapshots per second. Rendering still only happens on change.",
             1, 10, 1, () => c.UpdateHz, v => c.UpdateHz = (int)v, v => $"{v:0} Hz"));
+
+        // Spectating: a one-click way to line the widgets up with the in-car layout instead of
+        // dragging each one again. Positions are just settings, so this writes overrides like any edit.
+        if (_editingSpectate)
+        {
+            PageBody.Children.Add(Subhead("Spectating layout"));
+            PageBody.Children.Add(ButtonRow("Copy widget positions from In car",
+                "Move every widget to where it sits in your in-car profile.", "Copy layout",
+                () => Apply(() => CopyPositions(_cfg.Base, _edit))));
+        }
 
         PageBody.Children.Add(Subhead("Visibility"));
         PageBody.Children.Add(Toggle("Hide when iRacing isn't focused",
@@ -221,7 +299,7 @@ public partial class SettingsWindow : Window
 
     private void BuildStandings()
     {
-        var c = _cfg.Current;
+        var c = _edit;
 
         PageBody.Children.Add(Subhead("Layout"));
         PageBody.Children.Add(Slider("Size", "Scales the whole standings table.", 0.6, 2.0, 0.05,
@@ -295,9 +373,9 @@ public partial class SettingsWindow : Window
         host.Children.Clear();
         var s = session switch
         {
-            "Qualify" => _cfg.Current.Qualify,
-            "Practice" => _cfg.Current.Practice,
-            _ => _cfg.Current.Race,
+            "Qualify" => _edit.Qualify,
+            "Practice" => _edit.Practice,
+            _ => _edit.Race,
         };
         void T(string label, string? hint, Func<bool> get, Action<bool> set) =>
             host.Children.Add(Toggle(label, hint, get, set));
@@ -327,7 +405,7 @@ public partial class SettingsWindow : Window
 
     private void BuildRelative()
     {
-        var r = _cfg.Current.Relative;
+        var r = _edit.Relative;
         var body = Master("Show the relative box", "Cars just ahead and behind you on track.",
             () => r.Enabled, v => r.Enabled = v);
 
@@ -344,7 +422,7 @@ public partial class SettingsWindow : Window
         body.Children.Add(Toggle("License", null, () => r.ShowLicense, v => r.ShowLicense = v));
         body.Children.Add(Toggle("Stint age", "STn = laps since their last stop; green while fresh.", () => r.ShowStintAge, v => r.ShowStintAge = v));
         body.Children.Add(Toggle("Tire-change inference", "ST8+ = last stop took no tires (from stop lengths; needs fuel-and-tires-separate rules).",
-            () => _cfg.Current.InferTireChanges, v => _cfg.Current.InferTireChanges = v));
+            () => _edit.InferTireChanges, v => _edit.InferTireChanges = v));
         body.Children.Add(Toggle("Last lap", null, () => r.ShowLastLap, v => r.ShowLastLap = v));
         body.Children.Add(Toggle("Pace arrow", "Their recent pace vs yours.", () => r.ShowPace, v => r.ShowPace = v));
         body.Children.Add(Toggle("Closing rate", "s/lap the gap to you is closing — amber = a car behind is catching you, green = you're catching one ahead. Only shows real movers.", () => r.ShowClosing, v => r.ShowClosing = v));
@@ -362,7 +440,7 @@ public partial class SettingsWindow : Window
 
     private void BuildTraffic()
     {
-        var t = _cfg.Current.Traffic;
+        var t = _edit.Traffic;
         var body = Master("Enable traffic alerts", "Audio + visual warning before faster traffic arrives.",
             () => t.Enabled, v => t.Enabled = v);
 
@@ -427,7 +505,7 @@ public partial class SettingsWindow : Window
 
     private void BuildFuel()
     {
-        var f = _cfg.Current.Fuel;
+        var f = _edit.Fuel;
         var body = Master("Show fuel & strategy", "Live burn, laps in the tank, and endurance stint bars.",
             () => f.Enabled, v => f.Enabled = v);
 
@@ -456,7 +534,7 @@ public partial class SettingsWindow : Window
 
     private void BuildFuelTable()
     {
-        var ft = _cfg.Current.FuelTable;
+        var ft = _edit.FuelTable;
         var body = Master("Show fuel table",
             "A separate widget: Last / last-5 / last-10 / stint / target consumption, laps to empty, and a live target tracker. Works in practice and race.",
             () => ft.Enabled, v => ft.Enabled = v);
@@ -555,7 +633,7 @@ public partial class SettingsWindow : Window
 
     private void BuildLapLab()
     {
-        var l = _cfg.Current.LapLab;
+        var l = _edit.LapLab;
         var body = Master("Show lap lab", "Every lap a row, official sectors as columns, gaps vs a reference. Hidden in races.",
             () => l.Enabled, v => l.Enabled = v);
 
@@ -722,6 +800,14 @@ public partial class SettingsWindow : Window
         return body;
     }
 
+    /// <summary>A row whose control is a single action button.</summary>
+    private FrameworkElement ButtonRow(string label, string? hint, string buttonText, Action onClick)
+    {
+        var btn = new Button { Content = buttonText, Style = (Style)FindResource("LinkButton") };
+        btn.Click += (_, _) => onClick();
+        return Row(label, hint, btn);
+    }
+
     private FrameworkElement Subhead(string text) => new TextBlock
     {
         Text = text.ToUpperInvariant(), Foreground = Dim, FontSize = 11, FontWeight = FontWeights.SemiBold,
@@ -737,35 +823,37 @@ public partial class SettingsWindow : Window
 
     private void OnResetSection(object sender, RoutedEventArgs e)
     {
-        var c = _cfg.Current;
+        var c = _edit;
+        // While editing Spectating, "reset" means inherit from In car (copy the base values, which
+        // the diff then drops as overrides). While editing In car, it resets to app defaults.
+        var src = _editingSpectate ? _cfg.Base : new OverlayConfig();
         switch (_section)
         {
             case "General":
-                var d = new OverlayConfig();
-                c.UpdateHz = d.UpdateHz; c.Opacity = d.Opacity; c.FontSize = d.FontSize;
-                c.BackgroundColor = d.BackgroundColor; c.AccentColor = d.AccentColor; c.HighlightColor = d.HighlightColor;
+                c.UpdateHz = src.UpdateHz; c.Opacity = src.Opacity; c.FontSize = src.FontSize;
+                c.BackgroundColor = src.BackgroundColor; c.AccentColor = src.AccentColor; c.HighlightColor = src.HighlightColor;
                 break;
             case "Standings":
-                var s = new OverlayConfig();
-                c.Scale = s.Scale; c.NameColumnWidth = s.NameColumnWidth; c.HeaderFontSize = s.HeaderFontSize;
-                c.SmoothGaps = s.SmoothGaps; c.ShowRejoinState = s.ShowRejoinState; c.StatusStyle = s.StatusStyle;
-                c.DriversAtTop = s.DriversAtTop; c.DriversAhead = s.DriversAhead; c.DriversBehind = s.DriversBehind;
-                c.MinLeadingCars = s.MinLeadingCars; c.TyreSwitchDisplay = s.TyreSwitchDisplay;
-                c.OtherClassesDriversAtTop = s.OtherClassesDriversAtTop; c.DeltaLaps = s.DeltaLaps;
-                c.ShowColumnHeader = s.ShowColumnHeader; c.QualifyShowFullClass = s.QualifyShowFullClass;
-                c.ShowSof = s.ShowSof; c.ShowRealClock = s.ShowRealClock; c.ShowTimeOfDay = s.ShowTimeOfDay;
-                c.ShowTrackTemp = s.ShowTrackTemp; c.ShowTrackTempDecimals = s.ShowTrackTempDecimals;
-                c.ShowIncidents = s.ShowIncidents; c.ShowWeather = s.ShowWeather; c.AbbreviateWetness = s.AbbreviateWetness;
-                c.WeatherAlertSec = s.WeatherAlertSec; c.TyreSwitchAlertSec = s.TyreSwitchAlertSec; c.ShowWind = s.ShowWind;
-                c.GapPrecision = s.GapPrecision; c.IntervalPrecision = s.IntervalPrecision; c.LapTimePrecision = s.LapTimePrecision;
-                c.DeltaPrecision = s.DeltaPrecision; c.QualifyGapPrecision = s.QualifyGapPrecision;
-                c.Race = SessionColumns.RaceDefaults(); c.Qualify = SessionColumns.QualifyDefaults(); c.Practice = SessionColumns.PracticeDefaults();
+                c.Scale = src.Scale; c.NameColumnWidth = src.NameColumnWidth; c.HeaderFontSize = src.HeaderFontSize;
+                c.SmoothGaps = src.SmoothGaps; c.ShowRejoinState = src.ShowRejoinState; c.StatusStyle = src.StatusStyle;
+                c.DriversAtTop = src.DriversAtTop; c.DriversAhead = src.DriversAhead; c.DriversBehind = src.DriversBehind;
+                c.MinLeadingCars = src.MinLeadingCars; c.TyreSwitchDisplay = src.TyreSwitchDisplay;
+                c.OtherClassesDriversAtTop = src.OtherClassesDriversAtTop; c.DeltaLaps = src.DeltaLaps;
+                c.ShowColumnHeader = src.ShowColumnHeader; c.QualifyShowFullClass = src.QualifyShowFullClass;
+                c.ShowSof = src.ShowSof; c.ShowRealClock = src.ShowRealClock; c.ShowTimeOfDay = src.ShowTimeOfDay;
+                c.ShowTrackTemp = src.ShowTrackTemp; c.ShowTrackTempDecimals = src.ShowTrackTempDecimals;
+                c.ShowIncidents = src.ShowIncidents; c.ShowWeather = src.ShowWeather; c.AbbreviateWetness = src.AbbreviateWetness;
+                c.WeatherAlertSec = src.WeatherAlertSec; c.TyreSwitchAlertSec = src.TyreSwitchAlertSec; c.ShowWind = src.ShowWind;
+                c.GapPrecision = src.GapPrecision; c.IntervalPrecision = src.IntervalPrecision; c.LapTimePrecision = src.LapTimePrecision;
+                c.DeltaPrecision = src.DeltaPrecision; c.QualifyGapPrecision = src.QualifyGapPrecision;
+                c.Race = JsonClone(src.Race); c.Qualify = JsonClone(src.Qualify); c.Practice = JsonClone(src.Practice);
                 break;
-            // Widget sections keep their on-screen position; only behavior resets.
-            case "Relative": c.Relative = KeepPos(new RelativeConfig(), c.Relative.X, c.Relative.Y); break;
-            case "Traffic": c.Traffic = KeepPos(new TrafficConfig(), c.Traffic.X, c.Traffic.Y); break;
-            case "Fuel": c.Fuel = KeepPos(new FuelConfig(), c.Fuel.X, c.Fuel.Y); break;
-            case "Lap Lab": c.LapLab = KeepPos(new LapLabConfig(), c.LapLab.X, c.LapLab.Y); break;
+            // Widget sections: resetting In car keeps the on-screen position (defaults only reset
+            // behavior); resetting Spectating fully inherits In car, position included.
+            case "Relative": c.Relative = _editingSpectate ? JsonClone(src.Relative) : KeepPos(new RelativeConfig(), c.Relative.X, c.Relative.Y); break;
+            case "Traffic": c.Traffic = _editingSpectate ? JsonClone(src.Traffic) : KeepPos(new TrafficConfig(), c.Traffic.X, c.Traffic.Y); break;
+            case "Fuel": c.Fuel = _editingSpectate ? JsonClone(src.Fuel) : KeepPos(new FuelConfig(), c.Fuel.X, c.Fuel.Y); break;
+            case "Lap Lab": c.LapLab = _editingSpectate ? JsonClone(src.LapLab) : KeepPos(new LapLabConfig(), c.LapLab.X, c.LapLab.Y); break;
             case "About": return;
         }
         Apply(() => { });          // mark dirty + schedule save
@@ -776,6 +864,22 @@ public partial class SettingsWindow : Window
     private static TrafficConfig KeepPos(TrafficConfig t, double x, double y) { t.X = x; t.Y = y; return t; }
     private static FuelConfig KeepPos(FuelConfig f, double x, double y) { f.X = x; f.Y = y; return f; }
     private static LapLabConfig KeepPos(LapLabConfig l, double x, double y) { l.X = x; l.Y = y; return l; }
+
+    /// <summary>Deep copy via a JSON round-trip (independent instance, safe to assign into _edit).</summary>
+    private static T JsonClone<T>(T value) =>
+        System.Text.Json.JsonSerializer.Deserialize<T>(System.Text.Json.JsonSerializer.Serialize(value))!;
+
+    /// <summary>Copy every widget's on-screen position from one profile to another (used by the
+    /// spectating "Copy layout from In car" button). Positions are ordinary settings.</summary>
+    private static void CopyPositions(OverlayConfig from, OverlayConfig to)
+    {
+        to.X = from.X; to.Y = from.Y;
+        to.Relative.X = from.Relative.X; to.Relative.Y = from.Relative.Y;
+        to.Traffic.X = from.Traffic.X; to.Traffic.Y = from.Traffic.Y;
+        to.Fuel.X = from.Fuel.X; to.Fuel.Y = from.Fuel.Y;
+        to.FuelTable.X = from.FuelTable.X; to.FuelTable.Y = from.FuelTable.Y;
+        to.LapLab.X = from.LapLab.X; to.LapLab.Y = from.LapLab.Y;
+    }
 
     private void OnClose(object sender, RoutedEventArgs e) => Close();
 }

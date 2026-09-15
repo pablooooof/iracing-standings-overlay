@@ -151,6 +151,19 @@ Ideas and requests captured during rapid iteration so nothing is lost. Roughly o
   player is out of the car (`IsOnTrack`, 5 s debounce, tow-guarded): every setting including
   widget positions can differ. Cloned from the driving profile on first use (seeded with a
   wider standings view); tune it live while spectating, edits persist to the active profile.
+- [x] **Spectate profile → sparse inherit/override (2026-09-14)** — the full-clone above silently
+  drifted: a race dropping you out of the car reflowed everything (auto-seeded wider) and there was
+  no UI to see or edit the hidden second profile. Reworked into ONE base (`config.json`) + a sparse
+  override layer (`config.spectate.json`) holding **only** the keys deliberately changed while
+  spectating; the effective config is base ⊕ overrides, so un-overridden settings follow the in-car
+  value live. Inheritance is by value-diff on save (`ConfigService.Merge`/`Diff`, System.Text.Json
+  nodes); the fuel target stays global (pushed to base, never an override). Settings window got a
+  top-of-page **In car | Spectating** state switcher (`_edit` = base or `SpectateEffective`), an
+  inheritance banner with the override count, a contextual "Reset section to In car", and a "Copy
+  widget positions from In car" button. Old full-clone files auto-normalize to sparse on load
+  (`.bak` kept once). Decided against the full 2×3 state×session grid — session (race/qual/practice)
+  still varies only the standings columns as before. Tests: `ConfigProfileTests` (4). Fast-follow:
+  per-row override dots (v1 shows override count at section level only).
 - [x] **Tire-change inference (2026-07-11, `InferTireChanges`)** — no SDK channel exists for
   opponents' tire sets, but under fuel-and-tires-separate rules service is sequential: a tire
   stop sits ~10s+ longer than the car's own fuel-fill baseline (cheapest observed sec/stint-lap).

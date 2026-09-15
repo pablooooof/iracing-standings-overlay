@@ -1,5 +1,6 @@
 using System.IO;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 
 namespace StandingsOverlay.Config;
@@ -382,13 +383,21 @@ public sealed class SessionColumns
 }
 
 /// <summary>
-/// Owns the config instances, persists them next to the exe, and hot-reloads on external edits.
-/// Two profiles: config.json (driving) and config.spectate.json, active while the player is out
-/// of the car (teammate stint, garage, spectating — see IRacingSource.DrivingChanged). The
-/// spectate file is cloned from the driving profile on first use, seeded with a wider standings
-/// view, so EVERY setting — widget positions, columns, row counts — can differ per profile.
-/// <see cref="Current"/> is always the active profile; swapping raises <see cref="Changed"/> so
-/// all widgets re-apply, exactly like a settings edit.
+/// Owns the config, persists it next to the exe, and hot-reloads on external edits.
+///
+/// There are two "states": <b>In car</b> and <b>Spectating</b> (out of the car — teammate stint,
+/// garage, spectating; see IRacingSource.DrivingChanged). Rather than two full, independently
+/// drifting copies, this holds ONE base config (<c>config.json</c>) plus a <b>sparse override
+/// layer</b> for spectating (<c>config.spectate.json</c>) that stores ONLY the settings you've
+/// deliberately changed while out of the car. The effective spectate config is the base with those
+/// overrides patched in, so anything you HAVEN'T overridden follows the in-car value live — no more
+/// silent divergence when a race drops you out of the car.
+///
+/// Inheritance is by value-diff: on save while spectating, the effective config is diffed against
+/// the base and only the differing keys are stored. A spectate value equal to the base isn't
+/// stored (it inherits). <see cref="Current"/> is always the active effective config; the settings
+/// window can edit either state directly via <see cref="Base"/> / <see cref="SpectateEffective"/>
+/// and <see cref="SaveProfileAndNotify"/>.
 /// </summary>
 public sealed class ConfigService : IDisposable
 {
@@ -396,22 +405,37 @@ public sealed class ConfigService : IDisposable
     private readonly string _spectatePath;
     private readonly FileSystemWatcher? _watcher;
     private DateTime _lastSelfWrite = DateTime.MinValue;
-    private OverlayConfig _driving;
-    private OverlayConfig? _spectate;
 
-    public OverlayConfig Current { get; private set; }
+    private OverlayConfig _base;
+    private JsonObject _overrides;              // sparse: only the spectate keys that differ from base
+    private OverlayConfig _effectiveSpectate;   // = base ⊕ overrides
+
+    /// <summary>The active effective config (what the overlays render): base while in the car,
+    /// base-patched-with-overrides while spectating.</summary>
+    public OverlayConfig Current => Spectating ? _effectiveSpectate : _base;
+
+    /// <summary>The in-car profile — the base every setting falls back to.</summary>
+    public OverlayConfig Base => _base;
+
+    /// <summary>The spectate profile as effective values (base + overrides), editable in place.
+    /// Saving diffs it back against the base to keep only the deliberate overrides.</summary>
+    public OverlayConfig SpectateEffective => _effectiveSpectate;
+
     public bool Spectating { get; private set; }
+
+    /// <summary>How many individual settings the spectate profile currently overrides.</summary>
+    public int SpectateOverrideCount => CountLeaves(_overrides);
+
     public event Action<OverlayConfig>? Changed;
 
     public ConfigService(string path)
     {
         _path = path;
         _spectatePath = Path.Combine(Path.GetDirectoryName(path) ?? "", "config.spectate.json");
-        _driving = OverlayConfig.Load(path);
-        if (File.Exists(_spectatePath)) _spectate = OverlayConfig.Load(_spectatePath);
-        Current = _driving;
-        if (!File.Exists(path))
-            Current.Save(path);
+        _base = OverlayConfig.Load(path);
+        _overrides = LoadOverrides();          // normalizes a pre-inheritance full clone to sparse
+        _effectiveSpectate = BuildEffective();
+        if (!File.Exists(path)) _base.Save(path);
 
         var dir = Path.GetDirectoryName(path);
         if (dir is not null)
@@ -426,30 +450,47 @@ public sealed class ConfigService : IDisposable
         }
     }
 
-    /// <summary>Switch between the driving and spectate profiles. Clones the driving profile
-    /// into config.spectate.json on first use (nothing jumps, then the user tunes it live).</summary>
+    /// <summary>Switch the active state. Both profiles are always ready (inheritance means the
+    /// spectate profile needs no lazy seeding), so this just swaps which one is active and re-applies.</summary>
     public void SetSpectating(bool spectating)
     {
         if (Spectating == spectating) return;
         Spectating = spectating;
-        if (spectating && _spectate is null)
-        {
-            _spectate = _driving.Clone();
-            // Out of the car you're a crew chief: default to the field, not a window.
-            _spectate.DriversAhead = Math.Max(_spectate.DriversAhead, 8);
-            _spectate.DriversBehind = Math.Max(_spectate.DriversBehind, 8);
-            _spectate.OtherClassesDriversAtTop = Math.Max(_spectate.OtherClassesDriversAtTop, 2);
-            _lastSelfWrite = DateTime.UtcNow;
-            _spectate.Save(_spectatePath);
-        }
-        Current = spectating ? _spectate! : _driving;
         Log.Write($"config profile: {(spectating ? "spectate" : "driving")}");
         Changed?.Invoke(Current);
     }
 
+    // ---- inheritance engine ---------------------------------------------
+
+    private OverlayConfig BuildEffective() => FromObject(Merge(ToObject(_base), _overrides));
+
+    /// <summary>Load the spectate override layer, normalizing any older full-clone spectate file
+    /// (pre-inheritance) into the sparse format so inheritance takes effect immediately.</summary>
+    private JsonObject LoadOverrides()
+    {
+        if (!File.Exists(_spectatePath)) return new JsonObject();
+        try
+        {
+            var raw = JsonNode.Parse(File.ReadAllText(_spectatePath)) as JsonObject ?? new JsonObject();
+            var baseObj = ToObject(_base);
+            var sparse = Diff(Merge(baseObj, raw), baseObj);
+            StripSharedTargetKeys(sparse);     // the fuel target is global; never a spectate override
+            if (!JsonNode.DeepEquals(sparse, raw))
+            {
+                // Converting a legacy full clone: keep the original once so nothing is lost.
+                try { if (!File.Exists(_spectatePath + ".bak")) File.Copy(_spectatePath, _spectatePath + ".bak"); }
+                catch { /* best effort */ }
+                _lastSelfWrite = DateTime.UtcNow;
+                WriteOverridesFile(sparse);
+            }
+            return sparse;
+        }
+        catch { return new JsonObject(); }
+    }
+
     private void OnFileChanged(object sender, FileSystemEventArgs e)
     {
-        // Ignore the echo of our own Save(); editors also fire multiple events, so debounce.
+        // Ignore the echo of our own writes; editors also fire multiple events, so debounce.
         if ((DateTime.UtcNow - _lastSelfWrite).TotalMilliseconds < 500) return;
         Thread.Sleep(100); // let the editor finish writing
         bool spectateFile = string.Equals(e.Name, Path.GetFileName(_spectatePath),
@@ -457,52 +498,146 @@ public sealed class ConfigService : IDisposable
         if (spectateFile)
         {
             if (!File.Exists(_spectatePath)) return;
-            _spectate = OverlayConfig.Load(_spectatePath);
+            _overrides = LoadOverrides();
         }
         else
         {
-            _driving = OverlayConfig.Load(_path);
+            _base = OverlayConfig.Load(_path);
         }
-        if (spectateFile != Spectating) return;   // inactive profile edited: reloaded silently
-        Current = spectateFile ? _spectate! : _driving;
+        _effectiveSpectate = BuildEffective();   // base change must ripple through inherited keys
         Changed?.Invoke(Current);
     }
 
+    /// <summary>Persist the ACTIVE profile (used by widget drags in edit mode): base while in the
+    /// car, the spectate overrides while spectating.</summary>
     public void Save()
     {
-        MirrorSharedTarget();
-        _lastSelfWrite = DateTime.UtcNow;
-        Current.Save(Spectating ? _spectatePath : _path);
+        if (Spectating) SaveSpectate();
+        else SaveBase();
     }
 
-    /// <summary>The fuel target (laps / L-per-lap / which drives which) is a race-wide strategy
-    /// decision, not a per-view preference — keep it identical across the driving and spectate
-    /// profiles so setting it in the car also applies while watching a teammate's stint (and vice
-    /// versa). Everything else about the fuel table (position, enabled, which rows) stays
-    /// per-profile. Only writes the other file when a value actually changed.</summary>
-    private void MirrorSharedTarget()
-    {
-        var other = ReferenceEquals(Current, _driving) ? _spectate : _driving;
-        if (other is null || ReferenceEquals(other, Current)) return;
-        var a = Current.FuelTable;
-        var b = other.FuelTable;
-        if (b.TargetLaps == a.TargetLaps && b.TargetPerLap == a.TargetPerLap && b.TargetMode == a.TargetMode)
-            return;
-        b.TargetLaps = a.TargetLaps;
-        b.TargetPerLap = a.TargetPerLap;
-        b.TargetMode = a.TargetMode;
-        _lastSelfWrite = DateTime.UtcNow;
-        other.Save(ReferenceEquals(other, _driving) ? _path : _spectatePath);
-    }
-
-    /// <summary>Persist an in-app edit (the settings window) and push it to every widget.
-    /// <see cref="Save"/> alone suppresses the watcher echo, so it would NOT re-apply live —
-    /// this raises <see cref="Changed"/> directly. External file edits still flow via the watcher.</summary>
     public void SaveAndNotify()
     {
         Save();
         Changed?.Invoke(Current);
     }
+
+    /// <summary>Persist one specific profile — the settings window edits either state regardless of
+    /// which is live. Raises <see cref="Changed"/> so the (active) overlays re-apply.</summary>
+    public void SaveProfileAndNotify(bool spectate)
+    {
+        if (spectate) SaveSpectate();
+        else SaveBase();
+        Changed?.Invoke(Current);
+    }
+
+    private void SaveBase()
+    {
+        _lastSelfWrite = DateTime.UtcNow;
+        _base.Save(_path);
+        _effectiveSpectate = BuildEffective();   // inherited spectate keys follow the new base
+    }
+
+    private void SaveSpectate()
+    {
+        // The fuel target (laps / L-per-lap / which drives which) is a race-wide strategy decision,
+        // not a per-view preference: keep it in the base so it's shared across both states. Push any
+        // spectate-side change down into the base, then never store it as an override.
+        if (SyncSharedTargetToBase())
+        {
+            _lastSelfWrite = DateTime.UtcNow;
+            _base.Save(_path);
+        }
+        var sparse = Diff(ToObject(_effectiveSpectate), ToObject(_base));
+        StripSharedTargetKeys(sparse);
+        _overrides = sparse;
+        _lastSelfWrite = DateTime.UtcNow;
+        WriteOverridesFile(sparse);
+    }
+
+    private bool SyncSharedTargetToBase()
+    {
+        var a = _effectiveSpectate.FuelTable;
+        var b = _base.FuelTable;
+        if (b.TargetLaps == a.TargetLaps && b.TargetPerLap == a.TargetPerLap && b.TargetMode == a.TargetMode)
+            return false;
+        b.TargetLaps = a.TargetLaps;
+        b.TargetPerLap = a.TargetPerLap;
+        b.TargetMode = a.TargetMode;
+        return true;
+    }
+
+    private void WriteOverridesFile(JsonObject sparse) =>
+        File.WriteAllText(_spectatePath, sparse.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+
+    private static void StripSharedTargetKeys(JsonObject sparse)
+    {
+        if (sparse["FuelTable"] is not JsonObject ft) return;
+        ft.Remove(nameof(FuelTableConfig.TargetLaps));
+        ft.Remove(nameof(FuelTableConfig.TargetPerLap));
+        ft.Remove(nameof(FuelTableConfig.TargetMode));
+        if (ft.Count == 0) sparse.Remove("FuelTable");
+    }
+
+    // ---- JSON tree helpers ----------------------------------------------
+
+    private static JsonObject ToObject(OverlayConfig c) =>
+        JsonNode.Parse(JsonSerializer.Serialize(c))!.AsObject();
+
+    private static OverlayConfig FromObject(JsonObject o) =>
+        JsonSerializer.Deserialize<OverlayConfig>(o.ToJsonString(), NodeOpts) ?? new OverlayConfig();
+
+    /// <summary>Deep-merge <paramref name="over"/> onto a clone of <paramref name="baseObj"/>:
+    /// nested objects recurse, leaves replace.</summary>
+    private static JsonObject Merge(JsonObject baseObj, JsonObject over)
+    {
+        var result = baseObj.DeepClone().AsObject();
+        foreach (var (key, value) in over)
+        {
+            if (value is JsonObject oo && result[key] is JsonObject bo)
+                result[key] = Merge(bo, oo);
+            else
+                result[key] = value?.DeepClone();
+        }
+        return result;
+    }
+
+    /// <summary>Sparse diff: the keys of <paramref name="eff"/> whose values differ from
+    /// <paramref name="baseObj"/> (recursing into nested objects). Equal values are omitted, so
+    /// they inherit.</summary>
+    private static JsonObject Diff(JsonObject eff, JsonObject baseObj)
+    {
+        var result = new JsonObject();
+        foreach (var (key, value) in eff)
+        {
+            var b = baseObj[key];
+            if (value is JsonObject eo && b is JsonObject bo)
+            {
+                var child = Diff(eo, bo);
+                if (child.Count > 0) result[key] = child;
+            }
+            else if (b is null || !JsonNode.DeepEquals(value, b))
+            {
+                result[key] = value?.DeepClone();
+            }
+        }
+        return result;
+    }
+
+    private static int CountLeaves(JsonObject o)
+    {
+        int n = 0;
+        foreach (var (_, value) in o)
+            n += value is JsonObject child ? CountLeaves(child) : 1;
+        return n;
+    }
+
+    private static readonly JsonSerializerOptions NodeOpts = new()
+    {
+        ReadCommentHandling = JsonCommentHandling.Skip,
+        AllowTrailingCommas = true,
+        NumberHandling = JsonNumberHandling.AllowReadingFromString,
+    };
 
     public void Dispose() => _watcher?.Dispose();
 }
