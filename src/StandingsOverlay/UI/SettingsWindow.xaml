@@ -152,34 +152,6 @@
             </Setter>
         </Style>
 
-        <!-- Independent pill toggle (a restyled ToggleButton) for the per-box SHOW strip. -->
-        <Style x:Key="Pill" TargetType="ToggleButton">
-            <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="Foreground" Value="{StaticResource Dim}"/>
-            <Setter Property="Padding" Value="9,3"/>
-            <Setter Property="FontSize" Value="12"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="ToggleButton">
-                        <Border x:Name="Bd" Background="{StaticResource Control}" CornerRadius="5"
-                                Padding="{TemplateBinding Padding}" Margin="0,0,5,0">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="#4A4A58"/>
-                            </Trigger>
-                            <Trigger Property="IsChecked" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="{StaticResource Accent}"/>
-                                <Setter Property="Foreground" Value="#0C0C10"/>
-                                <Setter Property="FontWeight" Value="SemiBold"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
         <!-- Dark hex/text box. -->
         <Style x:Key="HexBox" TargetType="TextBox">
             <Setter Property="Background" Value="{StaticResource Control}"/>
@@ -279,40 +251,41 @@
             </Grid.RowDefinitions>
 
             <StackPanel Grid.Row="0" Margin="26,20,26,8">
-                <!-- Title row: section name left, the global "Move overlays" switch pinned right so
-                     it's reachable from every page (it's app edit mode, not a saved setting). -->
+                <!-- Title + subtitle on the left; two switches stacked on the right: enable THIS
+                     box (contextual, hidden on non-widget pages) and the global Move-overlays mode. -->
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
-                    <TextBlock x:Name="SectionTitle" FontSize="20" FontWeight="SemiBold"
-                               Foreground="{StaticResource Text}" VerticalAlignment="Center"/>
-                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                        <TextBlock Text="Move overlays" FontSize="12.5" Foreground="{StaticResource Dim}"
-                                   VerticalAlignment="Center" Margin="0,0,8,0"/>
-                        <CheckBox x:Name="MoveToggle" Style="{StaticResource Switch}"/>
+                    <StackPanel Grid.Column="0" Margin="0,0,16,0">
+                        <TextBlock x:Name="SectionTitle" FontSize="20" FontWeight="SemiBold"
+                                   Foreground="{StaticResource Text}"/>
+                        <TextBlock x:Name="SectionBlurb" Foreground="{StaticResource Dim}" FontSize="12.5"
+                                   TextWrapping="Wrap" Margin="0,3,0,0"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Top" Margin="0,2,0,0">
+                        <StackPanel x:Name="BoxToggleRow" Orientation="Horizontal"
+                                    HorizontalAlignment="Right" Margin="0,0,0,9">
+                            <TextBlock x:Name="BoxToggleLabel" FontSize="12.5" Foreground="{StaticResource Dim}"
+                                       VerticalAlignment="Center" Margin="0,0,8,0"/>
+                            <CheckBox x:Name="BoxToggle" Style="{StaticResource Switch}"/>
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                            <TextBlock Text="Move overlays" FontSize="12.5" Foreground="{StaticResource Dim}"
+                                       VerticalAlignment="Center" Margin="0,0,8,0"/>
+                            <CheckBox x:Name="MoveToggle" Style="{StaticResource Switch}"/>
+                        </StackPanel>
                     </StackPanel>
                 </Grid>
-                <TextBlock x:Name="SectionBlurb" Foreground="{StaticResource Dim}" FontSize="12.5"
-                           TextWrapping="Wrap" Margin="0,3,0,0"/>
 
                 <!-- State switcher: which of the two states these settings apply to. Populated in
                      code so it reuses the Segment style. -->
-                <StackPanel Orientation="Horizontal" Margin="0,12,0,0" VerticalAlignment="Center">
+                <StackPanel Orientation="Horizontal" Margin="0,14,0,0" VerticalAlignment="Center">
                     <TextBlock Text="EDITING" FontSize="11" FontWeight="SemiBold"
                                Foreground="{StaticResource Dim}" VerticalAlignment="Center"
                                Margin="0,0,10,0"/>
                     <StackPanel x:Name="StateSwitchHost" Orientation="Horizontal"/>
-                </StackPanel>
-
-                <!-- Per-box on/off, always visible so you can toggle any widget from any page.
-                     Reflects the state currently being edited; populated in code. -->
-                <StackPanel Orientation="Horizontal" Margin="0,9,0,0" VerticalAlignment="Center">
-                    <TextBlock Text="SHOW" FontSize="11" FontWeight="SemiBold"
-                               Foreground="{StaticResource Dim}" VerticalAlignment="Center"
-                               Margin="0,0,10,0"/>
-                    <StackPanel x:Name="BoxStripHost" Orientation="Horizontal"/>
                 </StackPanel>
 
                 <!-- Shown only when editing the Spectating state: what inherits vs overrides. -->

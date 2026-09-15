@@ -1,6 +1,5 @@
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using System.Windows.Threading;
 using StandingsOverlay.Config;
@@ -78,8 +77,11 @@ public partial class SettingsWindow : Window
         MoveToggle.Unchecked += (_, _) => { _editMode = false; if (!_suppressEdit) EditModeChanged?.Invoke(false); };
         _editToggle = MoveToggle;
 
+        // The contextual "show this box" switch is retargeted per section (ConfigureBoxToggle).
+        BoxToggle.Checked += (_, _) => OnBoxToggle(true);
+        BoxToggle.Unchecked += (_, _) => OnBoxToggle(false);
+
         BuildStateSwitch();
-        RefreshBoxStrip();
         UpdateInheritBanner();
 
         foreach (var name in new[] { "General", "Standings", "Relative", "Traffic", "Fuel", "Fuel Table", "Lap Lab", "About" })
@@ -87,41 +89,52 @@ public partial class SettingsWindow : Window
         Nav.SelectedIndex = 0;
     }
 
-    // ---- per-box on/off strip (always visible) --------------------------
+    // ---- contextual "show this box" toggle ------------------------------
 
-    // Each toggleable widget and how to read/write its Enabled flag on a given profile. The pill
-    // strip edits whichever state is currently selected, so a box can be on in the car and off
-    // while spectating (or vice versa). Standings has no Enable flag, so it isn't listed.
-    private static readonly (string label, Func<OverlayConfig, bool> get, Action<OverlayConfig, bool> set)[] BoxDefs =
+    private (Func<OverlayConfig, bool> get, Action<OverlayConfig, bool> set)? _currentBox;
+    private bool _suppressBoxToggle;
+
+    /// <summary>For a widget section, its enable label + how to read/write the box's Enabled flag on
+    /// a profile. Non-widget sections (General, Standings, About) return null — no box to toggle.</summary>
+    private static (string label, Func<OverlayConfig, bool> get, Action<OverlayConfig, bool> set)? BoxFor(string section) => section switch
     {
-        ("Relative",   c => c.Relative.Enabled,  (c, v) => c.Relative.Enabled = v),
-        ("Traffic",    c => c.Traffic.Enabled,   (c, v) => c.Traffic.Enabled = v),
-        ("Fuel",       c => c.Fuel.Enabled,      (c, v) => c.Fuel.Enabled = v),
-        ("Fuel Table", c => c.FuelTable.Enabled, (c, v) => c.FuelTable.Enabled = v),
-        ("Lap Lab",    c => c.LapLab.Enabled,    (c, v) => c.LapLab.Enabled = v),
+        "Relative"   => ("Show relative box",   c => c.Relative.Enabled,  (c, v) => c.Relative.Enabled = v),
+        "Traffic"    => ("Enable traffic alerts", c => c.Traffic.Enabled, (c, v) => c.Traffic.Enabled = v),
+        "Fuel"       => ("Show fuel & strategy", c => c.Fuel.Enabled,     (c, v) => c.Fuel.Enabled = v),
+        "Fuel Table" => ("Show fuel table",      c => c.FuelTable.Enabled, (c, v) => c.FuelTable.Enabled = v),
+        "Lap Lab"    => ("Show lap lab",         c => c.LapLab.Enabled,    (c, v) => c.LapLab.Enabled = v),
+        _ => null,
     };
 
-    private void RefreshBoxStrip()
+    /// <summary>Point the header box toggle at the current section (or hide it), and grey the page
+    /// body when that box is off. Called on every section (re)build and on a profile swap.</summary>
+    private void ConfigureBoxToggle(string section)
     {
-        BoxStripHost.Children.Clear();
-        foreach (var (label, get, set) in BoxDefs)
+        _suppressBoxToggle = true;
+        if (BoxFor(section) is { } b)
         {
-            var pill = new ToggleButton
-            {
-                Style = (Style)FindResource("Pill"), Content = label, IsChecked = get(_edit),
-            };
-            pill.Checked += (_, _) => ToggleBox(label, set, true);
-            pill.Unchecked += (_, _) => ToggleBox(label, set, false);
-            BoxStripHost.Children.Add(pill);
+            _currentBox = (b.get, b.set);
+            BoxToggleLabel.Text = b.label;
+            bool on = b.get(_edit);
+            BoxToggle.IsChecked = on;
+            BoxToggleRow.Visibility = Visibility.Visible;
+            PageBody.IsEnabled = on;
         }
+        else
+        {
+            _currentBox = null;
+            BoxToggleRow.Visibility = Visibility.Collapsed;
+            PageBody.IsEnabled = true;
+        }
+        _suppressBoxToggle = false;
     }
 
-    private void ToggleBox(string label, Action<OverlayConfig, bool> set, bool on)
+    private void OnBoxToggle(bool on)
     {
-        Apply(() => set(_edit, on));
+        if (_suppressBoxToggle || _currentBox is not { } b) return;
+        Apply(() => b.set(_edit, on));
+        PageBody.IsEnabled = on;
         UpdateInheritBanner();
-        // If that box's own section is open, rebuild it so its master toggle + greyed body match.
-        if (_section == label) OnNavChanged(Nav, null!);
     }
 
     // ---- state (in-car / spectating) editing target ---------------------
@@ -155,9 +168,8 @@ public partial class SettingsWindow : Window
         _editingSpectate = spectate;
         _edit = EditTarget();
         _builtAgainst = _edit;
-        RefreshBoxStrip();             // pills reflect the newly-selected state
         UpdateInheritBanner();
-        OnNavChanged(Nav, null!);      // rebuild against the new target instance
+        OnNavChanged(Nav, null!);      // rebuild (and retarget the box toggle) for the new state
     }
 
     private void UpdateInheritBanner()
@@ -262,9 +274,12 @@ public partial class SettingsWindow : Window
         Dispatcher.BeginInvoke(() =>
         {
             var target = EditTarget();
-            RefreshBoxStrip();          // enabled flags may have changed (external edit / state swap)
             UpdateInheritBanner();
-            if (ReferenceEquals(target, _edit)) return;
+            if (ReferenceEquals(target, _edit))
+            {
+                ConfigureBoxToggle(_section);   // enabled flag may have changed without a rebuild
+                return;
+            }
             _edit = target;
             _builtAgainst = target;
             OnNavChanged(Nav, null!);   // rebuild the visible section against the new instance
@@ -290,6 +305,8 @@ public partial class SettingsWindow : Window
             case "Lap Lab": SectionHeader("Lap Lab", "Practice lap table: your sectors against a reference lap. Testing, practice and qualifying only."); BuildLapLab(); break;
             case "About": SectionHeader("About", "Standings Overlay."); BuildAbout(); break;
         }
+
+        ConfigureBoxToggle(name);   // point the header "show this box" switch at this section
     }
 
     private void SectionHeader(string title, string blurb)
@@ -447,8 +464,7 @@ public partial class SettingsWindow : Window
     private void BuildRelative()
     {
         var r = _edit.Relative;
-        var body = Master("Show the relative box", "Cars just ahead and behind you on track.",
-            () => r.Enabled, v => r.Enabled = v);
+        var body = PageBody;   // enable toggle is in the header; content grays with the box
 
         body.Children.Add(Slider("Size", "Scales the whole relative box.", 0.6, 2.0, 0.05,
             () => r.Scale, v => r.Scale = v, v => $"{v * 100:0}%"));
@@ -482,8 +498,7 @@ public partial class SettingsWindow : Window
     private void BuildTraffic()
     {
         var t = _edit.Traffic;
-        var body = Master("Enable traffic alerts", "Audio + visual warning before faster traffic arrives.",
-            () => t.Enabled, v => t.Enabled = v);
+        var body = PageBody;
 
         body.Children.Add(Slider("Size", "Scales the whole traffic widget.", 0.6, 2.0, 0.05,
             () => t.Scale, v => t.Scale = v, v => $"{v * 100:0}%"));
@@ -547,8 +562,7 @@ public partial class SettingsWindow : Window
     private void BuildFuel()
     {
         var f = _edit.Fuel;
-        var body = Master("Show fuel & strategy", "Live burn, laps in the tank, and endurance stint bars.",
-            () => f.Enabled, v => f.Enabled = v);
+        var body = PageBody;
 
         body.Children.Add(Slider("Size", "Scales the whole fuel widget.", 0.6, 2.0, 0.05,
             () => f.Scale, v => f.Scale = v, v => $"{v * 100:0}%"));
@@ -574,9 +588,7 @@ public partial class SettingsWindow : Window
     private void BuildFuelTable()
     {
         var ft = _edit.FuelTable;
-        var body = Master("Show fuel table",
-            "Last / last-5 / last-10 / stint / target consumption, laps to empty, and a live target tracker. Works in practice and race.",
-            () => ft.Enabled, v => ft.Enabled = v);
+        var body = PageBody;
 
         body.Children.Add(Slider("Size", "Scales the whole fuel table.", 0.6, 2.0, 0.05,
             () => ft.Scale, v => ft.Scale = v, v => $"{v * 100:0}%"));
@@ -673,8 +685,7 @@ public partial class SettingsWindow : Window
     private void BuildLapLab()
     {
         var l = _edit.LapLab;
-        var body = Master("Show lap lab", "Every lap a row, official sectors as columns, gaps vs a reference. Hidden in races.",
-            () => l.Enabled, v => l.Enabled = v);
+        var body = PageBody;
 
         body.Children.Add(Slider("Size", "Scales the whole lap table.", 0.6, 2.0, 0.05,
             () => l.Scale, v => l.Scale = v, v => $"{v * 100:0}%"));
@@ -825,19 +836,6 @@ public partial class SettingsWindow : Window
         panel.Children.Add(swatch);
         panel.Children.Add(box);
         return Row(label, null, panel);
-    }
-
-    /// <summary>Prominent enable toggle at the top of a widget section; returns the body panel it
-    /// greys out when off.</summary>
-    private StackPanel Master(string label, string hint, Func<bool> get, Action<bool> set)
-    {
-        var body = new StackPanel();
-        // Keep the header SHOW strip in sync when a box is toggled from its own section.
-        PageBody.Children.Add(Toggle(label, hint, get, v => { set(v); body.IsEnabled = v; RefreshBoxStrip(); }, out _, strong: true));
-        PageBody.Children.Add(Divider());
-        body.IsEnabled = get();
-        PageBody.Children.Add(body);
-        return body;
     }
 
     /// <summary>A row whose control is a single action button.</summary>
