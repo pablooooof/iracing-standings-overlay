@@ -164,6 +164,12 @@ Ideas and requests captured during rapid iteration so nothing is lost. Roughly o
   (`.bak` kept once). Decided against the full 2×3 state×session grid — session (race/qual/practice)
   still varies only the standings columns as before. Tests: `ConfigProfileTests` (4). Fast-follow:
   per-row override dots (v1 shows override count at section level only).
+- [x] **Settings header controls + fuel split (2026-09-14)** — moved "Move overlays" out of the
+  General page into a persistent top-right switch on the header (reachable from every page; it owns
+  edit-mode mirroring now). Added an always-visible **SHOW** pill strip (Relative / Traffic / Fuel /
+  Fuel Table / Lap Lab) that toggles each box's `Enabled` on the state currently being edited, kept
+  in sync with each section's own master toggle. Split the Fuel nav section into **Fuel** (strategy
+  widget) and **Fuel Table** (consumption table) — each its own page + reset.
 - [x] **Tire-change inference (2026-07-11, `InferTireChanges`)** — no SDK channel exists for
   opponents' tire sets, but under fuel-and-tires-separate rules service is sequential: a tire
   stop sits ~10s+ longer than the car's own fuel-fill baseline (cheapest observed sec/stint-lap).

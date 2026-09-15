@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using System.Windows.Threading;
 using StandingsOverlay.Config;
@@ -70,12 +71,57 @@ public partial class SettingsWindow : Window
         Loaded += (_, _) => BringToFront();
         Closed += (_, _) => { _cfg.Changed -= OnProfileMaybeSwapped; Flush(); };   // never drop a pending edit
 
+        // The global "Move overlays" switch lives in the header (reachable from every page), so it
+        // owns edit-mode mirroring — no longer a row on the General page.
+        MoveToggle.IsChecked = _editMode;
+        MoveToggle.Checked += (_, _) => { _editMode = true; if (!_suppressEdit) EditModeChanged?.Invoke(true); };
+        MoveToggle.Unchecked += (_, _) => { _editMode = false; if (!_suppressEdit) EditModeChanged?.Invoke(false); };
+        _editToggle = MoveToggle;
+
         BuildStateSwitch();
+        RefreshBoxStrip();
         UpdateInheritBanner();
 
-        foreach (var name in new[] { "General", "Standings", "Relative", "Traffic", "Fuel", "Lap Lab", "About" })
+        foreach (var name in new[] { "General", "Standings", "Relative", "Traffic", "Fuel", "Fuel Table", "Lap Lab", "About" })
             Nav.Items.Add(name);
         Nav.SelectedIndex = 0;
+    }
+
+    // ---- per-box on/off strip (always visible) --------------------------
+
+    // Each toggleable widget and how to read/write its Enabled flag on a given profile. The pill
+    // strip edits whichever state is currently selected, so a box can be on in the car and off
+    // while spectating (or vice versa). Standings has no Enable flag, so it isn't listed.
+    private static readonly (string label, Func<OverlayConfig, bool> get, Action<OverlayConfig, bool> set)[] BoxDefs =
+    {
+        ("Relative",   c => c.Relative.Enabled,  (c, v) => c.Relative.Enabled = v),
+        ("Traffic",    c => c.Traffic.Enabled,   (c, v) => c.Traffic.Enabled = v),
+        ("Fuel",       c => c.Fuel.Enabled,      (c, v) => c.Fuel.Enabled = v),
+        ("Fuel Table", c => c.FuelTable.Enabled, (c, v) => c.FuelTable.Enabled = v),
+        ("Lap Lab",    c => c.LapLab.Enabled,    (c, v) => c.LapLab.Enabled = v),
+    };
+
+    private void RefreshBoxStrip()
+    {
+        BoxStripHost.Children.Clear();
+        foreach (var (label, get, set) in BoxDefs)
+        {
+            var pill = new ToggleButton
+            {
+                Style = (Style)FindResource("Pill"), Content = label, IsChecked = get(_edit),
+            };
+            pill.Checked += (_, _) => ToggleBox(label, set, true);
+            pill.Unchecked += (_, _) => ToggleBox(label, set, false);
+            BoxStripHost.Children.Add(pill);
+        }
+    }
+
+    private void ToggleBox(string label, Action<OverlayConfig, bool> set, bool on)
+    {
+        Apply(() => set(_edit, on));
+        UpdateInheritBanner();
+        // If that box's own section is open, rebuild it so its master toggle + greyed body match.
+        if (_section == label) OnNavChanged(Nav, null!);
     }
 
     // ---- state (in-car / spectating) editing target ---------------------
@@ -109,6 +155,7 @@ public partial class SettingsWindow : Window
         _editingSpectate = spectate;
         _edit = EditTarget();
         _builtAgainst = _edit;
+        RefreshBoxStrip();             // pills reflect the newly-selected state
         UpdateInheritBanner();
         OnNavChanged(Nav, null!);      // rebuild against the new target instance
     }
@@ -215,6 +262,7 @@ public partial class SettingsWindow : Window
         Dispatcher.BeginInvoke(() =>
         {
             var target = EditTarget();
+            RefreshBoxStrip();          // enabled flags may have changed (external edit / state swap)
             UpdateInheritBanner();
             if (ReferenceEquals(target, _edit)) return;
             _edit = target;
@@ -229,7 +277,6 @@ public partial class SettingsWindow : Window
     {
         if (Nav.SelectedItem is not string name) return;
         _section = name;
-        _editToggle = null;
         PageBody.Children.Clear();
 
         switch (name)
@@ -238,7 +285,8 @@ public partial class SettingsWindow : Window
             case "Standings": SectionHeader("Standings table", "The leaderboard: layout, header extras, and per-session columns."); BuildStandings(); break;
             case "Relative": SectionHeader("Relative box", "Cars physically around you, in track order."); BuildRelative(); break;
             case "Traffic": SectionHeader("Traffic alerter", "Warnings when a faster class is closing, or you're being lapped."); BuildTraffic(); break;
-            case "Fuel": SectionHeader("Fuel & strategy", "Live fuel numbers and endurance stint planning."); BuildFuel(); break;
+            case "Fuel": SectionHeader("Fuel & strategy", "Live burn, laps in the tank, and endurance stint bars."); BuildFuel(); break;
+            case "Fuel Table": SectionHeader("Fuel table", "Per-lap consumption — Last / Last-5 / Last-10 / Stint — with a clickable target. Practice and race."); BuildFuelTable(); break;
             case "Lap Lab": SectionHeader("Lap Lab", "Practice lap table: your sectors against a reference lap. Testing, practice and qualifying only."); BuildLapLab(); break;
             case "About": SectionHeader("About", "Standings Overlay."); BuildAbout(); break;
         }
@@ -254,14 +302,7 @@ public partial class SettingsWindow : Window
 
     private void BuildGeneral()
     {
-        PageBody.Children.Add(Toggle("Move overlays", "Unlock every widget so you can drag it into place. Turn off to lock.",
-            () => _editMode, v =>
-            {
-                _editMode = v;
-                if (!_suppressEdit) EditModeChanged?.Invoke(v);
-            }, out var editCb, strong: true));
-        _editToggle = editCb;
-
+        // "Move overlays" now lives in the header (visible on every page), so it's not repeated here.
         PageBody.Children.Add(Toggle("Start with Windows", "Launch the overlay automatically when you log in.",
             AutoStart.IsEnabled, AutoStart.Set));
 
@@ -528,15 +569,13 @@ public partial class SettingsWindow : Window
             () => f.PitLaneLossSec, v => f.PitLaneLossSec = v, v => v < 0 ? "auto" : $"{v:0}s"));
         body.Children.Add(Slider("Fill rate", null, -1, 5, 0.1,
             () => f.FillRateLps, v => f.FillRateLps = v, v => v < 0 ? "auto" : $"{v:0.0} L/s"));
-
-        BuildFuelTable();
     }
 
     private void BuildFuelTable()
     {
         var ft = _edit.FuelTable;
         var body = Master("Show fuel table",
-            "A separate widget: Last / last-5 / last-10 / stint / target consumption, laps to empty, and a live target tracker. Works in practice and race.",
+            "Last / last-5 / last-10 / stint / target consumption, laps to empty, and a live target tracker. Works in practice and race.",
             () => ft.Enabled, v => ft.Enabled = v);
 
         body.Children.Add(Slider("Size", "Scales the whole fuel table.", 0.6, 2.0, 0.05,
@@ -793,7 +832,8 @@ public partial class SettingsWindow : Window
     private StackPanel Master(string label, string hint, Func<bool> get, Action<bool> set)
     {
         var body = new StackPanel();
-        PageBody.Children.Add(Toggle(label, hint, get, v => { set(v); body.IsEnabled = v; }, out _, strong: true));
+        // Keep the header SHOW strip in sync when a box is toggled from its own section.
+        PageBody.Children.Add(Toggle(label, hint, get, v => { set(v); body.IsEnabled = v; RefreshBoxStrip(); }, out _, strong: true));
         PageBody.Children.Add(Divider());
         body.IsEnabled = get();
         PageBody.Children.Add(body);
@@ -853,6 +893,7 @@ public partial class SettingsWindow : Window
             case "Relative": c.Relative = _editingSpectate ? JsonClone(src.Relative) : KeepPos(new RelativeConfig(), c.Relative.X, c.Relative.Y); break;
             case "Traffic": c.Traffic = _editingSpectate ? JsonClone(src.Traffic) : KeepPos(new TrafficConfig(), c.Traffic.X, c.Traffic.Y); break;
             case "Fuel": c.Fuel = _editingSpectate ? JsonClone(src.Fuel) : KeepPos(new FuelConfig(), c.Fuel.X, c.Fuel.Y); break;
+            case "Fuel Table": c.FuelTable = _editingSpectate ? JsonClone(src.FuelTable) : KeepPos(new FuelTableConfig(), c.FuelTable.X, c.FuelTable.Y); break;
             case "Lap Lab": c.LapLab = _editingSpectate ? JsonClone(src.LapLab) : KeepPos(new LapLabConfig(), c.LapLab.X, c.LapLab.Y); break;
             case "About": return;
         }
@@ -863,6 +904,7 @@ public partial class SettingsWindow : Window
     private static RelativeConfig KeepPos(RelativeConfig r, double x, double y) { r.X = x; r.Y = y; return r; }
     private static TrafficConfig KeepPos(TrafficConfig t, double x, double y) { t.X = x; t.Y = y; return t; }
     private static FuelConfig KeepPos(FuelConfig f, double x, double y) { f.X = x; f.Y = y; return f; }
+    private static FuelTableConfig KeepPos(FuelTableConfig f, double x, double y) { f.X = x; f.Y = y; return f; }
     private static LapLabConfig KeepPos(LapLabConfig l, double x, double y) { l.X = x; l.Y = y; return l; }
 
     /// <summary>Deep copy via a JSON round-trip (independent instance, safe to assign into _edit).</summary>
