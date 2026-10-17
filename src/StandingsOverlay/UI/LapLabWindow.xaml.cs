@@ -181,12 +181,7 @@ public partial class LapLabWindow : Window
     }
 
     private void SavePosition()
-    {
-        var pos = _configService.Current.LapLab.Position.For(_configService.Session);
-        pos.X = Left;
-        pos.Y = Top;
-        _configService.Save();
-    }
+        => _configService.SavePosition(c => c.LapLab.Position, Left, Top);
 
     public bool EditMode
     {

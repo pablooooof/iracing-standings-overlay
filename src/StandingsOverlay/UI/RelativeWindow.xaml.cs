@@ -321,12 +321,7 @@ public partial class RelativeWindow : Window
     }
 
     private void SavePosition()
-    {
-        var pos = _configService.Current.Relative.Position.For(_configService.Session);
-        pos.X = Left;
-        pos.Y = Top;
-        _configService.Save();
-    }
+        => _configService.SavePosition(c => c.Relative.Position, Left, Top);
 
     /// <summary>Edit mode shows a representative field so there is something to position.</summary>
     private void RenderSample()

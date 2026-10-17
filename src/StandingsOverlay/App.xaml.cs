@@ -21,9 +21,11 @@ public partial class App : Application
     private SettingsWindow? _settings;
     private bool _editMode;
 
-    // Widget layouts are per session type. The live session drives which one is on screen; while
-    // moving overlays the settings window may preview another, and leaving move mode snaps back.
+    // Four situations — race, quali, practice (driving) and spectating — each with its own widget
+    // layout. Live state drives which one is on screen; while moving overlays the settings window
+    // may preview another, and leaving move mode snaps back to live.
     private SessionKind _liveKind = SessionKind.Race;   // UI thread
+    private bool _liveSpectating;                       // UI thread
     private SessionKind? _seenKind;                      // source thread: dedups the dispatch
 
     // Auto-hide: keep the widgets off screen unless iRacing is focused (data still flows), with a
@@ -107,7 +109,7 @@ public partial class App : Application
             }
             var (text, connected) = demo ? ("Demo mode", true)
                 : !snapshot.Connected ? ("Waiting for iRacing…", false)
-                : _configService.Spectating ? ("Connected · spectating", true)
+                : _liveSpectating ? ("Connected · spectating", true)
                 : ("Connected", true);
             Dispatcher.BeginInvoke(() => _settings?.SetStatus(text, connected));
         };
@@ -125,7 +127,11 @@ public partial class App : Application
         // positions, row counts and columns can differ. The source debounces IsOnTrack.
         if (_source is IRacingSource live)
             live.DrivingChanged += driving =>
-                Dispatcher.BeginInvoke(() => _configService.SetSpectating(!driving));
+                Dispatcher.BeginInvoke(() =>
+                {
+                    _liveSpectating = !driving;
+                    if (!_editMode) _configService.SetSpectating(!driving);
+                });
 
         _window.Show();
         _trafficWindow.Show();
@@ -213,9 +219,13 @@ public partial class App : Application
         _fuelWindow!.EditMode = on;
         _fuelTableWindow!.EditMode = on;
         _lapLabWindow!.EditMode = on;
-        // Leaving move mode (each widget just saved its spot for the previewed session): back to
-        // the live session's layout.
-        if (!on) _configService!.SetSession(_liveKind);
+        // Leaving move mode (each widget just saved its spot for the previewed situation): back to
+        // the live one's layout.
+        if (!on)
+        {
+            _configService!.SetSession(_liveKind);
+            _configService.SetSpectating(_liveSpectating);
+        }
         _settings?.ReflectEditMode(on);
         // Edit mode force-shows every widget — you can't drag one you can't see.
         _visibility.EditMode = on;

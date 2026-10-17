@@ -196,6 +196,7 @@
         <Style x:Key="RailSegment" TargetType="RadioButton" BasedOn="{StaticResource Segment}">
             <Setter Property="Padding" Value="4,5"/>
             <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Margin" Value="0,0,0,6"/>
         </Style>
 
         <!-- Page tab (General / Content / Header): text with an accent underline when selected. -->
@@ -341,7 +342,7 @@
                         <TextBlock Text="Move overlays" VerticalAlignment="Center"
                                    Foreground="{StaticResource Text}" FontSize="13"/>
                     </DockPanel>
-                    <UniformGrid x:Name="LayoutHost" Columns="3" Margin="0,10,-6,0"/>
+                    <UniformGrid x:Name="LayoutHost" Columns="2" Margin="0,10,-6,-6"/>
                     <TextBlock x:Name="LayoutHint" Foreground="{StaticResource Dim}" FontSize="11.5"
                                TextWrapping="Wrap" Margin="0,7,0,0"/>
 

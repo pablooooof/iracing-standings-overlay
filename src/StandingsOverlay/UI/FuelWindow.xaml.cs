@@ -183,12 +183,7 @@ public partial class FuelWindow : Window
     }
 
     private void SavePosition()
-    {
-        var pos = _configService.Current.Fuel.Position.For(_configService.Session);
-        pos.X = Left;
-        pos.Y = Top;
-        _configService.Save();
-    }
+        => _configService.SavePosition(c => c.Fuel.Position, Left, Top);
 
     public bool EditMode
     {

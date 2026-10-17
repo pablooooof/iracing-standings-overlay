@@ -125,12 +125,7 @@ public partial class OverlayWindow : Window
     }
 
     private void SavePosition()
-    {
-        var pos = _configService.Current.Position.For(_configService.Session);
-        pos.X = Left;
-        pos.Y = Top;
-        _configService.Save();
-    }
+        => _configService.SavePosition(c => c.Position, Left, Top);
 
     /// <summary>Called from the telemetry thread; skips the dispatch entirely when nothing changed.</summary>
     public void OnSnapshot(StandingsSnapshot snapshot)

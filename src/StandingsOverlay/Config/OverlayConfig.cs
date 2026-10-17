@@ -528,6 +528,21 @@ public sealed class ConfigService : IDisposable
         else SaveBase();
     }
 
+    /// <summary>Record where a widget was dragged to. Driving: the slot for the session type on
+    /// screen (race / qual / practice layouts are independent). Spectating: every slot — the
+    /// spectating setup has one layout whatever the session. Until a widget is dragged while
+    /// spectating, its spectate position simply follows the driving layout (inheritance).</summary>
+    public void SavePosition(Func<OverlayConfig, SessionPositions> widget, double x, double y)
+    {
+        var p = widget(Current);
+        foreach (var slot in Spectating ? [p.Race, p.Qualify, p.Practice] : new[] { p.For(Session) })
+        {
+            slot.X = x;
+            slot.Y = y;
+        }
+        Save();
+    }
+
     public void SaveAndNotify()
     {
         Save();

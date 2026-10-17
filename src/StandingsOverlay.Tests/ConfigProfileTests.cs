@@ -181,6 +181,37 @@ public class ConfigProfileTests
     }
 
     [Fact]
+    public void DraggedPositions_PerSessionWhileDriving_OneLayoutWhileSpectating()
+    {
+        var dir = Directory.CreateTempSubdirectory("overlay-cfg-test");
+        try
+        {
+            var svc = new ConfigService(Path.Combine(dir.FullName, "config.json"));
+            svc.Base.Fuel.Position = SessionPositions.All(100, 100);
+
+            // Driving: a drag lands in the slot for the session type on screen only.
+            svc.SetSession(Data.SessionKind.Practice);
+            svc.SavePosition(c => c.Fuel.Position, 300, 40);
+            Assert.Equal(300, svc.Base.Fuel.Position.Practice.X);
+            Assert.Equal(100, svc.Base.Fuel.Position.Race.X);
+
+            // Spectating: until dragged, it follows the driving layout of the session...
+            svc.SetSpectating(true);
+            Assert.Equal(300, svc.Current.Fuel.Position.For(svc.Session).X);
+            // ...and one drag sets the single spectating layout for every session type.
+            svc.SavePosition(c => c.Fuel.Position, 900, 700);
+            foreach (var kind in new[] { Data.SessionKind.Race, Data.SessionKind.Qualify, Data.SessionKind.Practice })
+                Assert.Equal(900, svc.Current.Fuel.Position.For(kind).X);
+            Assert.Equal(100, svc.Base.Fuel.Position.Race.X);   // driving layout untouched
+            svc.Dispose();
+        }
+        finally
+        {
+            dir.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
     public void LegacySpectateOverride_MigratesThroughTheTypedModel()
     {
         var dir = Directory.CreateTempSubdirectory("overlay-cfg-test");

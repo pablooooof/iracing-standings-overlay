@@ -79,9 +79,21 @@ public partial class SettingsWindow : Window
         Loaded += (_, _) => BringToFront();
         Closed += (_, _) => { _cfg.Changed -= OnProfileMaybeSwapped; Flush(); };   // never drop a pending edit
 
-        // The global "Move overlays" switch lives in the rail (reachable from every page).
+        // The global "Move overlays" switch lives in the rail (reachable from every page). While
+        // moving, the screen shows what you're editing: the spectating setup when editing
+        // Spectating, else the driving layout of the picked session type. App snaps back to live
+        // when you finish.
         MoveToggle.IsChecked = _editMode;
-        MoveToggle.Checked += (_, _) => { _editMode = true; if (!_suppressEdit) EditModeChanged?.Invoke(true); ReflectLayout(); };
+        MoveToggle.Checked += (_, _) =>
+        {
+            _editMode = true;
+            if (!_suppressEdit)
+            {
+                EditModeChanged?.Invoke(true);
+                _cfg.SetSpectating(_editingSpectate);
+            }
+            ReflectLayout();
+        };
         MoveToggle.Unchecked += (_, _) => { _editMode = false; if (!_suppressEdit) EditModeChanged?.Invoke(false); ReflectLayout(); };
 
         BuildStateSwitch();
@@ -95,19 +107,30 @@ public partial class SettingsWindow : Window
 
     // ---- page "Visible" switch + race/quali/practice ---------------------
 
-    /// <summary>For a widget section, how to read/write which session types the box shows in, and
-    /// the session types it can show in at all. Non-widget sections (General, About) return null.</summary>
-    private static (Func<OverlayConfig, Sessions> get, Action<OverlayConfig, Sessions> set, Sessions allowed)? BoxFor(string section) => section switch
+    /// <summary>For a widget section, how to read/write which session types the box shows in, the
+    /// session types it can show in at all, and (spectating only) a fixed note in place of the
+    /// "as in car" status. Non-widget sections (General, About) return null.</summary>
+    private (Func<OverlayConfig, Sessions> get, Action<OverlayConfig, Sessions> set, Sessions allowed, string? note)? BoxFor(string section)
     {
-        "Standings"  => (c => c.ShowStandings,     (c, v) => c.ShowStandings = v,     Sessions.All),
-        "Relative"   => (c => c.Relative.Enabled,  (c, v) => c.Relative.Enabled = v,  Sessions.All),
-        "Traffic"    => (c => c.Traffic.Enabled,   (c, v) => c.Traffic.Enabled = v,   Sessions.All),
-        "Fuel"       => (c => c.Fuel.Enabled,      (c, v) => c.Fuel.Enabled = v,      Sessions.All),
-        "Fuel Table" => (c => c.FuelTable.Enabled, (c, v) => c.FuelTable.Enabled = v, Sessions.All),
-        // Lap Lab never shows in races (a practice tool by design).
-        "Lap Lab"    => (c => c.LapLab.Enabled,    (c, v) => c.LapLab.Enabled = v,    Sessions.Qualify | Sessions.Practice),
-        _ => null,
-    };
+        // Traffic alerts are about the car you're driving, so spectating has its own opt-in
+        // (Traffic.WhileSpectating — also the detector's instant gate the moment you step out of the
+        // car, before the profile swaps) instead of following In car.
+        if (section == "Traffic" && _editingSpectate)
+            return (c => c.Traffic.WhileSpectating ? Sessions.All : Sessions.None,
+                    (c, v) => c.Traffic.WhileSpectating = v != Sessions.None, Sessions.All,
+                    "off by default — alerts are about the car you drive");
+        return section switch
+        {
+            "Standings"  => (c => c.ShowStandings,     (c, v) => c.ShowStandings = v,     Sessions.All, null),
+            "Relative"   => (c => c.Relative.Enabled,  (c, v) => c.Relative.Enabled = v,  Sessions.All, null),
+            "Traffic"    => (c => c.Traffic.Enabled,   (c, v) => c.Traffic.Enabled = v,   Sessions.All, null),
+            "Fuel"       => (c => c.Fuel.Enabled,      (c, v) => c.Fuel.Enabled = v,      Sessions.All, null),
+            "Fuel Table" => (c => c.FuelTable.Enabled, (c, v) => c.FuelTable.Enabled = v, Sessions.All, null),
+            // Lap Lab never shows in races (a practice tool by design).
+            "Lap Lab"    => (c => c.LapLab.Enabled,    (c, v) => c.LapLab.Enabled = v,    Sessions.Qualify | Sessions.Practice, null),
+            _ => null,
+        };
+    }
 
     // Re-reads the header Visible cluster in place (after a save or external edit) without
     // rebuilding it, so its remembered R/Q/P set survives a master off → on.
@@ -125,12 +148,11 @@ public partial class SettingsWindow : Window
             return;
         }
         var edit = _edit;
-        var (master, boxes, refresh) = SessionControls(() => b.get(edit), v =>
+        var (master, boxes, refresh) = Controls(b.get, (c, v) =>
         {
-            b.set(edit, v);
+            b.set(c, v);
             PageBody.IsEnabled = (v & b.allowed) != 0;
-            UpdateInheritBanner();
-        }, b.allowed);
+        }, b.allowed, b.note);
         _refreshBox = () =>
         {
             refresh();
@@ -154,6 +176,9 @@ public partial class SettingsWindow : Window
     /// effective spectate config (base + overrides) while editing Spectating.</summary>
     private OverlayConfig EditTarget() => _editingSpectate ? _cfg.SpectateEffective : _cfg.Base;
 
+    private readonly Dictionary<bool, RadioButton> _profileButtons = new();
+    private bool _suppressProfile;
+
     private void BuildStateSwitch()
     {
         void Add(string text, bool spectate)
@@ -163,7 +188,13 @@ public partial class SettingsWindow : Window
                 Style = (Style)FindResource("RailSegment"), Content = text, GroupName = "statesel",
                 IsChecked = _editingSpectate == spectate,
             };
-            rb.Checked += (_, _) => SetEditTarget(spectate);
+            rb.Checked += (_, _) =>
+            {
+                if (_suppressProfile) return;
+                SetEditTarget(spectate);
+                if (_editMode) _cfg.SetSpectating(spectate);   // moving: show what you're editing
+            };
+            _profileButtons[spectate] = rb;
             StateSwitchHost.Children.Add(rb);
         }
         Add("In car", false);
@@ -178,6 +209,9 @@ public partial class SettingsWindow : Window
         Flush();                       // commit anything pending to the state we're leaving
         _editingSpectate = spectate;
         _edit = EditTarget();
+        _suppressProfile = true;
+        _profileButtons[spectate].IsChecked = true;
+        _suppressProfile = false;
         UpdateInheritBanner();
         RebuildPage();                 // rebuild (and retarget the Visible switch) for the new state
     }
@@ -193,33 +227,60 @@ public partial class SettingsWindow : Window
         }
         int n = _cfg.SpectateOverrideCount;
         InheritBannerText.Text = n == 0
-            ? "Spectating — every setting currently follows In car. Change anything here to override it for spectating only."
-            : $"Spectating — {n} setting{(n == 1 ? "" : "s")} overridden. Everything else follows In car; change In car and these follow along.";
+            ? "Spectating — one setup for when you're out of the car, whatever the session. Everything follows In car until you change it here."
+            : $"Spectating — one setup for when you're out of the car, whatever the session. {n} setting{(n == 1 ? "" : "s")} changed; everything else follows In car.";
         InheritBanner.Visibility = Visibility.Visible;
     }
 
-    // ---- per-session layout picker ---------------------------------------
+    // ---- layout picker: race / quali / practice / spectating -------------
 
-    private readonly Dictionary<SessionKind, RadioButton> _layoutButtons = new();
+    // The four situations, each with its own widget layout: the three driving session types, and
+    // spectating (one layout whatever the session).
+    private enum Situation { Race, Qualify, Practice, Spectating }
+
+    private readonly Dictionary<Situation, RadioButton> _layoutButtons = new();
     private bool _suppressLayout;
 
-    private static string SessionName(SessionKind k) => k switch
+    private Situation OnScreen => _cfg.Spectating ? Situation.Spectating : _cfg.Session switch
     {
-        SessionKind.Race => "race",
-        SessionKind.Qualify => "qualifying",
-        _ => "practice",
+        SessionKind.Race => Situation.Race,
+        SessionKind.Qualify => Situation.Qualify,
+        _ => Situation.Practice,
     };
 
-    /// <summary>Race / Quali / Practice under Move overlays: which session type's widget layout is
-    /// on screen. Live it follows the session; while moving overlays you can pick another to
-    /// arrange it without being in that session (App snaps back to live when you finish).</summary>
+    private static string SituationName(Situation s) => s switch
+    {
+        Situation.Race => "race",
+        Situation.Qualify => "qualifying",
+        Situation.Practice => "practice",
+        _ => "spectating",
+    };
+
+    /// <summary>Race / Quali / Practice / Spectating under Move overlays: which layout is on screen.
+    /// Live it follows the session and whether you're in the car; while moving overlays you pick
+    /// one to arrange it without being in that situation. Picking also points the editor at that
+    /// profile (In car for the three session types, Spectating for spectating).</summary>
     private void BuildLayoutSwitch()
     {
-        foreach (var (text, kind) in new[] { ("Race", SessionKind.Race), ("Quali", SessionKind.Qualify), ("Practice", SessionKind.Practice) })
+        foreach (var (text, s) in new[] { ("Race", Situation.Race), ("Quali", Situation.Qualify),
+                                          ("Practice", Situation.Practice), ("Spectating", Situation.Spectating) })
         {
             var rb = new RadioButton { Style = (Style)FindResource("RailSegment"), Content = text, GroupName = "layoutsel" };
-            rb.Checked += (_, _) => { if (!_suppressLayout && _editMode) _cfg.SetSession(kind); };
-            _layoutButtons[kind] = rb;
+            rb.Checked += (_, _) =>
+            {
+                if (_suppressLayout || !_editMode) return;
+                bool spectate = s == Situation.Spectating;
+                SetEditTarget(spectate);
+                _cfg.SetSpectating(spectate);
+                if (!spectate)
+                    _cfg.SetSession(s switch
+                    {
+                        Situation.Race => SessionKind.Race,
+                        Situation.Qualify => SessionKind.Qualify,
+                        _ => SessionKind.Practice,
+                    });
+            };
+            _layoutButtons[s] = rb;
             LayoutHost.Children.Add(rb);
         }
         ReflectLayout();
@@ -227,13 +288,14 @@ public partial class SettingsWindow : Window
 
     private void ReflectLayout()
     {
+        var s = OnScreen;
         _suppressLayout = true;
-        _layoutButtons[_cfg.Session].IsChecked = true;
+        _layoutButtons[s].IsChecked = true;
         _suppressLayout = false;
         LayoutHost.IsEnabled = _editMode;
         LayoutHint.Text = _editMode
-            ? $"Dragging saves the {SessionName(_cfg.Session)} layout. Pick another session type to arrange it too."
-            : $"Each session type keeps its own widget positions. On screen: {SessionName(_cfg.Session)}.";
+            ? $"Dragging saves the {SituationName(s)} layout. Pick another to arrange it too."
+            : $"Race, quali, practice and spectating each keep their own widget positions. On screen: {SituationName(s)}.";
     }
 
     /// <summary>Restore (if minimized) and take focus/activation. Called on Loaded so this normal,
@@ -444,8 +506,8 @@ public partial class SettingsWindow : Window
         if (_editingSpectate)
         {
             PageBody.Children.Add(Subhead("Spectating layout"));
-            PageBody.Children.Add(ButtonRow("Copy widget positions from In car",
-                "Move every widget to where it sits in your in-car profile (all session types).", "Copy layout",
+            PageBody.Children.Add(ButtonRow("Use the in-car layout",
+                "Drop the spectating layout: every widget goes back to its in-car spot for the session type.", "Use in-car layout",
                 () => Apply(() => CopyPositions(_cfg.Base, _edit))));
         }
 
@@ -557,21 +619,21 @@ public partial class SettingsWindow : Window
         var c = _edit;
         void Add(FrameworkElement row) => PageBody.Children.Add(row);
 
-        Add(Item("Column header row", "The P / DRIVER / GAP … labels above the rows.", () => c.ShowColumnHeader, v => c.ShowColumnHeader = v));
-        Add(Item("Real-life clock", "Your wall-clock time next to the in-sim clock.", () => c.ShowRealClock, v => c.ShowRealClock = v));
-        Add(Item("Local time of day", "In-sim track clock.", () => c.ShowTimeOfDay, v => c.ShowTimeOfDay = v));
-        Add(Item("Strength of Field", null, () => c.ShowSof, v => c.ShowSof = v));
-        Add(Item("Track temperature", null, () => c.ShowTrackTemp, v => c.ShowTrackTemp = v, settings: p =>
+        Add(Item("Column header row", "The P / DRIVER / GAP … labels above the rows.", o => o.ShowColumnHeader, (o, v) => o.ShowColumnHeader = v));
+        Add(Item("Real-life clock", "Your wall-clock time next to the in-sim clock.", o => o.ShowRealClock, (o, v) => o.ShowRealClock = v));
+        Add(Item("Local time of day", "In-sim track clock.", o => o.ShowTimeOfDay, (o, v) => o.ShowTimeOfDay = v));
+        Add(Item("Strength of Field", null, o => o.ShowSof, (o, v) => o.ShowSof = v));
+        Add(Item("Track temperature", null, o => o.ShowTrackTemp, (o, v) => o.ShowTrackTemp = v, settings: p =>
             p.Children.Add(Slider("Decimals", null, 0, 2, 1, () => c.ShowTrackTempDecimals, v => c.ShowTrackTempDecimals = (int)v, v => $"{v:0}"))));
-        Add(Item("Incident count", null, () => c.ShowIncidents, v => c.ShowIncidents = v));
-        Add(Item("Weather / track state", "Track wetness + rain %, and the dry↔wet banner.", () => c.ShowWeather, v => c.ShowWeather = v, settings: p =>
+        Add(Item("Incident count", null, o => o.ShowIncidents, (o, v) => o.ShowIncidents = v));
+        Add(Item("Weather / track state", "Track wetness + rain %, and the dry↔wet banner.", o => o.ShowWeather, (o, v) => o.ShowWeather = v, settings: p =>
         {
             p.Children.Add(Toggle("Abbreviate track state", "“M.Dry” / “V.Wet” instead of the full words.",
                 () => c.AbbreviateWetness, v => c.AbbreviateWetness = v));
             p.Children.Add(Slider("Wet↔dry alert", "How long the track-state change banner stays.", 10, 300, 10,
                 () => c.WeatherAlertSec, v => c.WeatherAlertSec = (int)v, v => $"{v:0}s"));
         }));
-        Add(Item("Wind direction & speed", null, () => c.ShowWind, v => c.ShowWind = v));
+        Add(Item("Wind direction & speed", null, o => o.ShowWind, (o, v) => o.ShowWind = v));
     }
 
     // Shared item sub-settings.
@@ -614,17 +676,17 @@ public partial class SettingsWindow : Window
         var r = _edit.Relative;
         void Add(FrameworkElement row) => PageBody.Children.Add(row);
 
-        Add(Item("Class position", "Off = overall position.", () => r.ShowClassPos, v => r.ShowClassPos = v));
-        Add(Item("Tyre compound", "Dry/wet ring, like the standings.", () => r.ShowTyre, v => r.ShowTyre = v));
-        Add(Item("Car brand", null, () => r.ShowBrand, v => r.ShowBrand = v));
-        Add(Item("iRating", null, () => r.ShowIRating, v => r.ShowIRating = v));
-        Add(Item("License", null, () => r.ShowLicense, v => r.ShowLicense = v));
+        Add(Item("Class position", "Off = overall position.", o => o.Relative.ShowClassPos, (o, v) => o.Relative.ShowClassPos = v));
+        Add(Item("Tyre compound", "Dry/wet ring, like the standings.", o => o.Relative.ShowTyre, (o, v) => o.Relative.ShowTyre = v));
+        Add(Item("Car brand", null, o => o.Relative.ShowBrand, (o, v) => o.Relative.ShowBrand = v));
+        Add(Item("iRating", null, o => o.Relative.ShowIRating, (o, v) => o.Relative.ShowIRating = v));
+        Add(Item("License", null, o => o.Relative.ShowLicense, (o, v) => o.Relative.ShowLicense = v));
         Add(Item("Stint age", "STn = laps since their last stop; green while fresh. ST8+ = last stop took no tires.",
-            () => r.ShowStintAge, v => r.ShowStintAge = v, settings: TireInference));
-        Add(Item("Last lap", null, () => r.ShowLastLap, v => r.ShowLastLap = v, settings: LapDecimals));
-        Add(Item("Pace arrow", "Their recent pace vs yours.", () => r.ShowPace, v => r.ShowPace = v));
+            o => o.Relative.ShowStintAge, (o, v) => o.Relative.ShowStintAge = v, settings: TireInference));
+        Add(Item("Last lap", null, o => o.Relative.ShowLastLap, (o, v) => o.Relative.ShowLastLap = v, settings: LapDecimals));
+        Add(Item("Pace arrow", "Their recent pace vs yours.", o => o.Relative.ShowPace, (o, v) => o.Relative.ShowPace = v));
         Add(Item("Closing rate", "s/lap the gap to you is closing — amber = a car behind is catching you, green = you're catching one ahead. Only shows real movers.",
-            () => r.ShowClosing, v => r.ShowClosing = v));
+            o => o.Relative.ShowClosing, (o, v) => o.Relative.ShowClosing = v));
     }
 
     // ---- Traffic ---------------------------------------------------------
@@ -636,8 +698,6 @@ public partial class SettingsWindow : Window
 
         body.Children.Add(Slider("Size", "Scales the whole traffic widget.", 0.6, 2.0, 0.05,
             () => t.Scale, v => t.Scale = v, v => $"{v * 100:0}%"));
-        body.Children.Add(Toggle("Alert while spectating", "Keep warnings while you're out of the car (teammate stint, garage).",
-            () => t.WhileSpectating, v => t.WhileSpectating = v));
         body.Children.Add(Segmented("Style", "How the alert is drawn.",
             [("Row", "Row"), ("Beacon", "Beacon")], () => t.Style, v => Apply(() => t.Style = v)));
         body.Children.Add(Segmented("Trigger", "Which cars raise an alert.",
@@ -689,9 +749,9 @@ public partial class SettingsWindow : Window
     private void BuildTrafficContent()
     {
         var t = _edit.Traffic;
-        PageBody.Children.Add(Item("iRating", null, () => t.ShowIRating, v => t.ShowIRating = v));
+        PageBody.Children.Add(Item("iRating", null, o => o.Traffic.ShowIRating, (o, v) => o.Traffic.ShowIRating = v));
         PageBody.Children.Add(Item("Alongside banner", "Left/right marker on the car that's beside you.",
-            () => t.AlongsideBanner, v => t.AlongsideBanner = v, settings: p =>
+            o => o.Traffic.AlongsideBanner, (o, v) => o.Traffic.AlongsideBanner = v, settings: p =>
                 p.Children.Add(Toggle("Any car", "Show it for ANY car the spotter reports beside you, not just alerted traffic — for constant same-class side-by-side in a pack.",
                     () => t.AlongsideAnyCar, v => t.AlongsideAnyCar = v))));
     }
@@ -749,11 +809,11 @@ public partial class SettingsWindow : Window
     private void BuildFuelTableContent()
     {
         var ft = _edit.FuelTable;
-        PageBody.Children.Add(Item("Last-5 row", "Average burn over your last 5 laps.", () => ft.ShowLast5, v => ft.ShowLast5 = v));
-        PageBody.Children.Add(Item("Last-10 row", null, () => ft.ShowLast10, v => ft.ShowLast10 = v));
-        PageBody.Children.Add(Item("Stint row", "Average burn since your last pit stop.", () => ft.ShowStint, v => ft.ShowStint = v));
+        PageBody.Children.Add(Item("Last-5 row", "Average burn over your last 5 laps.", o => o.FuelTable.ShowLast5, (o, v) => o.FuelTable.ShowLast5 = v));
+        PageBody.Children.Add(Item("Last-10 row", null, o => o.FuelTable.ShowLast10, (o, v) => o.FuelTable.ShowLast10 = v));
+        PageBody.Children.Add(Item("Stint row", "Average burn since your last pit stop.", o => o.FuelTable.ShowStint, (o, v) => o.FuelTable.ShowStint = v));
         PageBody.Children.Add(Item("Target tracker", "The ahead/behind line while a stint is running: how much fuel you've banked or overspent, and the burn you now need to make the target stint.",
-            () => ft.ShowStatus, v => ft.ShowStatus = v));
+            o => o.FuelTable.ShowStatus, (o, v) => o.FuelTable.ShowStatus = v));
     }
 
     // ---- Lap Lab ---------------------------------------------------------
@@ -827,7 +887,7 @@ public partial class SettingsWindow : Window
           + "it repaints only on change and never busy-polls.", Dim, 12.5, 14);
         P("MIT licensed · uses irsdkSharp (MIT).", Dim, 12.5, 14);
         P("Tip: switch on Move overlays (left rail) and drag each widget where you want it. Race, "
-          + "qualifying and practice each keep their own layout — pick one under Move overlays to arrange it.", Dim, 12.5, 14);
+          + "qualifying, practice and spectating each keep their own layout — pick one under Move overlays to arrange it.", Dim, 12.5, 14);
 
         PageBody.Children.Add(Divider());
         PageBody.Children.Add(new TextBlock { Text = "config.json", Foreground = Dim, FontSize = 11.5, Margin = new Thickness(0, 8, 0, 0) });
@@ -839,13 +899,94 @@ public partial class SettingsWindow : Window
         });
     }
 
-    // ---- per-session item rows -------------------------------------------
+    // ---- per-situation item rows -----------------------------------------
+    //
+    // Four situations: race, quali and practice while driving, and spectating. Editing In car, a row
+    // shows the three session-type boxes. Editing Spectating, it shows one on/off switch — the
+    // spectating setup is a single setup, not ×3 — plus whether it still follows In car.
+
+    /// <summary>The on/off cluster for a row (or a page's Visible header), for whichever profile is
+    /// being edited. <paramref name="note"/> replaces the spectating "as in car" status.</summary>
+    private (CheckBox master, FrameworkElement right, Action refresh) Controls(
+        Func<OverlayConfig, Sessions> get, Action<OverlayConfig, Sessions> set, Sessions allowed, string? note = null)
+    {
+        var edit = _edit;
+        return _editingSpectate
+            ? SpectateControls(get, set, allowed, note)
+            : SessionControls(() => get(edit), v => set(edit, v), allowed);
+    }
+
+    private static string SessionNames(Sessions v) => string.Join(", ",
+        new[] { (Sessions.Race, "race"), (Sessions.Qualify, "quali"), (Sessions.Practice, "practice") }
+            .Where(p => (v & p.Item1) != 0).Select(p => p.Item2));
+
+    /// <summary>The spectating cluster: one switch (shown while spectating, whatever the session)
+    /// and a status. Until changed it follows In car — "as in car", naming the session types when In
+    /// car varies by session — and once changed it says so, with "use in car" to follow again
+    /// (setting it back to the In car value drops the override).</summary>
+    private (CheckBox master, FrameworkElement right, Action refresh) SpectateControls(
+        Func<OverlayConfig, Sessions> get, Action<OverlayConfig, Sessions> set, Sessions allowed, string? note)
+    {
+        var edit = _edit;
+        var master = new CheckBox { Style = (Style)FindResource("Switch") };
+        var status = new TextBlock
+        {
+            FontSize = 12, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis,
+        };
+        var reset = new Button { Style = (Style)FindResource("SettingsLink"), Content = "use in car", Margin = new Thickness(4, 0, 0, 0) };
+        var right = new DockPanel { Width = 220, LastChildFill = true };
+        DockPanel.SetDock(reset, Dock.Right);
+        right.Children.Add(reset);
+        right.Children.Add(status);
+        bool sync = false;
+
+        void Refresh()
+        {
+            sync = true;
+            var v = get(edit) & allowed;
+            master.IsChecked = v != Sessions.None;
+            if (note is not null)
+            {
+                status.Text = note;
+                status.Foreground = Dim;
+                reset.Visibility = Visibility.Collapsed;
+            }
+            else
+            {
+                var inCar = get(_cfg.Base) & allowed;
+                bool same = v == inCar;
+                bool varies = v != Sessions.None && v != allowed;
+                status.Text = same
+                    ? varies ? $"as in car: {SessionNames(v)}" : "as in car"
+                    : $"spectating: {(v == Sessions.None ? "off" : varies ? SessionNames(v) : "on")}";
+                status.Foreground = same ? Dim : Accent;
+                reset.Visibility = same ? Visibility.Collapsed : Visibility.Visible;
+            }
+            sync = false;
+        }
+        // Keep bits outside `allowed` as they are, so toggling never invents hidden overrides.
+        void Write(Sessions v)
+        {
+            Apply(() => set(edit, (get(edit) & ~allowed) | (v & allowed)));
+            Refresh();
+        }
+
+        master.Checked += (_, _) => { if (!sync) Write(allowed); };
+        master.Unchecked += (_, _) => { if (!sync) Write(Sessions.None); };
+        reset.Click += (_, _) =>
+        {
+            Apply(() => set(edit, get(_cfg.Base)));
+            Refresh();
+        };
+        Refresh();
+        return (master, right, Refresh);
+    }
 
     /// <summary>The R/Q/P cluster: a master switch (on = shown in at least one session type) plus a
     /// race / quali / practice checkbox each. Master off clears the boxes (remembering them for this
     /// page), master on restores them (or every allowed one). Session types the item can never show
     /// in (<paramref name="allowed"/>) are greyed out and never written as on.</summary>
-    private (CheckBox master, FrameworkElement boxes, Action refresh) SessionControls(Func<Sessions> get, Action<Sessions> set, Sessions allowed)
+    private (CheckBox master, FrameworkElement right, Action refresh) SessionControls(Func<Sessions> get, Action<Sessions> set, Sessions allowed)
     {
         var master = new CheckBox { Style = (Style)FindResource("Switch") };
         var boxes = new StackPanel { Orientation = Orientation.Horizontal };
@@ -863,7 +1004,7 @@ public partial class SettingsWindow : Window
         }
         void Write(Sessions v)
         {
-            Apply(() => set(v & allowed));
+            Apply(() => set((get() & ~allowed) | (v & allowed)));
             Refresh();
         }
 
@@ -897,12 +1038,15 @@ public partial class SettingsWindow : Window
     }
 
     /// <summary>A Content/Header row, iOverlay-style: master switch · label · optional "settings"
-    /// link · race / quali / practice. The hint shows as a tooltip; <paramref name="settings"/> fills
-    /// the item's own options panel (built on first expand, stays open across page rebuilds).</summary>
-    private FrameworkElement Item(string label, string? hint, Func<Sessions> get, Action<Sessions> set,
+    /// link · race / quali / practice (or, editing Spectating, the follows-In-car status). The hint
+    /// shows as a tooltip; <paramref name="settings"/> fills the item's own options panel (built on
+    /// first expand, stays open across page rebuilds). <paramref name="get"/>/<paramref name="set"/>
+    /// take the whole config so a spectating row can compare itself with In car.</summary>
+    private FrameworkElement Item(string label, string? hint, Func<OverlayConfig, Sessions> get,
+                                  Action<OverlayConfig, Sessions> set,
                                   Sessions allowed = Sessions.All, Action<StackPanel>? settings = null)
     {
-        var (master, boxes, _) = SessionControls(get, set, allowed);
+        var (master, boxes, _) = Controls(get, set, allowed);
 
         var grid = new Grid { Margin = new Thickness(0, 7, 0, 7) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -976,19 +1120,16 @@ public partial class SettingsWindow : Window
     private FrameworkElement Column(string label, string? hint, Func<SessionColumns, bool> get,
                                     Action<SessionColumns, bool> set, Sessions allowed = Sessions.All,
                                     Action<StackPanel>? settings = null)
-    {
-        var c = _edit;
-        return Item(label, hint,
-            () => (get(c.Race) ? Sessions.Race : 0) | (get(c.Qualify) ? Sessions.Qualify : 0)
-                  | (get(c.Practice) ? Sessions.Practice : 0),
-            v =>
+        => Item(label, hint,
+            c => (get(c.Race) ? Sessions.Race : 0) | (get(c.Qualify) ? Sessions.Qualify : 0)
+                 | (get(c.Practice) ? Sessions.Practice : 0),
+            (c, v) =>
             {
                 set(c.Race, v.In(SessionKind.Race));
                 set(c.Qualify, v.In(SessionKind.Qualify));
                 set(c.Practice, v.In(SessionKind.Practice));
             },
             allowed, settings);
-    }
 
     // ---- reusable row builders ------------------------------------------
 

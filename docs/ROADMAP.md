@@ -187,6 +187,17 @@ Ideas and requests captured during rapid iteration so nothing is lost. Roughly o
   Global controls (profile, Move overlays, layout) moved to the left rail. Tests: legacy-migration
   cases in `ConfigProfileTests`. Not done: iOverlay's ≡ drag-to-reorder columns (the standings XAML
   has a fixed column order) — candidate follow-up.
+- [x] **Race · quali · practice · spectating (2026-10-17)** — the first R/Q/P pass quietly made a
+  full 2×3 grid (spectate could override every R/Q/P box; six layouts) — the thing decided against
+  above. Settled on four situations instead: race, quali and practice while driving, and
+  **spectating as one setup**. Spectating rows show a single switch that follows In car until
+  changed ("as in car" / "spectating: off" + "use in car"); a drag while spectating sets one
+  layout for every session type (`ConfigService.SavePosition`). The rail layout picker is
+  Race / Quali / Practice / Spectating; while moving overlays the screen shows what you're editing
+  and picking a layout retargets the editor. Traffic's "Alert while spectating" toggle became
+  Traffic's spectating Visible switch (still `WhileSpectating` underneath — the detector's instant
+  gate). Rationale from the user's real `config.spectate.json`: every override was about the screen
+  without a cockpit (widget spots, 8 ahead/8 behind, Lap Lab off), none about session type.
 - [x] **Tire-change inference (2026-07-11, `InferTireChanges`)** — no SDK channel exists for
   opponents' tire sets, but under fuel-and-tires-separate rules service is sequential: a tire
   stop sits ~10s+ longer than the car's own fuel-fill baseline (cheapest observed sec/stint-lap).

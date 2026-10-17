@@ -218,12 +218,7 @@ public partial class FuelTableWindow : Window
     private static string Fmt(double v) => v > 0.005 ? $"{v:0.00}" : "—";
 
     private void SavePosition()
-    {
-        var pos = _configService.Current.FuelTable.Position.For(_configService.Session);
-        pos.X = Left;
-        pos.Y = Top;
-        _configService.Save();
-    }
+        => _configService.SavePosition(c => c.FuelTable.Position, Left, Top);
 
     public bool EditMode
     {
