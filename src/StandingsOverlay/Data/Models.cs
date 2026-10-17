@@ -41,6 +41,8 @@ public sealed class RawTick
     public bool PlayerInPitStall;              // refueling only happens here, not anywhere on pit road
     public int GlobalFlags;                    // SessionFlags bitfield (global green/yellow/caution…)
     public float TankCapacity = -1;            // usable liters: DriverCarFuelMaxLtr × DriverCarMaxFuelPct (BoP)
+    public float PitSvFuel = float.NaN;        // black box: fuel to ADD at the next stop (L)
+    public int PitSvFlags;                     // irsdk_PitSvFlags: 0x10 = fuel fill requested
 
     public bool Has(int idx) => idx >= 0 && idx < Position.Length;
 }

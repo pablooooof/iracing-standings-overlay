@@ -35,13 +35,32 @@
                 <TextBlock x:Name="SaveLine" Foreground="#35A653" FontFamily="Consolas" FontSize="12"
                            FontWeight="Bold" Margin="0,3,0,0"/>
 
-                <!-- Timed-race distance: projected laps, your laps to go, extra-lap knife-edge. -->
-                <TextBlock x:Name="RaceLine" Foreground="#E8E9EE" FontFamily="Consolas" FontSize="12"
-                           FontWeight="Bold" Margin="0,3,0,0"/>
+                <!-- Timed-race distance: projected laps + a bar that fills toward the extra lap
+                     (the leader's progress through their lap when the clock hits 0:00). -->
+                <StackPanel x:Name="RaceRow" Orientation="Horizontal" Margin="0,5,0,0">
+                    <TextBlock Text="RACE" Foreground="#9DA0AA" FontSize="10" FontWeight="Bold"
+                               VerticalAlignment="Center" Margin="0,0,7,0"/>
+                    <TextBlock x:Name="RaceHead" Foreground="#E8E9EE" FontFamily="Consolas" FontSize="12"
+                               FontWeight="Bold" VerticalAlignment="Center"/>
+                    <Border x:Name="RaceBarTrack" Width="120" Height="8" CornerRadius="2" Background="#3A3E48"
+                            VerticalAlignment="Center" Margin="8,0,6,0">
+                        <Border x:Name="RaceBarFill" HorizontalAlignment="Left" CornerRadius="2" Width="0"/>
+                    </Border>
+                    <TextBlock x:Name="RaceNext" Foreground="#9DA0AA" FontFamily="Consolas" FontSize="12"
+                               VerticalAlignment="Center"/>
+                    <TextBlock x:Name="RaceChance" FontFamily="Consolas" FontSize="12" FontWeight="Bold"
+                               VerticalAlignment="Center" Margin="8,0,0,0"/>
+                </StackPanel>
+                <TextBlock x:Name="RaceLine" Foreground="#9DA0AA" FontFamily="Consolas" FontSize="11"
+                           Margin="0,2,0,0"/>
 
                 <!-- Plan summary: next stop lap, fill, laps to go. -->
                 <TextBlock x:Name="PlanLine" Foreground="#9DA0AA" FontFamily="Consolas" FontSize="11"
                            Margin="0,3,0,0"/>
+
+                <!-- Pit black box vs the planned fill (the number you actually set). -->
+                <TextBlock x:Name="BoxLine" FontFamily="Consolas" FontSize="11" FontWeight="Bold"
+                           Margin="0,2,0,0"/>
 
                 <!-- Pirelli-style strategy bars, built in code-behind. -->
                 <StackPanel x:Name="BarsPanel" Margin="0,7,0,0"/>

@@ -364,6 +364,27 @@ public sealed class StintTracker
         return clean.TakeLast(n).Average();
     }
 
+    /// <summary>Robust pace of the car's last <paramref name="n"/> clean laps — a trimmed mean
+    /// (slowest two and fastest one dropped once there are enough: traffic and mistakes are
+    /// slow-side outliers) — plus a robust spread (MAD × 1.4826 ≈ σ), or null with fewer than 3
+    /// clean laps. The race-end projection's pace + noise inputs. Not a plain median: over an
+    /// odd window the median flips between clusters of laps (fuel load, tyre phase, traffic
+    /// rhythm) from one lap to the next, and the projected race length breathes with it.</summary>
+    public (float Pace, float Sigma, int Count)? PaceStats(int idx, int n = 8)
+    {
+        var clean = CleanLaps(idx);
+        if (clean.Count < 3) return null;
+        var last = clean.TakeLast(n).OrderBy(x => x).ToList();
+        float med = Median(last);
+        float mad = Median(last.Select(x => Math.Abs(x - med)).OrderBy(x => x).ToList());
+        var core = last.Count >= 6 ? last.Skip(1).Take(last.Count - 3).ToList() : last;
+        return (core.Average(), mad * 1.4826f, last.Count);
+
+        static float Median(List<float> sorted) => sorted.Count % 2 == 1
+            ? sorted[sorted.Count / 2]
+            : 0.5f * (sorted[sorted.Count / 2 - 1] + sorted[sorted.Count / 2]);
+    }
+
     private List<float> CleanLaps(int idx)
     {
         if (!_cars.TryGetValue(idx, out var s)) return [];

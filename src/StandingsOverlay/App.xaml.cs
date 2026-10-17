@@ -59,7 +59,7 @@ public partial class App : Application
         var configPath = Path.Combine(AppContext.BaseDirectory, "config.json");
         _configService = new ConfigService(configPath);
 
-        // --demo [race|qual|practice|timed|rain|lab]
+        // --demo [race|qual|practice|timed|endurance|rain|lab]
         int demoIdx = Array.FindIndex(e.Args, a => a.Equals("--demo", StringComparison.OrdinalIgnoreCase));
         bool demo = demoIdx >= 0;
         string demoArg = demoIdx >= 0 && demoIdx + 1 < e.Args.Length
@@ -73,9 +73,10 @@ public partial class App : Application
         };
         bool demoTimed = demoArg is "timed" or "time";
         bool demoRain = demoArg is "rain" or "wet";
+        bool demoEndurance = demoArg is "endurance" or "endu";
 
         _source = demo
-            ? new DemoSource(() => _configService.Current, demoSession, demoTimed, demoRain)
+            ? new DemoSource(() => _configService.Current, demoSession, demoTimed, demoRain, demoEndurance)
             : new IRacingSource(() => _configService.Current);
 
         _window = new OverlayWindow(_configService);

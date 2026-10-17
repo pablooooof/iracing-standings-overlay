@@ -61,6 +61,22 @@ Follow-ups:
   laps instead of config constants.
 - [x] **Fuel-saving strategy surfacing** — the fuel widget shows the fork's exact per-lap save as
   an action: "save 0.14/lap → 2 stops (38s faster)" / "save X/lap to skip the stop" in a sprint.
+- [x] **Timed-race end + extra-lap readout (2026-10-17)** — `RaceEndModel` (spec: FUEL-STRATEGY.md
+  "Race-end model"). Fixed the rule: white flag = the overall leader's first crossing after 0:00,
+  checkered one lap later (the old estimator ended the race a lap early). Projection over the top 3
+  cars with soft remaining stops priced at each car's measured stop loss, held through pit visits,
+  trimmed-mean pace, σ → P(+1 lap) that only moves when the race does; hysteresis on the shown
+  counts. Widget: `RACE 84 laps ▕bar▏ 85  14%` + "+1 lap if leader 26.4s quicker (0.95s/lap)",
+  fuel-to-the-flag priced for the extra lap, "last stop · add 38L (40L if +1 lap)", and a black-box
+  check (`PitSvFuel`/`PitSvFlags`). New `--demo endurance` (10-min timed race, everyone pits).
+  **Validate next timed race**: grep `race end:` in overlay.log — the sim's white flag should come
+  at the leader's first crossing after 0:00 and match "model final lap"; `race est:` lines (one per
+  leader lap) show f/σ/P drift for calibration.
+- **Race-end follow-ups**: (1) stop count as a mixture (N if the leader doesn't splash, N−1 if it
+  does) instead of a Gaussian-widened mean — sharper when one car's last stop is a coin flip;
+  (2) yellow-aware pace (a caution lap is currently a slow clean lap in the trimmed mean); (3) the
+  standings header "L 3/26.4" and the strategy column still use the naive time ÷ class-lap
+  estimate — feed them the model's count.
 
 ## Sector mini-bar (idea, evaluated 2026-07)
 

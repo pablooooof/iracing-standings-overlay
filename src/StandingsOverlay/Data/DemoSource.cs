@@ -57,9 +57,15 @@ public sealed class DemoSource : ITelemetrySource
 
     private readonly bool _isRace;
     // Timed sprint: join the last ~2.6 laps of a time-limited race so the race-end / extra-lap
-    // estimator is exercised immediately instead of after a 40-minute wait.
+    // estimator is exercised immediately instead of after a 40-minute wait. "--demo endurance"
+    // is a 10-minute timed race instead: every car still pits (the leader's remaining stops are
+    // what the projection has to price), and the player faces a real last-stop fuel call.
+    // Both end like iRacing: the clock runs negative after 0:00, the leader's next crossing is
+    // the white flag, the one after that the checkered (SessionState 5).
     private readonly bool _timed;
-    private static readonly double TimedTailSeconds = 2.6 * Gt3LapSeconds;
+    private readonly double _timedTotal;
+    private int _finalLap = -1;
+    public const double EnduranceSeconds = 600;
     // "--demo rain": a scripted dry→wet arc so the weather trend arrows and the dry→wet flash are
     // exercisable offline (rain starts ramping ~25 s in, track goes damp→wet over the next minute).
     private readonly bool _rain;
@@ -78,11 +84,13 @@ public sealed class DemoSource : ITelemetrySource
     public event Action<FuelTableSnapshot>? FuelTableReady;
     public event Action<LapLabSnapshot>? LapLabReady;
 
-    public DemoSource(Func<OverlayConfig> cfg, string sessionType = "Race", bool timed = false, bool rain = false)
+    public DemoSource(Func<OverlayConfig> cfg, string sessionType = "Race", bool timed = false, bool rain = false,
+                      bool endurance = false)
     {
         _cfg = cfg;
         _isRace = sessionType.Contains("Race", StringComparison.OrdinalIgnoreCase);
-        _timed = timed && _isRace;
+        _timed = (timed || endurance) && _isRace;
+        _timedTotal = endurance ? EnduranceSeconds : 2.6 * Gt3LapSeconds;
         _rain = rain;
         _lab = sessionType.Contains("Testing", StringComparison.OrdinalIgnoreCase);
         // Three equal-distance sectors; with the non-uniform TrackPct speed profile the middle
@@ -167,7 +175,9 @@ public sealed class DemoSource : ITelemetrySource
         _tick.WindDir = 2.36f;             // ~SW, so the header arrow points NE
         _tick.PlayerIncidents = 3;
         _tick.SessionType = sessionType;
-        _tick.SessionTimeTotal = _timed ? TimedTailSeconds : 40 * Gt3LapSeconds;
+        _tick.SessionTimeTotal = _timed ? _timedTotal : 40 * Gt3LapSeconds;
+        _tick.PitSvFuel = PlayerTank;      // black box: brim it, like a default pit setup
+        _tick.PitSvFlags = 0x10;           // fuel fill on
         _tick.SessionLapsTotal = _timed ? -1
             : _isRace ? 40 : sessionType.Contains("Qual", StringComparison.OrdinalIgnoreCase) ? 4 : -1;
         _tick.Precipitation = 0.0f;
@@ -239,8 +249,13 @@ public sealed class DemoSource : ITelemetrySource
                 if (inCycle < 8) continue;   // spinning: stationary on track
             }
 
-            // Pit when the stint is up (crossing the line on the pit lap). Races only.
-            if (_isRace && _tick.Lap[i] - _lastPitLap[i] >= _stintLaps[i] && _tick.LapDistPct[i] < 0.05f)
+            // Pit when the stint is up (crossing the line on the pit lap). Races only. In the timed
+            // races the player stops on fuel like a real driver (the race-end model and the
+            // planner both reason from the tank), not on the scripted lap count.
+            bool stintUp = _timed && i == PlayerIdx
+                ? _playerFuel < PlayerBurnPerLap * 1.3 && !PlayerFuelReachesFlag()
+                : _tick.Lap[i] - _lastPitLap[i] >= _stintLaps[i];
+            if (_isRace && stintUp && _tick.LapDistPct[i] < 0.05f)
             {
                 _lastPitLap[i] = _tick.Lap[i];
                 _pitStart[i] = _elapsed;
@@ -290,9 +305,18 @@ public sealed class DemoSource : ITelemetrySource
         if (_timed)
         {
             // Time-limited: the clock, not a lap target, ends it; laps remaining is unknown
-            // (that's exactly what the estimator infers from the leader's pace).
-            _tick.SessionTimeRemain = Math.Max(0, TimedTailSeconds - _elapsed);
+            // (that's exactly what the estimator infers from the leader's pace). Past 0:00 the
+            // clock goes negative like the sim's; the leader's next crossing shows the white,
+            // the one after the checkered.
+            _tick.SessionTimeRemain = _timedTotal - _elapsed;
             _tick.SessionLapsRemain = -1;
+            int lead = order[0];
+            if (_tick.SessionTimeRemain <= 0 && _finalLap < 0) _finalLap = _tick.Lap[lead] + 1;
+            if (_finalLap > 0)
+            {
+                if (_tick.Lap[lead] > _finalLap) { _tick.SessionState = 5; _tick.GlobalFlags |= 0x1; }
+                else if (_tick.Lap[lead] == _finalLap) _tick.GlobalFlags |= 0x2;
+            }
         }
         else
         {
@@ -403,9 +427,17 @@ public sealed class DemoSource : ITelemetrySource
         SnapshotReady?.Invoke(SnapshotBuilder.Build(_tick, _roster, _history, _stints, _weather, _driverSwap, cfg));
         TrafficReady?.Invoke(_traffic.Update(_tick, _roster, _history, _stints, cfg));
         RelativeReady?.Invoke(RelativeBuilder.Build(_tick, _roster, _stints, _driverSwap, _history, cfg));
-        FuelReady?.Invoke(_planner.Build(_tick, _fuel, cfg));
+        FuelReady?.Invoke(_planner.Build(_tick, _fuel, _stints, _roster, cfg));
         FuelTableReady?.Invoke(FuelTableBuilder.Build(_tick, _fuel, cfg));
         LapLabReady?.Invoke(_lapLab.Build(_tick, _sectorClock, _roster, _refStore, cfg));
+    }
+
+    /// <summary>Timed demos: a driver doesn't splash with the flag a lap away. Rough on purpose
+    /// (the leader's checkered ≈ clock + 1.5 GTP laps) — the race-end model must not depend on it.</summary>
+    private bool PlayerFuelReachesFlag()
+    {
+        double toFlag = Math.Max(0, _tick.SessionTimeRemain) + 1.5 * GtpLapSeconds;
+        return _playerFuel / PlayerBurnPerLap >= toFlag / Gt3LapSeconds + 1;
     }
 
     /// <summary>Synthetic lab-mode speed trace: eight Gaussian braking zones on a 62 m/s

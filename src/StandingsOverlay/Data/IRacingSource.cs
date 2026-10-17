@@ -135,7 +135,7 @@ public sealed class IRacingSource : ITelemetrySource
             SnapshotReady?.Invoke(SnapshotBuilder.Build(t, _roster, _history, _stints, _weather, _driverSwap, cfg));
             TrafficReady?.Invoke(_traffic.Update(t, _roster, _history, _stints, cfg));
             RelativeReady?.Invoke(RelativeBuilder.Build(t, _roster, _stints, _driverSwap, _history, cfg));
-            FuelReady?.Invoke(_planner.Build(t, _fuel, cfg));
+            FuelReady?.Invoke(_planner.Build(t, _fuel, _stints, _roster, cfg));
             FuelTableReady?.Invoke(FuelTableBuilder.Build(t, _fuel, cfg));
             LapLabReady?.Invoke(_lapLab.Build(t, _sectorClock, _roster, _refStore, cfg));
             _emitted = true;
@@ -356,6 +356,8 @@ public sealed class IRacingSource : ITelemetrySource
         if (_sdk.GetData("FuelLevel") is float fuelLevel) t.PlayerFuelLevel = fuelLevel;
         if (_sdk.GetData("PlayerCarInPitStall") is bool stall) t.PlayerInPitStall = stall;
         if (_sdk.GetData("SessionFlags") is int flags) t.GlobalFlags = flags;
+        if (_sdk.GetData("PitSvFuel") is float pitSvFuel) t.PitSvFuel = pitSvFuel;
+        if (_sdk.GetData("PitSvFlags") is int pitSvFlags) t.PitSvFlags = pitSvFlags;
         t.TankCapacity = _tankCapacity;
 
         return t;

@@ -80,12 +80,12 @@ public partial class FuelWindow : Window
             }
         }
 
-        // The timed-race estimate updates every lap even without strategy bars — log its
-        // transitions so the extra-lap logic is verifiable from overlay.log.
-        if (snapshot.RaceText.Length > 0 && snapshot.RaceText != _lastLoggedRace)
+        // The race-end model logs its own projection once per leader lap ("race est:"); here just
+        // the lap-count transitions the driver sees, so a flip is easy to find in overlay.log.
+        if (snapshot.RaceHead.Length > 0 && snapshot.RaceHead != _lastLoggedRace)
         {
-            _lastLoggedRace = snapshot.RaceText;
-            Log.Write($"race est: {snapshot.RaceText}");
+            _lastLoggedRace = snapshot.RaceHead;
+            Log.Write($"race row: {snapshot.RaceHead} · {snapshot.RaceChance} · {snapshot.RaceText}");
         }
 
         bool same = snapshot.VisuallyEquals(_last);
@@ -109,11 +109,24 @@ public partial class FuelWindow : Window
         FinishLine.Foreground = s.FinishEmphasis >= 2 ? SplashBrush : s.FinishEmphasis == 1 ? SaveBrush : PushBrush;
         SaveLine.Text = s.SaveText;
         SaveLine.Visibility = s.SaveText.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+        var raceBrush = s.RaceEmphasis >= 2 ? SplashBrush : s.RaceEmphasis == 1 ? SaveBrush : PushBrush;
+        RaceRow.Visibility = s.RaceHead.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+        RaceHead.Text = s.RaceHead;
+        bool hasBar = s.RaceProgress >= 0;
+        RaceBarTrack.Visibility = RaceNext.Visibility = RaceChance.Visibility =
+            hasBar ? Visibility.Visible : Visibility.Collapsed;
+        RaceBarFill.Width = Math.Clamp(s.RaceProgress, 0, 1) * RaceBarTrack.Width;
+        RaceBarFill.Background = raceBrush;
+        RaceNext.Text = s.RaceNext;
+        RaceChance.Text = s.RaceChance;
+        RaceChance.Foreground = raceBrush;
         RaceLine.Text = s.RaceText;
         RaceLine.Visibility = s.RaceText.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
-        RaceLine.Foreground = s.RaceEmphasis >= 2 ? SplashBrush : s.RaceEmphasis == 1 ? SaveBrush : TextBrush;
         PlanLine.Text = s.PlanText;
         PlanLine.Visibility = s.PlanText.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+        BoxLine.Text = s.BoxText;
+        BoxLine.Visibility = s.BoxText.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+        BoxLine.Foreground = s.BoxEmphasis == 1 ? SaveBrush : PushBrush;
 
         BarsPanel.Children.Clear();
         BarsPanel.Visibility = s.Bars.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
@@ -211,12 +224,14 @@ public partial class FuelWindow : Window
         Render(new FuelSnapshot(
             Show: true,
             FuelText: "43.2L", PerLapText: "2.31/lap", LapsText: "18.7 laps", TargetText: "tgt 2.21",
-            PlanText: "next stop ~L168 · add 74L · 214 laps to go",
-            RaceText: "≈24(+1?) laps · you 12 to go · extra lap likely — fuel for 13",
-            RaceEmphasis: 2,
-            FinishText: "finish on 41.8L · carrying 5.6L extra (2.4 laps)",
-            FinishEmphasis: 1,
+            PlanText: "last stop ~L58 · add 38L (40L if +1 lap) · 26 laps to go",
+            RaceHead: "84 laps", RaceProgress: 0.73, RaceNext: "85", RaceChance: "14%",
+            RaceText: "+1 lap if leader 26.4s quicker (0.95s/lap) · leader 1 stop left · you 26 to go",
+            RaceEmphasis: 1,
+            FinishText: "finish needs 62.4L — SHORT 19.2L · +1 lap: 64.7L",
+            FinishEmphasis: 2,
             SaveText: "save 0.09/lap to skip the stop (12s faster)",
+            BoxText: "black box 35L — 3.0L short, set 38L", BoxEmphasis: 1,
             NowFrac: 0.75,
             Bars:
             [

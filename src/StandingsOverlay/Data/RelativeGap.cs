@@ -103,6 +103,11 @@ public static class RelativeGap
         return 90f;
     }
 
+    /// <summary>One car's lap phase in [0,1), time domain when the est value is sane (see
+    /// <see cref="Phase"/>). For projections that extrapolate a car's position in time (the
+    /// race-end model) — distance pct would breathe with track section.</summary>
+    public static float LapPhase(RawTick t, Roster roster, int idx) => Phase(t, roster, idx, out _);
+
     /// <summary>One car's lap phase in [0,1): est-time based when sane, LapDistPct otherwise.
     /// <paramref name="estValid"/> reports which domain was used.</summary>
     private static float Phase(RawTick t, Roster roster, int idx, out bool estValid)

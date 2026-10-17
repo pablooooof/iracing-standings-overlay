@@ -57,16 +57,64 @@ real work only on transitions:
 
 All state resets with the session (same reset points as `StintTracker`).
 
-## Race-end model
+## Race-end model (`Data/RaceEnd.cs` → `RaceEndModel`)
 
 - **Lap-limited**: `SessionLapsRemain` is authoritative.
-- **Time-limited** (the endurance case): laps remaining ≈ `timeRemain / paceLap`, computed
-  with the *strategy's own* lap time (saving fuel slows you down → fewer laps → less fuel —
-  the endurance freebie; the solver iterates this fixed point, it converges in 2-3 rounds).
-  The flag falls when the **leader** finishes: if the player is laps down, use the leader's
-  recent pace (`StintTracker.RecentPace`) to bound total race laps, then count how many the
-  player completes in that window. `Fuel.MarginLaps` (default 1.0) of extra fuel is always
-  budgeted on top — a calculator that runs you dry once is deleted forever.
+- **Time-limited** (the endurance case) — the rule, as observed in iRacing (the sporting code
+  doesn't spell it out; confirmed from community telemetry logs, and the model logs the sim's own
+  white/checkered flags to `overlay.log` so the next real race re-confirms it): the clock reaching
+  0:00 does **not** end the race. The **overall leader's first crossing after 0:00 is the white
+  flag; the checkered falls one lap later.** So
+  `N = floor(leader laps completed at 0:00) + 2`. The leader crossing the line just *before* 0:00
+  means a whole extra lap. (v0.x before this had the checkered at the first crossing — one lap
+  short; the 1-lap fuel margin was hiding it.)
+
+  **Projection** — for each of the top 3 overall cars (whoever is P1 at 0:00 decides, and leaders
+  swap during pit cycles; the max wins):
+  `X = laps completed now + (clock left − expected remaining stop time) / pace`
+  - *laps completed now*: integer from `CarIdxLap`, fraction from the **time-domain** lap phase
+    (`RelativeGap.LapPhase`) — distance pct would make the projection breathe with track section.
+  - *pace*: `StintTracker.PaceStats` — trimmed mean of the last 8 clean laps (drop slowest 2,
+    fastest 1). Not a median: over an odd window the median flips between lap clusters from one
+    lap to the next and the projection alternated ±0.1 lap with it (seen in the demo).
+  - *remaining stops*: soft. P(needs another stop) = Φ((laps needed − laps left in tank + 0.5) /
+    0.6) per stop, from the car's typical stint (own → class median → player's tank converted to
+    the car's lap time; borrowed stints widen σ). Priced at the car's **measured stop loss**: the
+    drop of its "laps completed − elapsed / pace" invariant from pit entry to its first crossing
+    after the exit (in-lap slowdown + lane + service + cold out-lap in one number; works without a
+    track map, same in demo and live). Fallbacks: class median → player's → 60 s.
+  - *on pit road*: the projection made on the way in is **held** (it already priced the stop);
+    the implied remaining stop time feeds the checkered time. Re-projected at pit exit — the
+    only jump left is the real stop's deviation from the measured ones.
+  - *σ*: √(laps · lap-σ² + (0.25 % · clock)² + stop-count variance · loss² + stops · 6 s²), the stop
+    terms capped by the clock actually left. P(+1 lap) = 1 − Φ((N−1−X)/σ), P(−1) = Φ((N−2−X)/σ).
+  - *hysteresis*: the shown N (and the player's final lap) is kept while it's still ≥ 35 % likely,
+    so a projection sitting on a lap boundary doesn't flip the count every few seconds; the bar
+    pins full/empty and the % carries the rest.
+  - *at 0:00*: the white-flag lap is latched (a late join reads the sim's white flag), phase
+    becomes "white flag next crossing" → "final lap", P = 0.
+
+  **Player**: laps to go = the player's line crossings until the leader's checkered (+ the one
+  they're on), with their own remaining stops from the tank (stops = what the tank can't cover,
+  lane loss + fill / fill rate), capped at the leader's lap count. The checkered *time* uses the
+  most likely leader stop count, not the mean (a 5 % "maybe a splash" moved the player's knife-
+  edge for an outcome that almost never happens). P(player runs one more) sums the leader's
+  −1/0/+1 outcomes × the chance the player's own crossing lands past the line — in multiclass or
+  laps down the player's crossing can tip a lap on its own. Held through the player's pit visit.
+
+  The planner prices every candidate plan with the same count (`PlayerLapsFor(lapSec, stopSec)`,
+  including the hysteresis hold) — saving fuel slows you → fewer laps → less fuel, the endurance
+  freebie — so the plan's "N laps to go" and the race line never disagree.
+  `Fuel.MarginLaps` (default 1.0) of extra fuel is always budgeted on top — a calculator that runs
+  you dry once is deleted forever.
+
+  **Why a % that doesn't jump** (the "4 % on lap 80, 80 % on lap 81" complaint about naive
+  calculators): `time left ÷ last lap` moves with every lap-time wobble, with the leader's in-lap,
+  and by a whole pit stop when the leader pits. Here the only inputs that move are a robust pace
+  and stops that were already priced in, so the % can only move when the race actually changes
+  (a caution, the leader losing time, a stop slower than their others). The headline is the
+  bar and the seconds; the % is calibrated by the same σ. Verified in `RaceEndTests` on the
+  endurance demo: second-half worst lap-to-lap change 6 %, final lap called 100 % of the last third.
 
 ## StrategyPlanner (the solver)
 
@@ -110,7 +158,11 @@ Default position: top-right area, under the traffic widget.
 
 ```
 FUEL 43.2L ▏ 2.31/lap ▏ 18.7 laps ▏ tgt 2.21          ← live numbers (big)
-next stop ~L168 · add 74L · 214 laps to go            ← plan summary
+finish needs 62.4L — SHORT 19.2L · +1 lap: 64.7L      ← fuel to the flag (+ the extra-lap case)
+RACE 84 laps ▕██████████████▌░░░░░▏ 85  14%           ← timed race: bar = leader's progress through
++1 lap if leader 26.4s quicker (0.95s/lap) · leader 1 stop left · you 26 to go   the lap at 0:00
+last stop ~L58 · add 38L (40L if +1 lap) · 26 laps to go   ← plan summary
+black box 35L — 3.0L short, set 38L                   ← PitSvFuel vs the planned fill
 ┌──────────────────────────────────────────────┬─────┐
 │▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒│██████│██████│██████│█▍   │ +0s │  A · push · 3 stops
 │▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒│▓▓▓▓▓▓▓│▓▓▓▓▓▓▓│▓▓▓▓▓▓▓ │ +14s│  B · save 0.11/lap · 2 stops
@@ -135,7 +187,12 @@ next stop ~L168 · add 74L · 214 laps to go            ← plan summary
 `DemoSource` fabricates player fuel so the whole pipeline is testable offline: 100 L tank,
 ~2.4 L/lap with noise, scripted stops refuel at 2.5 L/s, one caution phase (lower burn), and
 the remaining-race fuel need deliberately lands at ~2.15 tanks → the planner must produce the
-push-plus-splash vs save-two-stints fork within the first minute of `--demo`. Verify via
+push-plus-splash vs save-two-stints fork within the first minute of `--demo`. `--demo endurance`
+is a 10-minute timed race where the GTP leaders pit every 7-9 laps and the player pits on fuel
+(skipping a stop its tank already covers): the race-end model has to price the leaders' stops,
+the last-stop line and black-box check show up before the player's final stop, and the race ends
+like iRacing's (clock negative after 0:00, white at the leader's next crossing, checkered → state 5).
+`RaceEndTests` steps it headless and checks the projection against the actual finish. Verify via
 `overlay.log` (planner logs each re-plan: inputs + chosen strategies) per the token-budget
 rules; screenshot only the final look.
 
