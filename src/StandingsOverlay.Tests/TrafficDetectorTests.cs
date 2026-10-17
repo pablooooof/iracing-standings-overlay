@@ -1,4 +1,5 @@
 using System.Globalization;
+using StandingsOverlay.Config;
 using StandingsOverlay.Data;
 using Xunit;
 
@@ -65,11 +66,26 @@ public class TrafficDetectorTests
 
         var snaps = Run(r, new TrafficDetector(), progress, _ => [120.0, 100.0], seconds: 90);
         Assert.All(snaps, s => Assert.Empty(s.Rows));
+        Assert.All(snaps, s => Assert.True(s.Off));   // switched off → the widget hides, YOU line too
 
         r.Cfg.Traffic.WhileSpectating = true;
         progress = [20.0, 20.0 - 8.0 / 100];
         var optedIn = Run(r, new TrafficDetector(), progress, _ => [120.0, 100.0], seconds: 90);
         Assert.Contains(optedIn, s => s.Rows.Count > 0);
+        Assert.All(optedIn, s => Assert.False(s.Off));
+    }
+
+    [Fact]
+    public void SessionTypeNotTicked_SwitchesTheWidgetOff()
+    {
+        var r = new Rig(2, sessionType: "Practice");
+        r.AddCar(0, 2, 120f);
+        r.AddCar(1, 1, 100f, "GTP");
+        r.Cfg.Traffic.Enabled = Sessions.Race | Sessions.Qualify;
+        var progress = new double[] { 20.0, 20.0 - 8.0 / 100 };
+
+        var snaps = Run(r, new TrafficDetector(), progress, _ => [120.0, 100.0], seconds: 30);
+        Assert.All(snaps, s => Assert.True(s.Off));
     }
 
     [Fact]

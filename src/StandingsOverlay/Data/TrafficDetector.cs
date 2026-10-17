@@ -38,6 +38,13 @@ public sealed record TrafficSnapshot(
 {
     public static readonly TrafficSnapshot Empty = new([], 0, AlongsideDir.None, -1, false, TrafficCues.None);
 
+    /// <summary>Switched off for the current situation (session type not ticked, out of the car
+    /// without the spectating opt-in, lone qualifying): the widget hides entirely. <see cref="Empty"/>
+    /// is "on, nothing to show" — the split layout keeps its fixed YOU line.</summary>
+    public static readonly TrafficSnapshot Disabled = Empty with { Off = true };
+
+    public bool Off { get; init; }
+
     public bool IsEmpty => Rows.Count == 0 && Alongside == AlongsideDir.None && !ClearFlash;
 
     /// <summary>Value comparison (the record alone compares Rows by reference). Cues excluded —
@@ -45,7 +52,7 @@ public sealed record TrafficSnapshot(
     public bool VisuallyEquals(TrafficSnapshot? o)
     {
         if (o is null) return false;
-        if (Overflow != o.Overflow || Alongside != o.Alongside || AlongsideCarIdx != o.AlongsideCarIdx ||
+        if (Off != o.Off || Overflow != o.Overflow || Alongside != o.Alongside || AlongsideCarIdx != o.AlongsideCarIdx ||
             ClearFlash != o.ClearFlash || Rows.Count != o.Rows.Count) return false;
         for (int i = 0; i < Rows.Count; i++)
             if (Rows[i] != o.Rows[i]) return false;
@@ -126,9 +133,13 @@ public sealed class TrafficDetector
         if (!tc.Enabled.In(kind) ||
             // Out of the car (teammate stint, garage, spectating) nobody needs a warning.
             (!t.IsOnTrack && !tc.WhileSpectating) ||
-            !t.Has(t.PlayerCarIdx) || t.SessionTime < 0 ||
             // Lone qualifying: other cars are ghosts from separate runs, never really near you.
-            t.SessionType.Contains("Lone", StringComparison.OrdinalIgnoreCase) ||
+            t.SessionType.Contains("Lone", StringComparison.OrdinalIgnoreCase))
+        {
+            if (_cars.Count > 0) Reset();
+            return TrafficSnapshot.Disabled;   // switched off here: hide the widget entirely
+        }
+        if (!t.Has(t.PlayerCarIdx) || t.SessionTime < 0 ||
             // No traffic warnings while the player is anywhere in the pit area (lane, stall,
             // or the entry/exit roads before the cones) — everyone "closes" at full speed on
             // a slow car and none of it is actionable.

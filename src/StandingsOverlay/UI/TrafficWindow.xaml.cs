@@ -216,6 +216,17 @@ public partial class TrafficWindow : Window
     {
         var tc = _configService.Current.Traffic;
         bool beacon = tc.BeaconStyle;
+
+        // Switched off for this situation (session type, spectating): hide everything, the fixed
+        // YOU line and the panel included — "on but quiet" keeps them.
+        Root.Visibility = s.Off ? Visibility.Collapsed : Visibility.Visible;
+        WidgetPanel.Visibility = !s.Off && tc.ShowPanel && !beacon ? Visibility.Visible : Visibility.Collapsed;
+        if (s.Off)
+        {
+            Pulse(AlongsideBanner, on: false);
+            StopChevrons();
+            return;
+        }
         bool showRows = s.Rows.Count > 0;
         bool split = !beacon && tc.GroupByDirection;
 
