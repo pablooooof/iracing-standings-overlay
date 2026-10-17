@@ -63,7 +63,8 @@ public static class RelativeBuilder
         DriverSwapTracker swap, GapHistory history, OverlayConfig cfg)
     {
         var rc = cfg.Relative;
-        if (!rc.Enabled || !t.Has(t.PlayerCarIdx)) return RelativeSnapshot.Empty;
+        var kind = StandingsSnapshot.KindOf(t.SessionType);
+        if (!rc.Enabled.In(kind) || !t.Has(t.PlayerCarIdx)) return RelativeSnapshot.Empty;
         // Lone qualifying: every driver runs alone, so any "cars around you" are ghosts from other
         // drivers' separate runs — the relative (and traffic) are meaningless.
         if (t.SessionType.Contains("Lone", StringComparison.OrdinalIgnoreCase)) return RelativeSnapshot.Empty;
@@ -83,7 +84,7 @@ public static class RelativeBuilder
             return RelativeSnapshot.Empty;
         if (!roster.Drivers.TryGetValue(focus, out var me)) return RelativeSnapshot.Empty;
 
-        bool isRace = StandingsSnapshot.KindOf(t.SessionType) == SessionKind.Race;
+        bool isRace = kind == SessionKind.Race;
         double playerTotal = t.Lap[focus] + t.LapDistPct[focus];
         float? playerPace = stints.RecentPace(focus);
         // Ruler = the centre car's ACTUAL lap time (recent clean-lap pace, else best), not the
@@ -159,6 +160,7 @@ public static class RelativeBuilder
         bool isRace, int focus, double playerTotal, int playerClassId, float? playerPace)
     {
         var rc = cfg.Relative;
+        var kind = StandingsSnapshot.KindOf(t.SessionType);
         int idx = d.CarIdx;
         bool inPit = idx < t.OnPitRoad.Length && t.OnPitRoad[idx];
 
@@ -183,13 +185,13 @@ public static class RelativeBuilder
         // Races use the live total-distance rank so this always matches the standings row the
         // car occupies; practice/qual keep the sim's scored positions.
         string pos = "";
-        if (isRace && LiveRank(t, roster, idx, rc.ShowClassPos) is > 0 and var live)
+        if (isRace && LiveRank(t, roster, idx, rc.ShowClassPos.In(kind)) is > 0 and var live)
             pos = live.ToString();
         else
         {
             int cp = idx < t.ClassPosition.Length ? t.ClassPosition[idx] : 0;
             int op = idx < t.Position.Length ? t.Position[idx] : 0;
-            if (rc.ShowClassPos && cp > 0) pos = cp.ToString();
+            if (rc.ShowClassPos.In(kind) && cp > 0) pos = cp.ToString();
             else if (op > 0) pos = op.ToString();
         }
 
@@ -198,7 +200,7 @@ public static class RelativeBuilder
         // lengths). Green while the tyres are fresh.
         string stint = "";
         bool fresh = false;
-        if (rc.ShowStintAge && stints.StintLaps(idx, t.Lap[idx]) is int laps)
+        if (rc.ShowStintAge.In(kind) && stints.StintLaps(idx, t.Lap[idx]) is int laps)
         {
             stint = "ST" + laps;
             int age = laps;
@@ -212,7 +214,7 @@ public static class RelativeBuilder
 
         string pace = "";
         int paceSign = 0;
-        if (rc.ShowPace && !isPlayer
+        if (rc.ShowPace.In(kind) && !isPlayer
             && stints.RecentPace(idx) is float rp && playerPace is float pp && pp > 0)
         {
             if (rp < pp * 0.997f) { pace = "▲"; paceSign = 1; }
@@ -226,7 +228,7 @@ public static class RelativeBuilder
         // green = you're reeling in a car ahead (prepare to pass). Holding-station cars stay blank.
         string closingText = "";
         int closingKind = 0;
-        if (rc.ShowClosing && !isPlayer && history.CatchRatePerLap(idx) is float catchRate)
+        if (rc.ShowClosing.In(kind) && !isPlayer && history.CatchRatePerLap(idx) is float catchRate)
         {
             bool behind = gap < 0;
             float converging = behind ? catchRate : -catchRate;   // >0 = the gap is shrinking
@@ -243,21 +245,21 @@ public static class RelativeBuilder
             IsPlayer: isPlayer,
             PosText: pos,
             ClassColor: d.ClassColor,
-            Tyre: rc.ShowTyre && idx < t.TireCompound.Length ? t.TireCompound[idx] : -1,
-            TyreSwitch: rc.ShowTyre ? SnapshotBuilder.InlineTyreSwitch(t, stints, idx, cfg) : 0,
+            Tyre: rc.ShowTyre.In(kind) && idx < t.TireCompound.Length ? t.TireCompound[idx] : -1,
+            TyreSwitch: rc.ShowTyre.In(kind) ? SnapshotBuilder.InlineTyreSwitch(t, stints, idx, cfg) : 0,
             CarNumber: "#" + d.CarNumber,
-            CarBrand: rc.ShowBrand ? d.CarBrand : "",
+            CarBrand: rc.ShowBrand.In(kind) ? d.CarBrand : "",
             Name: d.Name,
             LapParity: parity,
             StatusText: statusText,
             PenaltyText: penaltyText,
             Battle: battle,
-            IRatingText: rc.ShowIRating ? SnapshotBuilder.FmtIr(d.IRating) : "",
-            LicText: rc.ShowLicense ? d.LicString : "",
+            IRatingText: rc.ShowIRating.In(kind) ? SnapshotBuilder.FmtIr(d.IRating) : "",
+            LicText: rc.ShowLicense.In(kind) ? d.LicString : "",
             LicColor: d.LicColor,
             StintText: stint,
             StintFresh: fresh,
-            LastLapText: rc.ShowLastLap && last > 0 ? SnapshotBuilder.FmtLap(last, cfg.LapTimePrecision) : "",
+            LastLapText: rc.ShowLastLap.In(kind) && last > 0 ? SnapshotBuilder.FmtLap(last, cfg.LapTimePrecision) : "",
             PaceText: pace,
             PaceSign: paceSign,
             // Ahead is unsigned (list order shows it); behind keeps its "-".

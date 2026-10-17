@@ -141,9 +141,9 @@ public static class SnapshotBuilder
         }
 
         return new StandingsSnapshot(true, kind, isRace ? "RACE" : t.SessionType.ToUpperInvariant(),
-            HeaderGroups(t, roster, weather, cfg, playerClassId), cellHeaders, rows,
-            HeaderAlert: HeaderAlert(t, roster, stints, weather, cfg),
-            WetDeclared: cfg.ShowWeather && t.DeclaredWet);
+            HeaderGroups(t, roster, weather, cfg, kind, playerClassId), cellHeaders, rows,
+            HeaderAlert: HeaderAlert(t, roster, stints, weather, cfg, kind),
+            WetDeclared: cfg.ShowWeather.In(kind) && t.DeclaredWet);
     }
 
     private static List<DriverEntry> OrderClass(List<DriverEntry> cars, RawTick t, Roster roster, bool isRace)
@@ -384,40 +384,40 @@ public static class SnapshotBuilder
     /// <summary>Header metrics grouped into chips by type: [time] · [track/field] · [weather].
     /// Each chip is rendered as a rounded pill so related numbers read as a cluster.</summary>
     private static List<string> HeaderGroups(RawTick t, Roster roster, WeatherTracker weather,
-        OverlayConfig cfg, int playerClassId)
+        OverlayConfig cfg, SessionKind kind, int playerClassId)
     {
         var groups = new List<string>(3);
 
         // Time: real-life clock · in-sim track clock · lap counter · session clock.
         var time = new List<string>(4);
-        if (cfg.ShowRealClock) time.Add(DateTime.Now.ToString("H:mm"));
-        if (cfg.ShowTimeOfDay && t.TimeOfDay >= 0) time.Add("☀ " + FmtTimeOfDay(t.TimeOfDay));
+        if (cfg.ShowRealClock.In(kind)) time.Add(DateTime.Now.ToString("H:mm"));
+        if (cfg.ShowTimeOfDay.In(kind) && t.TimeOfDay >= 0) time.Add("☀ " + FmtTimeOfDay(t.TimeOfDay));
         if (LapCounter(t, roster) is { Length: > 0 } laps) time.Add(laps);
         if (SessionClock(t) is { Length: > 0 } clock) time.Add(clock);
         if (time.Count > 0) groups.Add(string.Join(" · ", time));
 
         // Track / field: SoF (player's class) · track temp · incidents.
         var track = new List<string>(3);
-        if (cfg.ShowSof)
+        if (cfg.ShowSof.In(kind))
         {
             double sof = roster.SofByClass.TryGetValue(playerClassId, out var s) && s > 25
                 ? s : roster.StrengthOfField;
             if (sof > 25) track.Add($"SoF {FmtIr((int)sof)}");
         }
-        if (cfg.ShowTrackTemp && !float.IsNaN(t.TrackTemp))
+        if (cfg.ShowTrackTemp.In(kind) && !float.IsNaN(t.TrackTemp))
             track.Add($"{t.TrackTemp.ToString("F" + Math.Clamp(cfg.ShowTrackTempDecimals, 0, 2))}°C{TrendArrow(weather.TempTrend)}");
-        if (cfg.ShowIncidents && t.PlayerIncidents >= 0) track.Add($"{t.PlayerIncidents}x");
+        if (cfg.ShowIncidents.In(kind) && t.PlayerIncidents >= 0) track.Add($"{t.PlayerIncidents}x");
         if (track.Count > 0) groups.Add(string.Join(" · ", track));
 
         // Weather: track surface wetness · rain %. (The marshal's WeatherDeclaredWet flag is a
         // separate box indicator, not a wetness level — it rides on the snapshot, not here.)
         var sky = new List<string>(3);
-        if (cfg.ShowWeather)
+        if (cfg.ShowWeather.In(kind))
         {
             if (WetnessText(t.TrackWetness, cfg.AbbreviateWetness) is { Length: > 0 } wet) sky.Add(wet);
             if (!float.IsNaN(t.Precipitation)) sky.Add($"☂ {t.Precipitation * 100:0}%{TrendArrow(weather.PrecipTrend)}");
         }
-        if (cfg.ShowWind && WindText(t.WindVel, t.WindDir) is { Length: > 0 } wind) sky.Add(wind);
+        if (cfg.ShowWind.In(kind) && WindText(t.WindVel, t.WindDir) is { Length: > 0 } wind) sky.Add(wind);
         if (sky.Count > 0) groups.Add(string.Join(" · ", sky));
 
         return groups;
@@ -438,12 +438,12 @@ public static class SnapshotBuilder
     /// <summary>The flashing header banner text (empty = no flash). Dry→wet takes priority, then
     /// the most recent dry↔wet tyre switch by any car (the crossover "someone committed" signal).</summary>
     private static string HeaderAlert(RawTick t, Roster roster, StintTracker stints,
-        WeatherTracker weather, OverlayConfig cfg)
+        WeatherTracker weather, OverlayConfig cfg, SessionKind kind)
     {
         double now = t.SessionTime;
 
         // Track dry↔wet transition banner (its own configurable duration).
-        double weatherAt = cfg.ShowWeather && weather.TransitionTime >= 0
+        double weatherAt = cfg.ShowWeather.In(kind) && weather.TransitionTime >= 0
                            && now - weather.TransitionTime <= cfg.WeatherAlertSec
             ? weather.TransitionTime : -1;
 

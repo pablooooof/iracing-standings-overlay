@@ -214,12 +214,14 @@ public partial class RelativeWindow : Window
         SourceInitialized += (_, _) => Win32.ApplyOverlayStyle(this, clickThrough: true);
         MouseLeftButtonDown += (_, e) =>
         {
-            if (_editMode && e.ButtonState == MouseButtonState.Pressed) DragMove();
+            if (!_editMode || e.ButtonState != MouseButtonState.Pressed) return;
+            DragMove();       // modal until the mouse is released
+            SavePosition();   // per session type
         };
         // Until the user picks a spot, stay glued to the bottom-right corner across resizes.
         SizeChanged += (_, _) =>
         {
-            if (_configService.Current.Relative.X < 0) AutoPlace();
+            if (_configService.Current.Relative.Position.For(_configService.Session).X < 0) AutoPlace();
         };
 
         ApplyConfig(configService.Current);
@@ -233,10 +235,11 @@ public partial class RelativeWindow : Window
 
     public void ApplyConfig(OverlayConfig cfg)
     {
-        if (cfg.Relative.X >= 0)
+        var pos = cfg.Relative.Position.For(_configService.Session);
+        if (pos.X >= 0)
         {
-            Left = cfg.Relative.X;
-            Top = cfg.Relative.Y;
+            Left = pos.X;
+            Top = pos.Y;
         }
         else AutoPlace();
 
@@ -311,12 +314,18 @@ public partial class RelativeWindow : Window
             }
             else
             {
-                _configService.Current.Relative.X = Left;
-                _configService.Current.Relative.Y = Top;
-                _configService.Save();
+                SavePosition();
                 Render(_last ?? RelativeSnapshot.Empty);
             }
         }
+    }
+
+    private void SavePosition()
+    {
+        var pos = _configService.Current.Relative.Position.For(_configService.Session);
+        pos.X = Left;
+        pos.Y = Top;
+        _configService.Save();
     }
 
     /// <summary>Edit mode shows a representative field so there is something to position.</summary>

@@ -41,7 +41,9 @@ public partial class LapLabWindow : Window
         SourceInitialized += (_, _) => Win32.ApplyOverlayStyle(this, clickThrough: true);
         MouseLeftButtonDown += (_, e) =>
         {
-            if (_editMode && e.ButtonState == MouseButtonState.Pressed) DragMove();
+            if (!_editMode || e.ButtonState != MouseButtonState.Pressed) return;
+            DragMove();       // modal until the mouse is released
+            SavePosition();   // per session type
         };
 
         ApplyConfig(configService.Current);
@@ -55,8 +57,9 @@ public partial class LapLabWindow : Window
 
     private void ApplyConfig(OverlayConfig cfg)
     {
-        Left = cfg.LapLab.X;
-        Top = cfg.LapLab.Y;
+        var pos = cfg.LapLab.Position.For(_configService.Session);
+        Left = pos.X;
+        Top = pos.Y;
         Root.LayoutTransform = RowViewModel.ScaleTransformFor(cfg.LapLab.Scale);
         EditHint.Foreground = RowViewModel.TryBrush(cfg.AccentColor) ?? Brushes.Cyan;
     }
@@ -177,6 +180,14 @@ public partial class LapLabWindow : Window
         Table.Children.Add(cell);
     }
 
+    private void SavePosition()
+    {
+        var pos = _configService.Current.LapLab.Position.For(_configService.Session);
+        pos.X = Left;
+        pos.Y = Top;
+        _configService.Save();
+    }
+
     public bool EditMode
     {
         get => _editMode;
@@ -191,9 +202,7 @@ public partial class LapLabWindow : Window
             }
             else
             {
-                _configService.Current.LapLab.X = Left;
-                _configService.Current.LapLab.Y = Top;
-                _configService.Save();
+                SavePosition();
                 Render(_last ?? LapLabSnapshot.Empty);
             }
         }

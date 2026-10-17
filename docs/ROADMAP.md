@@ -172,6 +172,21 @@ Ideas and requests captured during rapid iteration so nothing is lost. Roughly o
   move overlays only on General, enable only as an in-body master toggle per section). The old master
   toggle is gone from each widget section — its enable lives in the header. Split the Fuel nav section
   into **Fuel** (strategy widget) and **Fuel Table** (consumption table), each its own page + reset.
+- [x] **Settings rework, iOverlay-style R/Q/P (2026-10-17)** — every overlay page now has a
+  **Visible** switch + race / quali / practice boxes in its header, and General / Content / Header
+  tabs. Content + Header rows are one line each: master switch · label · optional **settings** link
+  (expands that item's own options — decimals, styles, durations) · R/Q/P boxes; session types an
+  item can never render in (race-only pit/strategy columns, no cells in practice, Lap Lab in races)
+  are greyed. General tabs hold everything that doesn't vary by session type. Config: former bool
+  toggles are `Sessions` flags (`"All"`, `"Race, Practice"`, `"None"`; legacy `true`/`false` read
+  as All/None), widget `Enabled` is per session (`Traffic.RacesOnly` folded into it), standings
+  got `ShowStandings`. **Widget positions are per session type** (`Position.Race/Qualify/Practice`,
+  legacy `X`/`Y` seeds all three): a drag saves the slot of `ConfigService.Session` the moment the
+  mouse is released. The rail's Move-overlays block has a Race/Quali/Practice picker to arrange
+  another session's layout without being in it; leaving move mode snaps back to the live session.
+  Global controls (profile, Move overlays, layout) moved to the left rail. Tests: legacy-migration
+  cases in `ConfigProfileTests`. Not done: iOverlay's ≡ drag-to-reorder columns (the standings XAML
+  has a fixed column order) — candidate follow-up.
 - [x] **Tire-change inference (2026-07-11, `InferTireChanges`)** — no SDK channel exists for
   opponents' tire sets, but under fuel-and-tires-separate rules service is sequential: a tire
   stop sits ~10s+ longer than the car's own fuel-fill baseline (cheapest observed sec/stint-lap).

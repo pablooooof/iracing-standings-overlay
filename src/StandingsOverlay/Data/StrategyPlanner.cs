@@ -87,7 +87,7 @@ public sealed class StrategyPlanner
     {
         var fc = cfg.Fuel;
         int p = t.PlayerCarIdx;
-        if (!fc.Enabled || !t.Has(p) || float.IsNaN(t.PlayerFuelLevel)) return FuelSnapshot.Empty;
+        if (!fc.Enabled.In(StandingsSnapshot.KindOf(t.SessionType)) || !t.Has(p) || float.IsNaN(t.PlayerFuelLevel)) return FuelSnapshot.Empty;
 
         double fuelNow = t.PlayerFuelLevel;
         double perLap = fuel.GreenPerLap;

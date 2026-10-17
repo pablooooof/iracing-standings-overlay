@@ -42,7 +42,9 @@ public partial class FuelTableWindow : Window
         SourceInitialized += (_, _) => ApplyClickThrough();
         MouseLeftButtonDown += (_, e) =>
         {
-            if (_editMode && e.ButtonState == MouseButtonState.Pressed) DragMove();
+            if (!_editMode || e.ButtonState != MouseButtonState.Pressed) return;
+            DragMove();       // modal until the mouse is released
+            SavePosition();   // per session type
         };
 
         ApplyConfig(configService.Current);
@@ -56,8 +58,9 @@ public partial class FuelTableWindow : Window
 
     private void ApplyConfig(OverlayConfig cfg)
     {
-        Left = cfg.FuelTable.X;
-        Top = cfg.FuelTable.Y;
+        var pos = cfg.FuelTable.Position.For(_configService.Session);
+        Left = pos.X;
+        Top = pos.Y;
         Root.LayoutTransform = RowViewModel.ScaleTransformFor(cfg.FuelTable.Scale);
         _accent = RowViewModel.TryBrush(cfg.AccentColor) ?? Brushes.Orange;
         EditHint.Foreground = _accent;
@@ -214,6 +217,14 @@ public partial class FuelTableWindow : Window
 
     private static string Fmt(double v) => v > 0.005 ? $"{v:0.00}" : "—";
 
+    private void SavePosition()
+    {
+        var pos = _configService.Current.FuelTable.Position.For(_configService.Session);
+        pos.X = Left;
+        pos.Y = Top;
+        _configService.Save();
+    }
+
     public bool EditMode
     {
         get => _editMode;
@@ -225,9 +236,7 @@ public partial class FuelTableWindow : Window
             if (value) RenderSample();
             else
             {
-                _configService.Current.FuelTable.X = Left;
-                _configService.Current.FuelTable.Y = Top;
-                _configService.Save();
+                SavePosition();
                 Render(_last ?? FuelTableSnapshot.Empty);
             }
         }

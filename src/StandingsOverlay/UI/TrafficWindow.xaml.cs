@@ -158,7 +158,9 @@ public partial class TrafficWindow : Window
         SourceInitialized += (_, _) => Win32.ApplyOverlayStyle(this, clickThrough: true);
         MouseLeftButtonDown += (_, e) =>
         {
-            if (_editMode && e.ButtonState == MouseButtonState.Pressed) DragMove();
+            if (!_editMode || e.ButtonState != MouseButtonState.Pressed) return;
+            DragMove();       // modal until the mouse is released
+            SavePosition();   // per session type
         };
 
         ApplyConfig(configService.Current);
@@ -173,8 +175,9 @@ public partial class TrafficWindow : Window
     public void ApplyConfig(OverlayConfig cfg)
     {
         var tc = cfg.Traffic;
-        Left = tc.X;
-        Top = tc.Y;
+        var pos = tc.Position.For(_configService.Session);
+        Left = pos.X;
+        Top = pos.Y;
         Root.LayoutTransform = RowViewModel.ScaleTransformFor(tc.Scale);
         var accent = RowViewModel.TryBrush(cfg.AccentColor) ?? Brushes.Cyan;
         YouBar.Background = accent;
@@ -415,6 +418,14 @@ public partial class TrafficWindow : Window
         }
     }
 
+    private void SavePosition()
+    {
+        var pos = _configService.Current.Traffic.Position.For(_configService.Session);
+        pos.X = Left;
+        pos.Y = Top;
+        _configService.Save();
+    }
+
     public bool EditMode
     {
         get => _editMode;
@@ -429,9 +440,7 @@ public partial class TrafficWindow : Window
             }
             else
             {
-                _configService.Current.Traffic.X = Left;
-                _configService.Current.Traffic.Y = Top;
-                _configService.Save();
+                SavePosition();
                 Render(_last ?? TrafficSnapshot.Empty);
             }
         }

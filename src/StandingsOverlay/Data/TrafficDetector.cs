@@ -121,8 +121,9 @@ public sealed class TrafficDetector
                                   OverlayConfig cfg)
     {
         var tc = cfg.Traffic;
-        bool race = StandingsSnapshot.KindOf(t.SessionType) == SessionKind.Race;
-        if (!tc.Enabled || (tc.RacesOnly && !race) ||
+        var kind = StandingsSnapshot.KindOf(t.SessionType);
+        bool race = kind == SessionKind.Race;
+        if (!tc.Enabled.In(kind) ||
             // Out of the car (teammate stint, garage, spectating) nobody needs a warning.
             (!t.IsOnTrack && !tc.WhileSpectating) ||
             !t.Has(t.PlayerCarIdx) || t.SessionTime < 0 ||
@@ -428,7 +429,7 @@ public sealed class TrafficDetector
         // blanking the whole thing.
         var alongside = AlongsideDir.None;
         int alongsideCar = -1;
-        if (tc.AlongsideBanner && t.CarLeftRight >= 2)
+        if (tc.AlongsideBanner.In(kind) && t.CarLeftRight >= 2)
         {
             var near = active.Where(a => a.Gap <= 2.0f).ToList();
             if (near.Count > 0 || tc.AlongsideAnyCar)
@@ -545,7 +546,7 @@ public sealed class TrafficDetector
             CarIdx: d.CarIdx, Phase: phase, IsBlue: false, IsLapping: true, FromBehind: false,
             ClassColor: string.IsNullOrEmpty(d.ClassColor) ? "#9DA0AA" : d.ClassColor,
             CarNumber: cp > 0 ? $"P{cp}" : "#" + d.CarNumber, Name: d.Name,
-            IRatingText: tc.ShowIRating && d.IRating > 0 ? $"{d.IRating / 1000.0:0.0}k" : "",
+            IRatingText: tc.ShowIRating.In(StandingsSnapshot.KindOf(t.SessionType)) && d.IRating > 0 ? $"{d.IRating / 1000.0:0.0}k" : "",
             SubText: $"{d.ClassName} · #{d.CarNumber} · lapping",
             TtaText: Math.Clamp(gap, 0.1, 99.9).ToString("0.0"),
             PaceText: paceText, PaceSign: paceSign,
@@ -595,7 +596,7 @@ public sealed class TrafficDetector
             ClassColor: string.IsNullOrEmpty(d.ClassColor) ? "#9DA0AA" : d.ClassColor,
             CarNumber: headline,
             Name: d.Name,
-            IRatingText: tc.ShowIRating && d.IRating > 0 ? $"{d.IRating / 1000.0:0.0}k" : "",
+            IRatingText: tc.ShowIRating.In(StandingsSnapshot.KindOf(t.SessionType)) && d.IRating > 0 ? $"{d.IRating / 1000.0:0.0}k" : "",
             SubText: sub,
             TtaText: shown.ToString("0.0"),
             PaceText: paceText,

@@ -40,7 +40,9 @@ public partial class FuelWindow : Window
         SourceInitialized += (_, _) => Win32.ApplyOverlayStyle(this, clickThrough: true);
         MouseLeftButtonDown += (_, e) =>
         {
-            if (_editMode && e.ButtonState == MouseButtonState.Pressed) DragMove();
+            if (!_editMode || e.ButtonState != MouseButtonState.Pressed) return;
+            DragMove();       // modal until the mouse is released
+            SavePosition();   // per session type
         };
 
         ApplyConfig(configService.Current);
@@ -54,8 +56,9 @@ public partial class FuelWindow : Window
 
     private void ApplyConfig(OverlayConfig cfg)
     {
-        Left = cfg.Fuel.X;
-        Top = cfg.Fuel.Y;
+        var pos = cfg.Fuel.Position.For(_configService.Session);
+        Left = pos.X;
+        Top = pos.Y;
         Root.LayoutTransform = RowViewModel.ScaleTransformFor(cfg.Fuel.Scale);
         var accent = RowViewModel.TryBrush(cfg.AccentColor) ?? Brushes.Cyan;
         TargetValue.Foreground = accent;
@@ -179,6 +182,14 @@ public partial class FuelWindow : Window
         return row;
     }
 
+    private void SavePosition()
+    {
+        var pos = _configService.Current.Fuel.Position.For(_configService.Session);
+        pos.X = Left;
+        pos.Y = Top;
+        _configService.Save();
+    }
+
     public bool EditMode
     {
         get => _editMode;
@@ -193,9 +204,7 @@ public partial class FuelWindow : Window
             }
             else
             {
-                _configService.Current.Fuel.X = Left;
-                _configService.Current.Fuel.Y = Top;
-                _configService.Save();
+                SavePosition();
                 Render(_last ?? FuelSnapshot.Empty);
             }
         }

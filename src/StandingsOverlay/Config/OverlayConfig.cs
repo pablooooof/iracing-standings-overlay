@@ -5,11 +5,22 @@ using System.Text.Json.Serialization;
 
 namespace StandingsOverlay.Config;
 
-public sealed class OverlayConfig
+public sealed class OverlayConfig : IJsonOnDeserialized
 {
-    // Window position (DIPs). Defaults mirror the classic top-left placement.
-    public double X { get; set; } = 7;
-    public double Y { get; set; } = 6;
+    // Standings table: which session types it shows in, and where it sits per session type
+    // (DIPs; defaults mirror the classic top-left placement).
+    public Sessions ShowStandings { get; set; } = Sessions.All;
+    public SessionPositions Position { get; set; } = SessionPositions.All(7, 6);
+
+    // Legacy single position (before per-session layouts): seeds all three on load, never written.
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public double? X { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public double? Y { get; set; }
+
+    public void OnDeserialized()
+    {
+        Position = SessionPositions.FromLegacy(Position, X, Y);
+        X = Y = null;
+    }
 
     // Style
     public double Opacity { get; set; } = 0.75;
@@ -33,7 +44,7 @@ public sealed class OverlayConfig
     // sets): under fuel-and-tires-separate rules a tire stop sits ~10s+ longer than the same
     // fuel fill alone. Shows as "ST8+" (rubber older than the stint) in the relative.
     public bool InferTireChanges { get; set; } = true;
-    public bool ShowColumnHeader { get; set; } = true;
+    public Sessions ShowColumnHeader { get; set; } = Sessions.All;
     public bool ShowRejoinState { get; set; } = true;   // "REJOIN" badge when a stopped car moves again (experimental)
     // Status column style: "TextAndFlags" = penalty flag chip + physical-state text side by side;
     // "Text" = one text badge picked by the unified precedence (Data/CarStatus).
@@ -65,19 +76,19 @@ public sealed class OverlayConfig
     public SessionColumns Qualify { get; set; } = SessionColumns.QualifyDefaults();
     public SessionColumns Practice { get; set; } = SessionColumns.PracticeDefaults();
 
-    // Header extras
-    public bool ShowSof { get; set; } = true;
-    public bool ShowRealClock { get; set; } = true; // real-life wall clock alongside the in-sim clock
-    public bool ShowTimeOfDay { get; set; } = true; // in-sim local time of day (iOverlay-style clock)
-    public bool ShowTrackTemp { get; set; } = true;
+    // Header extras (per session type, like the columns)
+    public Sessions ShowSof { get; set; } = Sessions.All;
+    public Sessions ShowRealClock { get; set; } = Sessions.All; // real-life wall clock alongside the in-sim clock
+    public Sessions ShowTimeOfDay { get; set; } = Sessions.All; // in-sim local time of day (iOverlay-style clock)
+    public Sessions ShowTrackTemp { get; set; } = Sessions.All;
     public int ShowTrackTempDecimals { get; set; } = 1;   // decimals on the track-temp readout (0-2)
-    public bool ShowIncidents { get; set; } = true;
-    public bool ShowWeather { get; set; } = true;   // track state (Dry/Damp/Wet) + precipitation %
+    public Sessions ShowIncidents { get; set; } = Sessions.All;
+    public Sessions ShowWeather { get; set; } = Sessions.All;   // track state (Dry/Damp/Wet) + precipitation %
     public bool AbbreviateWetness { get; set; }     // false = full "Mostly Dry"/"Very Wet" names
     public int WeatherAlertSec { get; set; } = 180;     // how long the dry↔wet track-state banner stays
     public int TyreSwitchAlertSec { get; set; } = 30;   // how long a dry↔wet tyre switch is shown
     public string TyreSwitchDisplay { get; set; } = "Both";   // Flash (header) | Inline (o→o in the row) | Both
-    public bool ShowWind { get; set; } = true;      // wind direction arrow + speed
+    public Sessions ShowWind { get; set; } = Sessions.All;      // wind direction arrow + speed
     public double HeaderFontSize { get; set; } = 13; // standings header pill text size
 
     // Decimal places
@@ -167,10 +178,11 @@ public sealed class AutoHideConfig
 }
 
 /// <summary>Traffic alerter settings. Detection details in docs/TRAFFIC-ALERTER.md.</summary>
-public sealed class TrafficConfig
+public sealed class TrafficConfig() : WidgetConfig(810, 6)
 {
-    public bool Enabled { get; set; } = true;
-    public bool RacesOnly { get; set; }                         // default: also alert in practice/qual (blue flags stay race-only)
+    // Default: also alert in practice/qual (blue flags stay race-only). The old RacesOnly switch
+    // is now just Enabled = Race; a legacy true folds into Enabled on load and is never written.
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] public bool RacesOnly { get; set; }
     public bool WhileSpectating { get; set; }                   // default: no alerts while out of the car
     public string Style { get; set; } = "Row";                  // Row | Beacon
     public string Mode { get; set; } = "FasterClassAndLapping"; // FasterClassOnly | FasterClassAndLapping | AllClosing
@@ -189,18 +201,21 @@ public sealed class TrafficConfig
     public double SameClassPinSec { get; set; } = 2.0;      // …that "nearby" gap
     public int MaxRows { get; set; } = 3;               // total cap in the flat (grouping-off) list
     public double Scale { get; set; } = 1.0;            // widget size multiplier (LayoutTransform)
-    public bool ShowIRating { get; set; } = true;
-    public bool ShowTimeToArrival { get; set; }         // false (default) = Gap basis: appear/escalate/sort AND the number all key off the on-track gap (matches the relative box; lead/imminent read as gap-seconds). true = Countdown basis: all keyed off time-to-arrival.
-    public bool AlongsideBanner { get; set; } = true;   // CarLeftRight: mark the car overlapping you left/right (on its own row, not blanking the widget)
+    public Sessions ShowIRating { get; set; } = Sessions.All;
+    public bool ShowTimeToArrival { get; set; }        // false (default) = Gap basis: appear/escalate/sort AND the number all key off the on-track gap (matches the relative box; lead/imminent read as gap-seconds). true = Countdown basis: all keyed off time-to-arrival.
+    public Sessions AlongsideBanner { get; set; } = Sessions.All;   // CarLeftRight: mark the car overlapping you left/right (on its own row, not blanking the widget)
     public bool AlongsideAnyCar { get; set; }           // fire it for ANY spotter-reported overlap (a same-class pack has no "alert" beside you), not just alerted traffic
     public TrafficAudioConfig Audio { get; set; } = new();
 
-    // Widget position (DIPs), independent of the standings table; draggable in edit mode.
-    public double X { get; set; } = 810;
-    public double Y { get; set; } = 6;
-
     [JsonIgnore]
     public bool BeaconStyle => Style.Equals("Beacon", StringComparison.OrdinalIgnoreCase);
+
+    public override void OnDeserialized()
+    {
+        base.OnDeserialized();
+        if (RacesOnly) Enabled &= Sessions.Race;
+        RacesOnly = false;
+    }
 }
 
 public sealed class TrafficAudioConfig
@@ -214,23 +229,22 @@ public sealed class TrafficAudioConfig
 
 /// <summary>Relative box settings. Useful in every session type by design (no RacesOnly:
 /// lap-parity coloring and stint age simply stay neutral outside races). docs/RELATIVE.md.</summary>
-public sealed class RelativeConfig
+public sealed class RelativeConfig() : WidgetConfig(-1, -1)   // -1 = auto bottom-right until dragged
 {
-    public bool Enabled { get; set; } = true;
     public int CarsAhead { get; set; } = 5;
     public int CarsBehind { get; set; } = 5;
     public double Scale { get; set; } = 1.0;    // fonts now match the standings ramp exactly at 1.0
 
-    public bool ShowClassPos { get; set; } = true;
-    public bool ShowTyre { get; set; } = true;       // wet/dry compound ring, like the standings
-    public bool HideParkedCars { get; set; }         // drop cars sat in the pits >~60s (DNF / no driver)
-    public bool ShowBrand { get; set; } = true;
-    public bool ShowIRating { get; set; } = true;
-    public bool ShowLicense { get; set; }
-    public bool ShowStintAge { get; set; } = true;   // laps since last pit stop; green while fresh
-    public bool ShowLastLap { get; set; } = true;
-    public bool ShowPace { get; set; } = true;       // ▲/▼/► recent pace vs the player
-    public bool ShowClosing { get; set; } = true;    // per-car closing rate to YOU (gap trend): who's actually catching / being caught, s/lap
+    public Sessions ShowClassPos { get; set; } = Sessions.All;
+    public Sessions ShowTyre { get; set; } = Sessions.All;       // wet/dry compound ring, like the standings
+    public bool HideParkedCars { get; set; }                     // drop cars sat in the pits >~60s (DNF / no driver)
+    public Sessions ShowBrand { get; set; } = Sessions.All;
+    public Sessions ShowIRating { get; set; } = Sessions.All;
+    public Sessions ShowLicense { get; set; }
+    public Sessions ShowStintAge { get; set; } = Sessions.All;   // laps since last pit stop; green while fresh
+    public Sessions ShowLastLap { get; set; } = Sessions.All;
+    public Sessions ShowPace { get; set; } = Sessions.All;       // ▲/▼/► recent pace vs the player
+    public Sessions ShowClosing { get; set; } = Sessions.All;    // per-car closing rate to YOU (gap trend): who's actually catching / being caught, s/lap
 
     // Same-class same-lap cars within this many seconds get the ▸ battle marker + white gap.
     public double BattleGapSec { get; set; } = 1.5;
@@ -238,17 +252,12 @@ public sealed class RelativeConfig
 
     // Status style, independent of the standings: "Text" (default, denser) or "TextAndFlags".
     public string StatusStyle { get; set; } = "Text";
-
-    // Widget position (DIPs); -1 = auto bottom-right corner until dragged in edit mode.
-    public double X { get; set; } = -1;
-    public double Y { get; set; } = -1;
 }
 
 /// <summary>Fuel calculator + strategy bars. Live numbers show in every session (practice is
 /// where you learn your per-lap burn); strategy bars are race-only by definition.</summary>
-public sealed class FuelConfig
+public sealed class FuelConfig() : WidgetConfig(810, 130)
 {
-    public bool Enabled { get; set; } = true;
     public int Strategies { get; set; } = 2;            // bars shown (1-3)
     public double MarginLaps { get; set; } = 1.0;       // safety fuel budgeted at the end, in laps
 
@@ -262,10 +271,6 @@ public sealed class FuelConfig
 
     public double BarWidth { get; set; } = 420;         // strategy bar length, DIPs
     public double Scale { get; set; } = 1.0;            // widget size multiplier (LayoutTransform)
-
-    // Widget position (DIPs), draggable in edit mode like every widget.
-    public double X { get; set; } = 810;
-    public double Y { get; set; } = 130;
 }
 
 /// <summary>The fuel consumption table: rows for the last lap, last-5/last-10 averages, the
@@ -273,13 +278,12 @@ public sealed class FuelConfig
 /// interlocked numbers — laps per stint and litres per lap — tied together by the usable tank;
 /// whichever the driver set last (<see cref="TargetMode"/>) drives the other. Editable here and,
 /// when <see cref="Interactive"/> is on, clickable on the widget itself.</summary>
-public sealed class FuelTableConfig
+public sealed class FuelTableConfig() : WidgetConfig(810, 300)
 {
-    public bool Enabled { get; set; } = true;
-    public bool ShowLast5 { get; set; } = false;   // off by default (per request); toggle on in settings
-    public bool ShowLast10 { get; set; } = true;
-    public bool ShowStint { get; set; } = true;
-    public bool ShowStatus { get; set; } = true;    // the target-vs-actual "ahead/behind" line
+    public Sessions ShowLast5 { get; set; }                    // off by default (per request); toggle on in settings
+    public Sessions ShowLast10 { get; set; } = Sessions.All;
+    public Sessions ShowStint { get; set; } = Sessions.All;
+    public Sessions ShowStatus { get; set; } = Sessions.All;   // the target-vs-actual "ahead/behind" line
 
     // The target, as raw driver intent. The builder derives the partner value from the live tank.
     public double TargetLaps { get; set; } = 0;     // 0 = no target set
@@ -292,16 +296,12 @@ public sealed class FuelTableConfig
     public bool Interactive { get; set; } = false;
 
     public double Scale { get; set; } = 1.0;
-
-    public double X { get; set; } = 810;
-    public double Y { get; set; } = 300;
 }
 
 /// <summary>Lap Lab: the practice/testing lap table — every lap a row, official sectors as
 /// columns, gaps vs a reference lap. Never shows in races by design (Data/LapLabTracker).</summary>
-public sealed class LapLabConfig
+public sealed class LapLabConfig() : WidgetConfig(7, 330)
 {
-    public bool Enabled { get; set; } = true;
     public int Decimals { get; set; } = 2;        // sector/lap delta decimals (1-3)
     public int MaxRows { get; set; } = 8;         // laps shown, newest on top
     // Columns: official sectors, or turn zones auto-detected from the reference's speed
@@ -321,10 +321,6 @@ public sealed class LapLabConfig
     public bool SaveSessionBest { get; set; } = true;     // auto-save best clean lap per car+track
     public double WarnTrackTempDelta { get; set; } = 4.0; // °C difference vs ref that warns
     public double Scale { get; set; } = 1.0;      // widget size multiplier (LayoutTransform)
-
-    // Widget position (DIPs), draggable in edit mode like every widget.
-    public double X { get; set; } = 7;
-    public double Y { get; set; } = 330;
 }
 
 /// <summary>Column toggles for one session type. Not every column is meaningful everywhere —
@@ -423,6 +419,10 @@ public sealed class ConfigService : IDisposable
 
     public bool Spectating { get; private set; }
 
+    /// <summary>The session type whose widget layout is on screen — the live session, or, while
+    /// moving overlays, the one picked in settings. Widgets read their position for it.</summary>
+    public Data.SessionKind Session { get; private set; } = Data.SessionKind.Race;
+
     /// <summary>How many individual settings the spectate profile currently overrides.</summary>
     public int SpectateOverrideCount => CountLeaves(_overrides);
 
@@ -460,6 +460,16 @@ public sealed class ConfigService : IDisposable
         Changed?.Invoke(Current);
     }
 
+    /// <summary>Switch which session type's layout the widgets take. Positions are ordinary
+    /// per-session settings, so this just re-applies.</summary>
+    public void SetSession(Data.SessionKind kind)
+    {
+        if (Session == kind) return;
+        Session = kind;
+        Log.Write($"layout session: {kind}");
+        Changed?.Invoke(Current);
+    }
+
     // ---- inheritance engine ---------------------------------------------
 
     private OverlayConfig BuildEffective() => FromObject(Merge(ToObject(_base), _overrides));
@@ -473,7 +483,9 @@ public sealed class ConfigService : IDisposable
         {
             var raw = JsonNode.Parse(File.ReadAllText(_spectatePath)) as JsonObject ?? new JsonObject();
             var baseObj = ToObject(_base);
-            var sparse = Diff(Merge(baseObj, raw), baseObj);
+            // Round-trip the merge through the typed model so legacy keys (a single X/Y, plain
+            // bool toggles, RacesOnly) migrate the same way they do in config.json.
+            var sparse = Diff(ToObject(FromObject(Merge(baseObj, raw))), baseObj);
             StripSharedTargetKeys(sparse);     // the fuel target is global; never a spectate override
             if (!JsonNode.DeepEquals(sparse, raw))
             {

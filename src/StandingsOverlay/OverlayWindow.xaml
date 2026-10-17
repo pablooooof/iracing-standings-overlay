@@ -288,7 +288,7 @@
             </ItemsControl>
 
             <!-- Edit-mode hint -->
-            <TextBlock x:Name="EditHint" Text="EDIT MODE — drag to move, use tray icon to finish"
+            <TextBlock x:Name="EditHint" Text="STANDINGS — drag to move · turn off Move overlays to finish"
                        Visibility="Collapsed" Margin="2,6,2,0" FontSize="11" FontWeight="Bold"/>
         </StackPanel>
     </Border>

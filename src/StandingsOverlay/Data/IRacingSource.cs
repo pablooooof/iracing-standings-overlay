@@ -88,7 +88,7 @@ public sealed class IRacingSource : ITelemetrySource
         // Lap Lab's sector clock samples EVERY 60 Hz frame (player scalars only — three cheap
         // reads): crossing interpolation at the snapshot rate would be ±125 ms, at 60 Hz ±2 ms.
         // Races are gated out here so the hot path costs nothing where Lap Lab never shows.
-        if (cfg.LapLab.Enabled && _sectorClock.HasBoundaries && !_lapLabRace &&
+        if (_labKind != SessionKind.Race && cfg.LapLab.Enabled.In(_labKind) && _sectorClock.HasBoundaries &&
             _sdk.GetData("LapDistPct") is float labPct && _sdk.GetData("SessionTime") is double labTime)
         {
             int surf = _sdk.GetData("PlayerTrackSurface") is int sf ? sf : 3;
@@ -220,7 +220,7 @@ public sealed class IRacingSource : ITelemetrySource
                       ?? model.SessionInfo?.Sessions?.LastOrDefault();
         _currentSessionType = session?.SessionType ?? "Race";
         _sessionLapsTotal = int.TryParse(session?.SessionLaps, out var sl) && sl > 0 ? sl : -1;
-        _lapLabRace = StandingsSnapshot.KindOf(_currentSessionType) == SessionKind.Race;
+        _labKind = StandingsSnapshot.KindOf(_currentSessionType);
 
         // Usable tank: BoP can cap the physical tank, so the max-pct multiplier is not optional.
         var di = model.DriverInfo;
@@ -303,7 +303,7 @@ public sealed class IRacingSource : ITelemetrySource
     private string _lastRosterSummary = "";
 
     private string _currentSessionType = "Race";
-    private volatile bool _lapLabRace = true;   // read on the 60 Hz path, written on YAML refresh
+    private volatile SessionKind _labKind = SessionKind.Race;   // read on the 60 Hz path, written on YAML refresh
     private int _sessionLapsTotal = -1;
     private float _tankCapacity = -1;
     private bool _emitted;

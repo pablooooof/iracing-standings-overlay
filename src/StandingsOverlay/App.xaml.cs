@@ -21,6 +21,11 @@ public partial class App : Application
     private SettingsWindow? _settings;
     private bool _editMode;
 
+    // Widget layouts are per session type. The live session drives which one is on screen; while
+    // moving overlays the settings window may preview another, and leaving move mode snaps back.
+    private SessionKind _liveKind = SessionKind.Race;   // UI thread
+    private SessionKind? _seenKind;                      // source thread: dedups the dispatch
+
     // Auto-hide: keep the widgets off screen unless iRacing is focused (data still flows), with a
     // system-wide hotkey to force show/hide. _overlays is every widget window EXCEPT the settings
     // window (which is the app's chrome and stays put).
@@ -90,6 +95,16 @@ public partial class App : Application
         _source.SnapshotReady += snapshot =>
         {
             _window.OnSnapshot(snapshot);
+            if (snapshot.Connected && snapshot.Kind != _seenKind)
+            {
+                var kind = snapshot.Kind;
+                _seenKind = kind;
+                Dispatcher.BeginInvoke(() =>
+                {
+                    _liveKind = kind;
+                    if (!_editMode) _configService.SetSession(kind);
+                });
+            }
             var (text, connected) = demo ? ("Demo mode", true)
                 : !snapshot.Connected ? ("Waiting for iRacing…", false)
                 : _configService.Spectating ? ("Connected · spectating", true)
@@ -198,6 +213,9 @@ public partial class App : Application
         _fuelWindow!.EditMode = on;
         _fuelTableWindow!.EditMode = on;
         _lapLabWindow!.EditMode = on;
+        // Leaving move mode (each widget just saved its spot for the previewed session): back to
+        // the live session's layout.
+        if (!on) _configService!.SetSession(_liveKind);
         _settings?.ReflectEditMode(on);
         // Edit mode force-shows every widget — you can't drag one you can't see.
         _visibility.EditMode = on;

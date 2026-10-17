@@ -21,14 +21,14 @@ public class ConfigProfileTests
             var svc = new ConfigService(basePath);
             svc.Base.DriversAhead = 5;
             svc.Base.DriversBehind = 3;
-            svc.Base.X = 7;
+            svc.Base.Position.Race.X = 7;
             svc.SaveProfileAndNotify(false);
 
             // Nothing jumps on the first switch: spectate is pure inheritance, zero overrides.
             svc.SetSpectating(true);
             Assert.True(svc.Spectating);
             Assert.Equal(5, svc.Current.DriversAhead);
-            Assert.Equal(7, svc.Current.X);
+            Assert.Equal(7, svc.Current.Position.Race.X);
             Assert.Equal(0, svc.SpectateOverrideCount);
 
             // Override exactly one setting while spectating.
@@ -117,6 +117,89 @@ public class ConfigProfileTests
             // And the in-car state sees it too.
             svc.SetSpectating(false);
             Assert.Equal(25, svc.Current.FuelTable.TargetLaps);
+            svc.Dispose();
+        }
+        finally
+        {
+            dir.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void LegacyConfig_MigratesToPerSessionTogglesAndPositions()
+    {
+        var dir = Directory.CreateTempSubdirectory("overlay-cfg-test");
+        try
+        {
+            var path = Path.Combine(dir.FullName, "config.json");
+            // A pre-per-session config: plain bool toggles, single X/Y, RacesOnly.
+            File.WriteAllText(path, """
+                {
+                  "X": 40, "Y": 50,
+                  "ShowSof": false,
+                  "ShowWind": true,
+                  "Relative": { "Enabled": true, "ShowLicense": true, "X": 900, "Y": 500 },
+                  "Traffic": { "Enabled": true, "RacesOnly": true, "X": 10, "Y": 20 },
+                  "LapLab": { "Enabled": false }
+                }
+                """);
+
+            var c = OverlayConfig.Load(path);
+            Assert.Equal(Sessions.None, c.ShowSof);
+            Assert.Equal(Sessions.All, c.ShowWind);
+            Assert.Equal(Sessions.All, c.Relative.ShowLicense);
+            Assert.Equal(Sessions.Race, c.Traffic.Enabled);          // RacesOnly folded in
+            Assert.Equal(Sessions.None, c.LapLab.Enabled);
+            foreach (var kind in new[] { Data.SessionKind.Race, Data.SessionKind.Qualify, Data.SessionKind.Practice })
+            {
+                Assert.Equal(40, c.Position.For(kind).X);
+                Assert.Equal(500, c.Relative.Position.For(kind).Y);
+                Assert.Equal(10, c.Traffic.Position.For(kind).X);
+            }
+
+            // Saved back in the new shape: no legacy keys, readable session flags.
+            c.Save(path);
+            var json = File.ReadAllText(path);
+            var root = System.Text.Json.Nodes.JsonNode.Parse(json)!;
+            Assert.Null(root["X"]);
+            Assert.Null(root["Relative"]!["X"]);
+            Assert.DoesNotContain("RacesOnly", json);
+            Assert.Contains("\"ShowSof\": \"None\"", json);
+            Assert.Contains("\"Enabled\": \"Race\"", json);
+
+            // Positions are then independent per session type.
+            var reloaded = OverlayConfig.Load(path);
+            reloaded.Relative.Position.Practice.X = 123;
+            Assert.Equal(900, reloaded.Relative.Position.Race.X);
+            Assert.True(reloaded.Relative.Enabled.In(Data.SessionKind.Qualify));
+            Assert.False(reloaded.Traffic.Enabled.In(Data.SessionKind.Practice));
+        }
+        finally
+        {
+            dir.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void LegacySpectateOverride_MigratesThroughTheTypedModel()
+    {
+        var dir = Directory.CreateTempSubdirectory("overlay-cfg-test");
+        try
+        {
+            var basePath = Path.Combine(dir.FullName, "config.json");
+            var specPath = Path.Combine(dir.FullName, "config.spectate.json");
+            new OverlayConfig().Save(basePath);
+            // A sparse override written before per-session layouts/toggles existed.
+            File.WriteAllText(specPath, """{ "Relative": { "X": 900, "ShowIRating": false } }""");
+
+            var svc = new ConfigService(basePath);
+            svc.SetSpectating(true);
+            Assert.Equal(900, svc.Current.Relative.Position.Qualify.X);
+            Assert.Equal(Sessions.None, svc.Current.Relative.ShowIRating);
+            // Rewritten in the new shape: the legacy top-level X became per-session positions.
+            var rel = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(specPath))!["Relative"]!;
+            Assert.Null(rel["X"]);
+            Assert.NotNull(rel["Position"]);
             svc.Dispose();
         }
         finally

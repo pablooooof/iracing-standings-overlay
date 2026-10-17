@@ -61,7 +61,9 @@ public partial class OverlayWindow : Window
         SourceInitialized += (_, _) => Win32.ApplyOverlayStyle(this, clickThrough: true);
         MouseLeftButtonDown += (_, e) =>
         {
-            if (_editMode && e.ButtonState == MouseButtonState.Pressed) DragMove();
+            if (!_editMode || e.ButtonState != MouseButtonState.Pressed) return;
+            DragMove();       // modal until the mouse is released
+            SavePosition();   // per session type: race / qual / practice layouts are independent
         };
 
         ApplyConfig(configService.Current);
@@ -74,8 +76,9 @@ public partial class OverlayWindow : Window
 
     public void ApplyConfig(OverlayConfig cfg)
     {
-        Left = cfg.X;
-        Top = cfg.Y;
+        var pos = cfg.Position.For(_configService.Session);
+        Left = pos.X;
+        Top = pos.Y;
         FontSize = cfg.FontSize;
         // Shared type ramp (same formulas as the relative): secondary cells and chips derive
         // from the base size instead of hardcoding pixel values per column.
@@ -104,9 +107,29 @@ public partial class OverlayWindow : Window
         highlight.Freeze();
         _highlight = highlight;
 
-        ColumnHeader.Visibility = cfg.ShowColumnHeader ? Visibility.Visible : Visibility.Collapsed;
+        ApplySessionVisibility(cfg);
         // The config.Changed handler calls Render(_lastSnapshot) right after this, which re-applies
         // the cached _highlight/_accent to every row — no need to re-tint here.
+    }
+
+    /// <summary>The per-session-type switches: the table itself (Visible R/Q/P) and the column
+    /// header row. Re-run on config change, session-type change and edit-mode change.</summary>
+    private void ApplySessionVisibility(OverlayConfig cfg)
+    {
+        var kind = _visibleKind ?? SessionKind.Race;
+        // Before a session is known (waiting for iRacing) show the box if it's on anywhere.
+        bool show = _editMode || (_lastSnapshot is { Connected: true }
+            ? cfg.ShowStandings.In(kind) : cfg.ShowStandings != Sessions.None);
+        RootBorder.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+        ColumnHeader.Visibility = cfg.ShowColumnHeader.In(kind) ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void SavePosition()
+    {
+        var pos = _configService.Current.Position.For(_configService.Session);
+        pos.X = Left;
+        pos.Y = Top;
+        _configService.Save();
     }
 
     /// <summary>Called from the telemetry thread; skips the dispatch entirely when nothing changed.</summary>
@@ -150,6 +173,7 @@ public partial class OverlayWindow : Window
             _visibleKind = s.Kind;
             DataContext = ColumnVisibility.From(cfg.ColumnsFor(s.Kind), s.Kind, cfg.NameColumnWidth);
         }
+        ApplySessionVisibility(cfg);
         if (_visibleCellHeaders is null || !s.CellHeaders.SequenceEqual(_visibleCellHeaders))
         {
             _visibleCellHeaders = s.CellHeaders;
@@ -231,13 +255,8 @@ public partial class OverlayWindow : Window
             _editMode = value;
             Win32.ApplyOverlayStyle(this, clickThrough: !value);
             EditHint.Visibility = value ? Visibility.Visible : Visibility.Collapsed;
-            if (!value)
-            {
-                // Persist the dragged position.
-                _configService.Current.X = Left;
-                _configService.Current.Y = Top;
-                _configService.Save();
-            }
+            ApplySessionVisibility(_configService.Current);   // edit mode shows a hidden table to drag
+            if (!value) SavePosition();
         }
     }
 }

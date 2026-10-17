@@ -10,9 +10,16 @@ namespace StandingsOverlay.UI;
 
 /// <summary>
 /// The one piece of real chrome the app has: a normal (activatable, dark-title-bar) window that
-/// edits <see cref="OverlayConfig"/> live. A switcher at the top picks which state it edits —
-/// In car (<see cref="ConfigService.Base"/>) or Spectating (<see cref="ConfigService.SpectateEffective"/>,
-/// a sparse override layer over the base) — held in <c>_edit</c>; every Build* method reads/writes it.
+/// edits <see cref="OverlayConfig"/> live. Laid out like iOverlay's settings:
+/// <list type="bullet">
+/// <item>The left rail holds the global controls — which profile is edited (In car /
+/// Spectating, held in <c>_edit</c>), Move overlays, and which session type's widget layout is on
+/// screen (positions are per session type) — then the overlay list.</item>
+/// <item>Each overlay page has a <b>Visible</b> switch with race / quali / practice boxes, and up to
+/// three tabs: <b>General</b> (settings that don't vary by session type), <b>Content</b> (columns /
+/// rows) and <b>Header</b>. Content and Header rows are <see cref="Item"/>s: a master switch, the
+/// R/Q/P boxes, and an optional "settings" link that expands that item's own options.</item>
+/// </list>
 /// Every widget re-applies on <see cref="ConfigService.Changed"/>, so this just mutates <c>_edit</c>
 /// and calls <see cref="ConfigService.SaveProfileAndNotify"/> (debounced). Rows are built from small
 /// descriptor helpers — adding a setting is one line, and every control looks the same.
@@ -24,21 +31,24 @@ public partial class SettingsWindow : Window
     private static readonly Brush Line = RowViewModel.Frozen("#2C2C36");
     private static readonly Brush Accent = RowViewModel.Frozen("#00E6C3");
     private static readonly Brush Amber = RowViewModel.Frozen("#E8B14C");
+    private static readonly Brush SubPanel = RowViewModel.Frozen("#1C1C24");
 
     private readonly ConfigService _cfg;
     private readonly DispatcherTimer _saveTimer;
     private bool _dirty;
 
-    // Edit ("move overlays") mode is owned by App; the General toggle mirrors and drives it.
+    // Edit ("move overlays") mode is owned by App; the rail switch mirrors and drives it.
     public event Action<bool>? EditModeChanged;
     private bool _editMode;
     private bool _suppressEdit;
-    private CheckBox? _editToggle;
 
     private string _section = "General";
+    private string _tab = "";
+    private readonly Dictionary<string, string> _tabBySection = new();   // remembered per section
+    private readonly HashSet<string> _openSettings = new();              // expanded item "settings"
 
     // Which state the settings window is currently EDITING (independent of which is live-active).
-    // The switcher at the top of the page drives it; every Build* method reads/writes _edit.
+    // The rail switch drives it; every Build* method reads/writes _edit.
     private bool _editingSpectate;
     private OverlayConfig _edit;
 
@@ -61,7 +71,6 @@ public partial class SettingsWindow : Window
         // external edit replacing the base) can leave the open page editing a stale instance —
         // rebuild the visible section against the new one. Ordinary in-app saves keep the instance,
         // so they don't rebuild.
-        _builtAgainst = _edit;
         cfg.Changed += OnProfileMaybeSwapped;
         SourceInitialized += (_, _) => Win32.UseDarkTitleBar(this);
         // Shown at startup alongside the topmost overlay widgets and (usually) a running,
@@ -70,18 +79,13 @@ public partial class SettingsWindow : Window
         Loaded += (_, _) => BringToFront();
         Closed += (_, _) => { _cfg.Changed -= OnProfileMaybeSwapped; Flush(); };   // never drop a pending edit
 
-        // The global "Move overlays" switch lives in the header (reachable from every page), so it
-        // owns edit-mode mirroring — no longer a row on the General page.
+        // The global "Move overlays" switch lives in the rail (reachable from every page).
         MoveToggle.IsChecked = _editMode;
-        MoveToggle.Checked += (_, _) => { _editMode = true; if (!_suppressEdit) EditModeChanged?.Invoke(true); };
-        MoveToggle.Unchecked += (_, _) => { _editMode = false; if (!_suppressEdit) EditModeChanged?.Invoke(false); };
-        _editToggle = MoveToggle;
-
-        // The contextual "show this box" switch is retargeted per section (ConfigureBoxToggle).
-        BoxToggle.Checked += (_, _) => OnBoxToggle(true);
-        BoxToggle.Unchecked += (_, _) => OnBoxToggle(false);
+        MoveToggle.Checked += (_, _) => { _editMode = true; if (!_suppressEdit) EditModeChanged?.Invoke(true); ReflectLayout(); };
+        MoveToggle.Unchecked += (_, _) => { _editMode = false; if (!_suppressEdit) EditModeChanged?.Invoke(false); ReflectLayout(); };
 
         BuildStateSwitch();
+        BuildLayoutSwitch();
         UpdateInheritBanner();
 
         foreach (var name in new[] { "General", "Standings", "Relative", "Traffic", "Fuel", "Fuel Table", "Lap Lab", "About" })
@@ -89,52 +93,59 @@ public partial class SettingsWindow : Window
         Nav.SelectedIndex = 0;
     }
 
-    // ---- contextual "show this box" toggle ------------------------------
+    // ---- page "Visible" switch + race/quali/practice ---------------------
 
-    private (Func<OverlayConfig, bool> get, Action<OverlayConfig, bool> set)? _currentBox;
-    private bool _suppressBoxToggle;
-
-    /// <summary>For a widget section, its enable label + how to read/write the box's Enabled flag on
-    /// a profile. Non-widget sections (General, Standings, About) return null — no box to toggle.</summary>
-    private static (string label, Func<OverlayConfig, bool> get, Action<OverlayConfig, bool> set)? BoxFor(string section) => section switch
+    /// <summary>For a widget section, how to read/write which session types the box shows in, and
+    /// the session types it can show in at all. Non-widget sections (General, About) return null.</summary>
+    private static (Func<OverlayConfig, Sessions> get, Action<OverlayConfig, Sessions> set, Sessions allowed)? BoxFor(string section) => section switch
     {
-        "Relative"   => ("Show relative box",   c => c.Relative.Enabled,  (c, v) => c.Relative.Enabled = v),
-        "Traffic"    => ("Enable traffic alerts", c => c.Traffic.Enabled, (c, v) => c.Traffic.Enabled = v),
-        "Fuel"       => ("Show fuel & strategy", c => c.Fuel.Enabled,     (c, v) => c.Fuel.Enabled = v),
-        "Fuel Table" => ("Show fuel table",      c => c.FuelTable.Enabled, (c, v) => c.FuelTable.Enabled = v),
-        "Lap Lab"    => ("Show lap lab",         c => c.LapLab.Enabled,    (c, v) => c.LapLab.Enabled = v),
+        "Standings"  => (c => c.ShowStandings,     (c, v) => c.ShowStandings = v,     Sessions.All),
+        "Relative"   => (c => c.Relative.Enabled,  (c, v) => c.Relative.Enabled = v,  Sessions.All),
+        "Traffic"    => (c => c.Traffic.Enabled,   (c, v) => c.Traffic.Enabled = v,   Sessions.All),
+        "Fuel"       => (c => c.Fuel.Enabled,      (c, v) => c.Fuel.Enabled = v,      Sessions.All),
+        "Fuel Table" => (c => c.FuelTable.Enabled, (c, v) => c.FuelTable.Enabled = v, Sessions.All),
+        // Lap Lab never shows in races (a practice tool by design).
+        "Lap Lab"    => (c => c.LapLab.Enabled,    (c, v) => c.LapLab.Enabled = v,    Sessions.Qualify | Sessions.Practice),
         _ => null,
     };
 
-    /// <summary>Point the header box toggle at the current section (or hide it), and grey the page
-    /// body when that box is off. Called on every section (re)build and on a profile swap.</summary>
+    // Re-reads the header Visible cluster in place (after a save or external edit) without
+    // rebuilding it, so its remembered R/Q/P set survives a master off → on.
+    private Action? _refreshBox;
+
+    /// <summary>Build the header Visible cluster for the current section (or clear it), and grey the
+    /// page body when the box is off in every session type. Called on every page (re)build.</summary>
     private void ConfigureBoxToggle(string section)
     {
-        _suppressBoxToggle = true;
-        if (BoxFor(section) is { } b)
+        VisibleHost.Children.Clear();
+        _refreshBox = null;
+        if (BoxFor(section) is not { } b)
         {
-            _currentBox = (b.get, b.set);
-            BoxToggleLabel.Text = b.label;
-            bool on = b.get(_edit);
-            BoxToggle.IsChecked = on;
-            BoxToggleRow.Visibility = Visibility.Visible;
-            PageBody.IsEnabled = on;
-        }
-        else
-        {
-            _currentBox = null;
-            BoxToggleRow.Visibility = Visibility.Collapsed;
             PageBody.IsEnabled = true;
+            return;
         }
-        _suppressBoxToggle = false;
-    }
-
-    private void OnBoxToggle(bool on)
-    {
-        if (_suppressBoxToggle || _currentBox is not { } b) return;
-        Apply(() => b.set(_edit, on));
-        PageBody.IsEnabled = on;
-        UpdateInheritBanner();
+        var edit = _edit;
+        var (master, boxes, refresh) = SessionControls(() => b.get(edit), v =>
+        {
+            b.set(edit, v);
+            PageBody.IsEnabled = (v & b.allowed) != 0;
+            UpdateInheritBanner();
+        }, b.allowed);
+        _refreshBox = () =>
+        {
+            refresh();
+            PageBody.IsEnabled = (b.get(edit) & b.allowed) != 0;
+        };
+        VisibleHost.Children.Add(new TextBlock
+        {
+            Text = "Visible", Foreground = Text, FontSize = 13.5, VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 10, 0),
+        });
+        master.Margin = new Thickness(0, 0, 4, 0);
+        VisibleHost.Children.Add(master);
+        VisibleHost.Children.Add(VDivider());
+        VisibleHost.Children.Add(boxes);
+        PageBody.IsEnabled = (b.get(edit) & b.allowed) != 0;
     }
 
     // ---- state (in-car / spectating) editing target ---------------------
@@ -149,7 +160,7 @@ public partial class SettingsWindow : Window
         {
             var rb = new RadioButton
             {
-                Style = (Style)FindResource("Segment"), Content = text, GroupName = "statesel",
+                Style = (Style)FindResource("RailSegment"), Content = text, GroupName = "statesel",
                 IsChecked = _editingSpectate == spectate,
             };
             rb.Checked += (_, _) => SetEditTarget(spectate);
@@ -167,9 +178,8 @@ public partial class SettingsWindow : Window
         Flush();                       // commit anything pending to the state we're leaving
         _editingSpectate = spectate;
         _edit = EditTarget();
-        _builtAgainst = _edit;
         UpdateInheritBanner();
-        OnNavChanged(Nav, null!);      // rebuild (and retarget the box toggle) for the new state
+        RebuildPage();                 // rebuild (and retarget the Visible switch) for the new state
     }
 
     private void UpdateInheritBanner()
@@ -188,6 +198,44 @@ public partial class SettingsWindow : Window
         InheritBanner.Visibility = Visibility.Visible;
     }
 
+    // ---- per-session layout picker ---------------------------------------
+
+    private readonly Dictionary<SessionKind, RadioButton> _layoutButtons = new();
+    private bool _suppressLayout;
+
+    private static string SessionName(SessionKind k) => k switch
+    {
+        SessionKind.Race => "race",
+        SessionKind.Qualify => "qualifying",
+        _ => "practice",
+    };
+
+    /// <summary>Race / Quali / Practice under Move overlays: which session type's widget layout is
+    /// on screen. Live it follows the session; while moving overlays you can pick another to
+    /// arrange it without being in that session (App snaps back to live when you finish).</summary>
+    private void BuildLayoutSwitch()
+    {
+        foreach (var (text, kind) in new[] { ("Race", SessionKind.Race), ("Quali", SessionKind.Qualify), ("Practice", SessionKind.Practice) })
+        {
+            var rb = new RadioButton { Style = (Style)FindResource("RailSegment"), Content = text, GroupName = "layoutsel" };
+            rb.Checked += (_, _) => { if (!_suppressLayout && _editMode) _cfg.SetSession(kind); };
+            _layoutButtons[kind] = rb;
+            LayoutHost.Children.Add(rb);
+        }
+        ReflectLayout();
+    }
+
+    private void ReflectLayout()
+    {
+        _suppressLayout = true;
+        _layoutButtons[_cfg.Session].IsChecked = true;
+        _suppressLayout = false;
+        LayoutHost.IsEnabled = _editMode;
+        LayoutHint.Text = _editMode
+            ? $"Dragging saves the {SessionName(_cfg.Session)} layout. Pick another session type to arrange it too."
+            : $"Each session type keeps its own widget positions. On screen: {SessionName(_cfg.Session)}.";
+    }
+
     /// <summary>Restore (if minimized) and take focus/activation. Called on Loaded so this normal,
     /// non-topmost control panel isn't left buried at startup when the foreground-lock withholds
     /// activation while iRacing is the active app. It does not force itself above other windows.</summary>
@@ -198,14 +246,14 @@ public partial class SettingsWindow : Window
         Focus();
     }
 
-    /// <summary>Reflect edit mode toggled elsewhere into the General switch, no re-fire.</summary>
+    /// <summary>Reflect edit mode toggled elsewhere into the rail switch, no re-fire.</summary>
     public void ReflectEditMode(bool on)
     {
         _editMode = on;
-        if (_editToggle is null) return;
         _suppressEdit = true;
-        _editToggle.IsChecked = on;
+        MoveToggle.IsChecked = on;
         _suppressEdit = false;
+        ReflectLayout();
     }
 
     /// <summary>Connection status shown under the brand (this window replaces the old tray tooltip).</summary>
@@ -264,25 +312,24 @@ public partial class SettingsWindow : Window
         UpdateInheritBanner();                         // override count may have changed
     }
 
-    private OverlayConfig? _builtAgainst;
-
     /// <summary>A live state change (in car ↔ spectating) or an external file edit can replace the
     /// instance our edit target points at. Our own saves keep the instance, so those don't rebuild;
-    /// a genuine swap does. The edit target itself is user-chosen and does NOT jump with live state.</summary>
+    /// a genuine swap does. The edit target itself is user-chosen and does NOT jump with live state.
+    /// A session-type change (layout) arrives here too.</summary>
     private void OnProfileMaybeSwapped(OverlayConfig cfg)
     {
         Dispatcher.BeginInvoke(() =>
         {
+            ReflectLayout();
             var target = EditTarget();
             UpdateInheritBanner();
             if (ReferenceEquals(target, _edit))
             {
-                ConfigureBoxToggle(_section);   // enabled flag may have changed without a rebuild
+                _refreshBox?.Invoke();   // the Visible flags may have changed without a rebuild
                 return;
             }
             _edit = target;
-            _builtAgainst = target;
-            OnNavChanged(Nav, null!);   // rebuild the visible section against the new instance
+            RebuildPage();   // rebuild the visible section against the new instance
         });
     }
 
@@ -292,21 +339,85 @@ public partial class SettingsWindow : Window
     {
         if (Nav.SelectedItem is not string name) return;
         _section = name;
-        PageBody.Children.Clear();
+        RebuildPage();
+    }
 
-        switch (name)
+    /// <summary>Tabs per section. Sections with no tabs are a single page.</summary>
+    private static string[] TabsFor(string section) => section switch
+    {
+        "Standings" => ["General", "Content", "Header"],
+        "Relative" or "Traffic" or "Fuel Table" => ["General", "Content"],
+        _ => [],
+    };
+
+    private void RebuildPage()
+    {
+        var tabs = TabsFor(_section);
+        _tab = tabs.Length == 0 ? ""
+            : _tabBySection.TryGetValue(_section, out var t) && tabs.Contains(t) ? t : tabs[0];
+        BuildTabs(tabs);
+
+        PageBody.Children.Clear();
+        switch (_section)
         {
-            case "General": SectionHeader("General", "Refresh, startup, and how every widget looks."); BuildGeneral(); break;
-            case "Standings": SectionHeader("Standings table", "The leaderboard: layout, header extras, and per-session columns."); BuildStandings(); break;
-            case "Relative": SectionHeader("Relative box", "Cars physically around you, in track order."); BuildRelative(); break;
-            case "Traffic": SectionHeader("Traffic alerter", "Warnings when a faster class is closing, or you're being lapped."); BuildTraffic(); break;
-            case "Fuel": SectionHeader("Fuel & strategy", "Live burn, laps in the tank, and endurance stint bars."); BuildFuel(); break;
-            case "Fuel Table": SectionHeader("Fuel table", "Per-lap consumption — Last / Last-5 / Last-10 / Stint — with a clickable target. Practice and race."); BuildFuelTable(); break;
-            case "Lap Lab": SectionHeader("Lap Lab", "Practice lap table: your sectors against a reference lap. Testing, practice and qualifying only."); BuildLapLab(); break;
-            case "About": SectionHeader("About", "Standings Overlay."); BuildAbout(); break;
+            case "General":
+                SectionHeader("General", "Startup, refresh, visibility and how every widget looks. Applies to all session types.");
+                BuildGeneral();
+                break;
+            case "Standings":
+                SectionHeader("Standings", "The leaderboard. Content and Header items switch on per session type — race, qualifying, practice.");
+                if (_tab == "Content") BuildStandingsContent();
+                else if (_tab == "Header") BuildStandingsHeader();
+                else BuildStandingsGeneral();
+                break;
+            case "Relative":
+                SectionHeader("Relative", "Cars physically around you, in track order.");
+                if (_tab == "Content") BuildRelativeContent(); else BuildRelativeGeneral();
+                break;
+            case "Traffic":
+                SectionHeader("Traffic alerter", "Warnings when a faster class is closing, or you're being lapped. Blue flags are race-only by definition.");
+                if (_tab == "Content") BuildTrafficContent(); else BuildTrafficGeneral();
+                break;
+            case "Fuel":
+                SectionHeader("Fuel & strategy", "Live burn, laps in the tank, and endurance stint bars (race-only).");
+                BuildFuel();
+                break;
+            case "Fuel Table":
+                SectionHeader("Fuel table", "Per-lap consumption — Last / Last-5 / Last-10 / Stint — with a clickable target.");
+                if (_tab == "Content") BuildFuelTableContent(); else BuildFuelTableGeneral();
+                break;
+            case "Lap Lab":
+                SectionHeader("Lap Lab", "Practice lap table: your sectors against a reference lap. Never shown in races.");
+                BuildLapLab();
+                break;
+            case "About":
+                SectionHeader("About", "Standings Overlay.");
+                BuildAbout();
+                break;
         }
 
-        ConfigureBoxToggle(name);   // point the header "show this box" switch at this section
+        ConfigureBoxToggle(_section);   // point the header Visible switch at this section
+    }
+
+    private void BuildTabs(string[] tabs)
+    {
+        TabHost.Children.Clear();
+        TabStrip.Visibility = tabs.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+        foreach (var name in tabs)
+        {
+            var rb = new RadioButton
+            {
+                Style = (Style)FindResource("Tab"), Content = name, GroupName = "tabs",
+                IsChecked = name == _tab,
+            };
+            rb.Checked += (_, _) =>
+            {
+                if (_tab == name) return;
+                _tabBySection[_section] = name;
+                RebuildPage();
+            };
+            TabHost.Children.Add(rb);
+        }
     }
 
     private void SectionHeader(string title, string blurb)
@@ -315,11 +426,10 @@ public partial class SettingsWindow : Window
         SectionBlurb.Text = blurb;
     }
 
-    // ---- section content -------------------------------------------------
+    // ---- General (app-wide) ----------------------------------------------
 
     private void BuildGeneral()
     {
-        // "Move overlays" now lives in the header (visible on every page), so it's not repeated here.
         PageBody.Children.Add(Toggle("Start with Windows", "Launch the overlay automatically when you log in.",
             AutoStart.IsEnabled, AutoStart.Set));
 
@@ -335,7 +445,7 @@ public partial class SettingsWindow : Window
         {
             PageBody.Children.Add(Subhead("Spectating layout"));
             PageBody.Children.Add(ButtonRow("Copy widget positions from In car",
-                "Move every widget to where it sits in your in-car profile.", "Copy layout",
+                "Move every widget to where it sits in your in-car profile (all session types).", "Copy layout",
                 () => Apply(() => CopyPositions(_cfg.Base, _edit))));
         }
 
@@ -355,11 +465,11 @@ public partial class SettingsWindow : Window
         PageBody.Children.Add(ColorRow("Player highlight", () => c.HighlightColor, v => c.HighlightColor = v));
     }
 
-    private void BuildStandings()
+    // ---- Standings -------------------------------------------------------
+
+    private void BuildStandingsGeneral()
     {
         var c = _edit;
-
-        PageBody.Children.Add(Subhead("Layout"));
         PageBody.Children.Add(Slider("Size", "Scales the whole standings table.", 0.6, 2.0, 0.05,
             () => c.Scale, v => c.Scale = v, v => $"{v * 100:0}%"));
         PageBody.Children.Add(Slider("Leaders at top", "Always-shown positions from the front.", 0, 10, 1,
@@ -372,121 +482,125 @@ public partial class SettingsWindow : Window
             0, 20, 1, () => c.MinLeadingCars, v => c.MinLeadingCars = (int)v, v => v <= 0 ? "off" : $"{v:0}"));
         PageBody.Children.Add(Slider("Other-class leaders", "Top cars of each other class in a multiclass field.", 0, 6, 1,
             () => c.OtherClassesDriversAtTop, v => c.OtherClassesDriversAtTop = (int)v, v => $"{v:0}"));
+        PageBody.Children.Add(Toggle("List full class in qualifying", "Instead of the top-N + window layout.",
+            () => c.QualifyShowFullClass, v => c.QualifyShowFullClass = v));
         PageBody.Children.Add(Toggle("Pin towed cars", "A towed class rival shows at its position until it leaves the pits.",
             () => c.PinTowedCars, v => c.PinTowedCars = v));
-        PageBody.Children.Add(Slider("Delta laps", "Per-lap gap-change columns — the reason this overlay exists.", 1, 10, 1,
-            () => c.DeltaLaps, v => c.DeltaLaps = (int)v, v => $"{v:0}"));
         PageBody.Children.Add(Slider("Name column width", "Fixed width so long names don't resize the table.", 60, 400, 10,
             () => c.NameColumnWidth, v => c.NameColumnWidth = v, v => $"{v:0}px"));
         PageBody.Children.Add(Slider("Header text size", "Standings header pill text.", 10, 20, 0.5,
             () => c.HeaderFontSize, v => c.HeaderFontSize = v, v => $"{v:0.#}"));
-        PageBody.Children.Add(Toggle("Column header row", null, () => c.ShowColumnHeader, v => c.ShowColumnHeader = v));
-        PageBody.Children.Add(Toggle("List full class in qualifying", "Instead of the top-N + window layout.",
-            () => c.QualifyShowFullClass, v => c.QualifyShowFullClass = v));
-        PageBody.Children.Add(Toggle("Smooth gaps", "Continuous gap/interval (like the relative) instead of stepping at timing lines.",
-            () => c.SmoothGaps, v => c.SmoothGaps = v));
-        PageBody.Children.Add(Toggle("Rejoin badge", "Show REJOIN when a stopped car starts moving again (experimental).",
-            () => c.ShowRejoinState, v => c.ShowRejoinState = v));
-        PageBody.Children.Add(Segmented("Status style", "Penalties as flag chips beside the state text, or everything as one text badge.",
-            new[] { ("Text + flags", "TextAndFlags"), ("All text", "Text") },
-            () => c.StatusStyle, v => Apply(() => c.StatusStyle = v)));
-
-        PageBody.Children.Add(Subhead("Header extras"));
-        PageBody.Children.Add(Toggle("Real-life clock", "Your wall-clock time next to the in-sim clock.", () => c.ShowRealClock, v => c.ShowRealClock = v));
-        PageBody.Children.Add(Toggle("Local time of day", "In-sim track clock.", () => c.ShowTimeOfDay, v => c.ShowTimeOfDay = v));
-        PageBody.Children.Add(Toggle("Strength of Field", null, () => c.ShowSof, v => c.ShowSof = v));
-        PageBody.Children.Add(Toggle("Track temperature", null, () => c.ShowTrackTemp, v => c.ShowTrackTemp = v));
-        PageBody.Children.Add(Slider("Track temp decimals", null, 0, 2, 1, () => c.ShowTrackTempDecimals, v => c.ShowTrackTempDecimals = (int)v, v => $"{v:0}"));
-        PageBody.Children.Add(Toggle("Incident count", null, () => c.ShowIncidents, v => c.ShowIncidents = v));
-        PageBody.Children.Add(Toggle("Weather / track state", null, () => c.ShowWeather, v => c.ShowWeather = v));
-        PageBody.Children.Add(Toggle("Abbreviate track state", "“M.Dry” / “V.Wet” instead of the full words.", () => c.AbbreviateWetness, v => c.AbbreviateWetness = v));
-        PageBody.Children.Add(Slider("Wet↔dry alert", "How long the track-state change banner stays.", 10, 300, 10,
-            () => c.WeatherAlertSec, v => c.WeatherAlertSec = (int)v, v => $"{v:0}s"));
-        PageBody.Children.Add(Slider("Tyre-switch alert", "How long a dry↔wet tyre switch is shown.", 5, 60, 5,
-            () => c.TyreSwitchAlertSec, v => c.TyreSwitchAlertSec = (int)v, v => $"{v:0}s"));
-        PageBody.Children.Add(Segmented("Tyre-switch display", "Header flash, an inline o→o in the row, or both.",
-            new[] { ("Flash", "Flash"), ("Inline", "Inline"), ("Both", "Both") },
-            () => c.TyreSwitchDisplay, v => Apply(() => c.TyreSwitchDisplay = v)));
-        PageBody.Children.Add(Toggle("Wind direction & speed", null, () => c.ShowWind, v => c.ShowWind = v));
-
-        PageBody.Children.Add(Subhead("Precision (decimals)"));
-        PageBody.Children.Add(Slider("Gap", null, 0, 3, 1, () => c.GapPrecision, v => c.GapPrecision = (int)v, v => $"{v:0}"));
-        PageBody.Children.Add(Slider("Interval", null, 0, 3, 1, () => c.IntervalPrecision, v => c.IntervalPrecision = (int)v, v => $"{v:0}"));
-        PageBody.Children.Add(Slider("Lap time", null, 0, 3, 1, () => c.LapTimePrecision, v => c.LapTimePrecision = (int)v, v => $"{v:0}"));
-        PageBody.Children.Add(Slider("Delta", null, 0, 3, 1, () => c.DeltaPrecision, v => c.DeltaPrecision = (int)v, v => $"{v:0}"));
-        PageBody.Children.Add(Slider("Qualifying gap", null, 0, 3, 1, () => c.QualifyGapPrecision, v => c.QualifyGapPrecision = (int)v, v => $"{v:0}"));
-
-        // Per-session column toggles: a segment picker swaps which SessionColumns we edit.
-        PageBody.Children.Add(Subhead("Columns per session"));
-        var host = new StackPanel();
-        PageBody.Children.Add(Segmented("Session", "Column visibility is independent for each session type.",
-            new[] { ("Race", "Race"), ("Qualify", "Qualify"), ("Practice", "Practice") },
-            () => "Race", v => BuildColumns(host, v)));
-        PageBody.Children.Add(host);
-        BuildColumns(host, "Race");
     }
 
-    private void BuildColumns(StackPanel host, string session)
+    /// <summary>Columns in on-screen order. Columns that can only ever render in some session types
+    /// (race-only strategy/pit data, no per-lap cells in practice) grey out the others.</summary>
+    private void BuildStandingsContent()
     {
-        host.Children.Clear();
-        var s = session switch
-        {
-            "Qualify" => _edit.Qualify,
-            "Practice" => _edit.Practice,
-            _ => _edit.Race,
-        };
-        void T(string label, string? hint, Func<bool> get, Action<bool> set) =>
-            host.Children.Add(Toggle(label, hint, get, set));
+        var c = _edit;
+        const Sessions RaceOnly = Sessions.Race;
+        void Add(FrameworkElement row) => PageBody.Children.Add(row);
 
-        T("Positions gained", "Race only.", () => s.ShowPositionsGained, v => s.ShowPositionsGained = v);
-        T("Tyre compound", "Dry/wet ring next to the position.", () => s.ShowTyre, v => s.ShowTyre = v);
-        T("Tyre age", "Race only. Laps on their tires: 42² = double-stint, ³ = triple (inferred from stop lengths).",
-            () => s.ShowTyreAge, v => s.ShowTyreAge = v);
-        T("iRating", null, () => s.ShowIRating, v => s.ShowIRating = v);
-        T("License", null, () => s.ShowLicense, v => s.ShowLicense = v);
-        T("Car brand", null, () => s.ShowCarBrand, v => s.ShowCarBrand = v);
-        T("Laps completed", null, () => s.ShowLapsCount, v => s.ShowLapsCount = v);
-        T("Gap", null, () => s.ShowGap, v => s.ShowGap = v);
-        T("Interval", null, () => s.ShowInterval, v => s.ShowInterval = v);
-        T("Best lap", null, () => s.ShowBestLap, v => s.ShowBestLap = v);
-        T("Last lap", null, () => s.ShowLastLap, v => s.ShowLastLap = v);
-        T("Per-lap cells", "Race: gap deltas · Qualify: each lap time.", () => s.ShowCells, v => s.ShowCells = v);
-        T("Pace rank", "Fastest-in-class over the last 5 clean laps.", () => s.ShowPaceRank, v => s.ShowPaceRank = v);
-        T("Status", "PIT / off-track / penalties.", () => s.ShowStatus, v => s.ShowStatus = v);
-        T("Strategy", "Race only. Next pit lap: ~34 · 34! overdue · 0stp none needed.", () => s.ShowStrategy, v => s.ShowStrategy = v);
-        T("Pace arrow", "Race only.", () => s.ShowPace, v => s.ShowPace = v);
-        T("Pit lap", "Race only. Lap of their last stop.", () => s.ShowPitLap, v => s.ShowPitLap = v);
-        T("Pit time — total", "Race only. Time on pit road.", () => s.ShowPitTotal, v => s.ShowPitTotal = v);
-        T("Pit time — drive-through", "Race only. Pit-lane transit.", () => s.ShowPitDrive, v => s.ShowPitDrive = v);
-        T("Pit time — in box", "Race only. Time sat stationary.", () => s.ShowPitStall, v => s.ShowPitStall = v);
+        Add(Column("Tyre compound", "Dry/wet ring next to the position.", s => s.ShowTyre, (s, v) => s.ShowTyre = v,
+            settings: p =>
+            {
+                p.Children.Add(Segmented("Tyre-switch display", "Header flash, an inline o→o in the row, or both.",
+                    [("Flash", "Flash"), ("Inline", "Inline"), ("Both", "Both")],
+                    () => c.TyreSwitchDisplay, v => Apply(() => c.TyreSwitchDisplay = v)));
+                p.Children.Add(Slider("Tyre-switch alert", "How long a dry↔wet tyre switch is shown.", 5, 60, 5,
+                    () => c.TyreSwitchAlertSec, v => c.TyreSwitchAlertSec = (int)v, v => $"{v:0}s"));
+            }));
+        Add(Column("Tyre age", "Laps on their tires: 42² = double-stint, ³ = triple (inferred from stop lengths).",
+            s => s.ShowTyreAge, (s, v) => s.ShowTyreAge = v, RaceOnly, TireInference));
+        Add(Column("Positions gained", null, s => s.ShowPositionsGained, (s, v) => s.ShowPositionsGained = v, RaceOnly));
+        Add(Column("iRating", null, s => s.ShowIRating, (s, v) => s.ShowIRating = v));
+        Add(Column("Car brand", null, s => s.ShowCarBrand, (s, v) => s.ShowCarBrand = v));
+        Add(Column("License", null, s => s.ShowLicense, (s, v) => s.ShowLicense = v));
+        Add(Column("Laps completed", null, s => s.ShowLapsCount, (s, v) => s.ShowLapsCount = v));
+        Add(Column("Gap", "Gap to the class leader.", s => s.ShowGap, (s, v) => s.ShowGap = v, settings: p =>
+        {
+            p.Children.Add(Toggle("Smooth gaps", "Continuous gap & interval (like the relative) instead of stepping at timing lines.",
+                () => c.SmoothGaps, v => c.SmoothGaps = v));
+            p.Children.Add(Slider("Gap decimals", null, 0, 3, 1, () => c.GapPrecision, v => c.GapPrecision = (int)v, v => $"{v:0}"));
+            p.Children.Add(Slider("Qualifying gap decimals", "Gap and interval in qualifying, where hundredths matter.", 0, 3, 1,
+                () => c.QualifyGapPrecision, v => c.QualifyGapPrecision = (int)v, v => $"{v:0}"));
+        }));
+        Add(Column("Interval", "Gap to the car ahead.", s => s.ShowInterval, (s, v) => s.ShowInterval = v, settings: p =>
+            p.Children.Add(Slider("Interval decimals", null, 0, 3, 1, () => c.IntervalPrecision, v => c.IntervalPrecision = (int)v, v => $"{v:0}"))));
+        Add(Column("Best lap", null, s => s.ShowBestLap, (s, v) => s.ShowBestLap = v, settings: LapDecimals));
+        Add(Column("Last lap", null, s => s.ShowLastLap, (s, v) => s.ShowLastLap = v, settings: LapDecimals));
+        Add(Column("Per-lap cells", "Race: gap change per lap over the last N laps (the headline feature) · Qualifying: each lap time.",
+            s => s.ShowCells, (s, v) => s.ShowCells = v, Sessions.Race | Sessions.Qualify, p =>
+            {
+                p.Children.Add(Slider("Delta laps", "How many per-lap gap-change columns in a race.", 1, 10, 1,
+                    () => c.DeltaLaps, v => c.DeltaLaps = (int)v, v => $"{v:0}"));
+                p.Children.Add(Slider("Delta decimals", null, 0, 3, 1, () => c.DeltaPrecision, v => c.DeltaPrecision = (int)v, v => $"{v:0}"));
+            }));
+        Add(Column("Pace rank", "Fastest-in-class over the last 5 clean laps.", s => s.ShowPaceRank, (s, v) => s.ShowPaceRank = v));
+        Add(Column("Strategy", "Next pit lap: ~34 · 34! overdue · 0stp none needed.", s => s.ShowStrategy, (s, v) => s.ShowStrategy = v, RaceOnly));
+        Add(Column("Pace arrow", "Their recent pace vs yours.", s => s.ShowPace, (s, v) => s.ShowPace = v, RaceOnly));
+        Add(Column("Status", "PIT / off-track / penalties.", s => s.ShowStatus, (s, v) => s.ShowStatus = v, settings: p =>
+        {
+            p.Children.Add(Segmented("Status style", "Penalties as flag chips beside the state text, or everything as one text badge.",
+                [("Text + flags", "TextAndFlags"), ("All text", "Text")],
+                () => c.StatusStyle, v => Apply(() => c.StatusStyle = v)));
+            p.Children.Add(Toggle("Rejoin badge", "Show REJOIN when a stopped car starts moving again (experimental).",
+                () => c.ShowRejoinState, v => c.ShowRejoinState = v));
+        }));
+        Add(Column("Pit lap", "Lap of their last stop.", s => s.ShowPitLap, (s, v) => s.ShowPitLap = v, RaceOnly));
+        Add(Column("Pit time — total", "Time on pit road.", s => s.ShowPitTotal, (s, v) => s.ShowPitTotal = v, RaceOnly));
+        Add(Column("Pit time — drive-through", "Pit-lane transit.", s => s.ShowPitDrive, (s, v) => s.ShowPitDrive = v, RaceOnly));
+        Add(Column("Pit time — in box", "Time sat stationary.", s => s.ShowPitStall, (s, v) => s.ShowPitStall = v, RaceOnly));
     }
 
-    private void BuildRelative()
+    private void BuildStandingsHeader()
+    {
+        var c = _edit;
+        void Add(FrameworkElement row) => PageBody.Children.Add(row);
+
+        Add(Item("Column header row", "The P / DRIVER / GAP … labels above the rows.", () => c.ShowColumnHeader, v => c.ShowColumnHeader = v));
+        Add(Item("Real-life clock", "Your wall-clock time next to the in-sim clock.", () => c.ShowRealClock, v => c.ShowRealClock = v));
+        Add(Item("Local time of day", "In-sim track clock.", () => c.ShowTimeOfDay, v => c.ShowTimeOfDay = v));
+        Add(Item("Strength of Field", null, () => c.ShowSof, v => c.ShowSof = v));
+        Add(Item("Track temperature", null, () => c.ShowTrackTemp, v => c.ShowTrackTemp = v, settings: p =>
+            p.Children.Add(Slider("Decimals", null, 0, 2, 1, () => c.ShowTrackTempDecimals, v => c.ShowTrackTempDecimals = (int)v, v => $"{v:0}"))));
+        Add(Item("Incident count", null, () => c.ShowIncidents, v => c.ShowIncidents = v));
+        Add(Item("Weather / track state", "Track wetness + rain %, and the dry↔wet banner.", () => c.ShowWeather, v => c.ShowWeather = v, settings: p =>
+        {
+            p.Children.Add(Toggle("Abbreviate track state", "“M.Dry” / “V.Wet” instead of the full words.",
+                () => c.AbbreviateWetness, v => c.AbbreviateWetness = v));
+            p.Children.Add(Slider("Wet↔dry alert", "How long the track-state change banner stays.", 10, 300, 10,
+                () => c.WeatherAlertSec, v => c.WeatherAlertSec = (int)v, v => $"{v:0}s"));
+        }));
+        Add(Item("Wind direction & speed", null, () => c.ShowWind, v => c.ShowWind = v));
+    }
+
+    // Shared item sub-settings.
+    private void LapDecimals(StackPanel p)
+    {
+        var c = _edit;
+        p.Children.Add(Slider("Lap time decimals", "Shared by every lap-time readout.", 0, 3, 1,
+            () => c.LapTimePrecision, v => c.LapTimePrecision = (int)v, v => $"{v:0}"));
+    }
+
+    private void TireInference(StackPanel p)
+    {
+        var c = _edit;
+        p.Children.Add(Toggle("Tire-change inference", "No SDK channel exists for opponents' tires: infer them from stop lengths (needs fuel-and-tires-separate rules). Shared by standings and relative.",
+            () => c.InferTireChanges, v => c.InferTireChanges = v));
+    }
+
+    // ---- Relative --------------------------------------------------------
+
+    private void BuildRelativeGeneral()
     {
         var r = _edit.Relative;
-        var body = PageBody;   // enable toggle is in the header; content grays with the box
-
+        var body = PageBody;
         body.Children.Add(Slider("Size", "Scales the whole relative box.", 0.6, 2.0, 0.05,
             () => r.Scale, v => r.Scale = v, v => $"{v * 100:0}%"));
         body.Children.Add(Slider("Cars ahead", null, 0, 8, 1, () => r.CarsAhead, v => r.CarsAhead = (int)v, v => $"{v:0}"));
         body.Children.Add(Slider("Cars behind", null, 0, 8, 1, () => r.CarsBehind, v => r.CarsBehind = (int)v, v => $"{v:0}"));
-
-        body.Children.Add(Subhead("Columns"));
-        body.Children.Add(Toggle("Class position", null, () => r.ShowClassPos, v => r.ShowClassPos = v));
-        body.Children.Add(Toggle("Tyre compound", "Dry/wet ring, like the standings.", () => r.ShowTyre, v => r.ShowTyre = v));
-        body.Children.Add(Toggle("Car brand", null, () => r.ShowBrand, v => r.ShowBrand = v));
-        body.Children.Add(Toggle("iRating", null, () => r.ShowIRating, v => r.ShowIRating = v));
-        body.Children.Add(Toggle("License", null, () => r.ShowLicense, v => r.ShowLicense = v));
-        body.Children.Add(Toggle("Stint age", "STn = laps since their last stop; green while fresh.", () => r.ShowStintAge, v => r.ShowStintAge = v));
-        body.Children.Add(Toggle("Tire-change inference", "ST8+ = last stop took no tires (from stop lengths; needs fuel-and-tires-separate rules).",
-            () => _edit.InferTireChanges, v => _edit.InferTireChanges = v));
-        body.Children.Add(Toggle("Last lap", null, () => r.ShowLastLap, v => r.ShowLastLap = v));
-        body.Children.Add(Toggle("Pace arrow", "Their recent pace vs yours.", () => r.ShowPace, v => r.ShowPace = v));
-        body.Children.Add(Toggle("Closing rate", "s/lap the gap to you is closing — amber = a car behind is catching you, green = you're catching one ahead. Only shows real movers.", () => r.ShowClosing, v => r.ShowClosing = v));
-
-        body.Children.Add(Subhead("Behavior"));
         body.Children.Add(Segmented("Status style", "Independent of the standings: flag chips + text, or one text badge.",
-            new[] { ("Text + flags", "TextAndFlags"), ("All text", "Text") },
+            [("Text + flags", "TextAndFlags"), ("All text", "Text")],
             () => r.StatusStyle, v => Apply(() => r.StatusStyle = v)));
         body.Children.Add(Toggle("Hide parked cars", "Drop cars sat in the pits (DNF / no driver) — cuts endurance noise.",
             () => r.HideParkedCars, v => r.HideParkedCars = v));
@@ -495,21 +609,39 @@ public partial class SettingsWindow : Window
         body.Children.Add(Slider("Gap precision", null, 0, 2, 1, () => r.GapPrecision, v => r.GapPrecision = (int)v, v => $"{v:0}"));
     }
 
-    private void BuildTraffic()
+    private void BuildRelativeContent()
+    {
+        var r = _edit.Relative;
+        void Add(FrameworkElement row) => PageBody.Children.Add(row);
+
+        Add(Item("Class position", "Off = overall position.", () => r.ShowClassPos, v => r.ShowClassPos = v));
+        Add(Item("Tyre compound", "Dry/wet ring, like the standings.", () => r.ShowTyre, v => r.ShowTyre = v));
+        Add(Item("Car brand", null, () => r.ShowBrand, v => r.ShowBrand = v));
+        Add(Item("iRating", null, () => r.ShowIRating, v => r.ShowIRating = v));
+        Add(Item("License", null, () => r.ShowLicense, v => r.ShowLicense = v));
+        Add(Item("Stint age", "STn = laps since their last stop; green while fresh. ST8+ = last stop took no tires.",
+            () => r.ShowStintAge, v => r.ShowStintAge = v, settings: TireInference));
+        Add(Item("Last lap", null, () => r.ShowLastLap, v => r.ShowLastLap = v, settings: LapDecimals));
+        Add(Item("Pace arrow", "Their recent pace vs yours.", () => r.ShowPace, v => r.ShowPace = v));
+        Add(Item("Closing rate", "s/lap the gap to you is closing — amber = a car behind is catching you, green = you're catching one ahead. Only shows real movers.",
+            () => r.ShowClosing, v => r.ShowClosing = v));
+    }
+
+    // ---- Traffic ---------------------------------------------------------
+
+    private void BuildTrafficGeneral()
     {
         var t = _edit.Traffic;
         var body = PageBody;
 
         body.Children.Add(Slider("Size", "Scales the whole traffic widget.", 0.6, 2.0, 0.05,
             () => t.Scale, v => t.Scale = v, v => $"{v * 100:0}%"));
-        body.Children.Add(Toggle("Races only", "Off = also warn in practice/qual (blue flags stay race-only).",
-            () => t.RacesOnly, v => t.RacesOnly = v));
         body.Children.Add(Toggle("Alert while spectating", "Keep warnings while you're out of the car (teammate stint, garage).",
             () => t.WhileSpectating, v => t.WhileSpectating = v));
         body.Children.Add(Segmented("Style", "How the alert is drawn.",
-            new[] { ("Row", "Row"), ("Beacon", "Beacon") }, () => t.Style, v => Apply(() => t.Style = v)));
+            [("Row", "Row"), ("Beacon", "Beacon")], () => t.Style, v => Apply(() => t.Style = v)));
         body.Children.Add(Segmented("Trigger", "Which cars raise an alert.",
-            new[] { ("Faster class", "FasterClassOnly"), ("+ Lapping", "FasterClassAndLapping"), ("All closing", "AllClosing") },
+            [("Faster class", "FasterClassOnly"), ("+ Lapping", "FasterClassAndLapping"), ("All closing", "AllClosing")],
             () => t.Mode, v => Apply(() => t.Mode = v)));
         body.Children.Add(Toggle("Split by direction", "\"Me in the middle\": a fixed YOU line with cars you're catching AHEAD above it and cars closing from BEHIND below it. Off = one flat list with ▲/▼ arrows.",
             () => t.GroupByDirection, v => Apply(() => t.GroupByDirection = v)));
@@ -517,12 +649,13 @@ public partial class SettingsWindow : Window
             () => t.SlotsAhead, v => t.SlotsAhead = (int)v, v => $"{v:0}"));
         body.Children.Add(Slider("Slots behind", "Fixed rows below the YOU line (split layout).", 1, 6, 1,
             () => t.SlotsBehind, v => t.SlotsBehind = (int)v, v => $"{v:0}"));
+        body.Children.Add(Slider("Max rows", "Total cap in the flat (unsplit) list.", 1, 6, 1, () => t.MaxRows, v => t.MaxRows = (int)v, v => $"{v:0}"));
         body.Children.Add(Toggle("Panel background", "Off (default) = transparent widget with a text shadow. On = one solid rounded box behind it.",
             () => t.ShowPanel, v => Apply(() => t.ShowPanel = v)));
 
         body.Children.Add(Subhead("Timing"));
         body.Children.Add(Segmented("Alert basis", "Gap: cars appear, escalate, sort and print by on-track gap — the same seconds as the relative box (the lead/imminent sliders read as gap). Countdown: everything by time-to-arrival instead.",
-            new[] { ("Gap", "Gap"), ("Countdown", "ETA") },
+            [("Gap", "Gap"), ("Countdown", "ETA")],
             () => t.ShowTimeToArrival ? "ETA" : "Gap",
             v => Apply(() => t.ShowTimeToArrival = v == "ETA")));
         body.Children.Add(Slider("Lead time", "Alert when a car comes within this many seconds — of on-track gap (Gap basis) or arrival time (Countdown).", 4, 30, 1,
@@ -531,7 +664,6 @@ public partial class SettingsWindow : Window
             () => t.BlueLeadTimeSec, v => t.BlueLeadTimeSec = v, v => $"{v:0}s"));
         body.Children.Add(Slider("Imminent", "Escalate to the urgent cue inside this many seconds (same basis as above).", 1, 10, 1,
             () => t.ImminentSec, v => t.ImminentSec = v, v => $"{v:0}s"));
-        body.Children.Add(Slider("Max rows", null, 1, 6, 1, () => t.MaxRows, v => t.MaxRows = (int)v, v => $"{v:0}"));
         body.Children.Add(Toggle("Warn when lapping traffic", "Alert on slower/lapped cars ahead you're about to lap.",
             () => t.WarnLapping, v => t.WarnLapping = v));
         body.Children.Add(Slider("Lapping gap", "Gap at which the lapping alert fires.", 2, 10, 1,
@@ -544,11 +676,6 @@ public partial class SettingsWindow : Window
             () => t.PinNearbySameClass, v => t.PinNearbySameClass = v));
         body.Children.Add(Slider("Pin within", "That \"nearby\" gap.", 0.5, 5, 0.5,
             () => t.SameClassPinSec, v => t.SameClassPinSec = v, v => $"{v:0.0}s"));
-        body.Children.Add(Toggle("Show iRating", null, () => t.ShowIRating, v => t.ShowIRating = v));
-        body.Children.Add(Toggle("Alongside banner", "Left/right marker when a car is beside you.",
-            () => t.AlongsideBanner, v => t.AlongsideBanner = v));
-        body.Children.Add(Toggle("Alongside: any car", "Show it for ANY car the spotter reports beside you, not just alerted traffic — for constant same-class side-by-side in a pack.",
-            () => t.AlongsideAnyCar, v => t.AlongsideAnyCar = v));
 
         body.Children.Add(Subhead("Audio"));
         var audio = t.Audio;
@@ -559,6 +686,18 @@ public partial class SettingsWindow : Window
         body.Children.Add(Toggle("Blue-flag tone", "Calm two-tone when being lapped.", () => audio.BlueCue, v => audio.BlueCue = v));
     }
 
+    private void BuildTrafficContent()
+    {
+        var t = _edit.Traffic;
+        PageBody.Children.Add(Item("iRating", null, () => t.ShowIRating, v => t.ShowIRating = v));
+        PageBody.Children.Add(Item("Alongside banner", "Left/right marker on the car that's beside you.",
+            () => t.AlongsideBanner, v => t.AlongsideBanner = v, settings: p =>
+                p.Children.Add(Toggle("Any car", "Show it for ANY car the spotter reports beside you, not just alerted traffic — for constant same-class side-by-side in a pack.",
+                    () => t.AlongsideAnyCar, v => t.AlongsideAnyCar = v))));
+    }
+
+    // ---- Fuel ------------------------------------------------------------
+
     private void BuildFuel()
     {
         var f = _edit.Fuel;
@@ -566,7 +705,7 @@ public partial class SettingsWindow : Window
 
         body.Children.Add(Slider("Size", "Scales the whole fuel widget.", 0.6, 2.0, 0.05,
             () => f.Scale, v => f.Scale = v, v => $"{v * 100:0}%"));
-        body.Children.Add(Slider("Strategy bars", "How many candidate plans to show.", 1, 3, 1,
+        body.Children.Add(Slider("Strategy bars", "How many candidate plans to show (races).", 1, 3, 1,
             () => f.Strategies, v => f.Strategies = (int)v, v => $"{v:0}"));
         body.Children.Add(Slider("Safety margin", "Fuel kept in reserve at the finish.", 0, 3, 0.5,
             () => f.MarginLaps, v => f.MarginLaps = v, v => $"{v:0.0} lap"));
@@ -585,32 +724,79 @@ public partial class SettingsWindow : Window
             () => f.FillRateLps, v => f.FillRateLps = v, v => v < 0 ? "auto" : $"{v:0.0} L/s"));
     }
 
-    private void BuildFuelTable()
+    // ---- Fuel table ------------------------------------------------------
+
+    private void BuildFuelTableGeneral()
     {
         var ft = _edit.FuelTable;
         var body = PageBody;
 
         body.Children.Add(Slider("Size", "Scales the whole fuel table.", 0.6, 2.0, 0.05,
             () => ft.Scale, v => ft.Scale = v, v => $"{v * 100:0}%"));
-        body.Children.Add(Toggle("Last-5 row", "Average burn over your last 5 laps.",
-            () => ft.ShowLast5, v => ft.ShowLast5 = v));
-        body.Children.Add(Toggle("Last-10 row", null, () => ft.ShowLast10, v => ft.ShowLast10 = v));
-        body.Children.Add(Toggle("Stint row", "Average burn since your last pit stop.",
-            () => ft.ShowStint, v => ft.ShowStint = v));
-        body.Children.Add(Toggle("Target tracker", "The ahead/behind line while a stint is running: how much fuel you've banked or overspent, and the burn you now need to make the target stint.",
-            () => ft.ShowStatus, v => ft.ShowStatus = v));
         body.Children.Add(Toggle("Clickable on widget", "Drop click-through so the target ▲/▼ (and mouse wheel) work during a session. Off = set the target here only; still clickable while overlays are unlocked.",
             () => ft.Interactive, v => Apply(() => { ft.Interactive = v; })));
 
         body.Children.Add(Subhead("Target — the last value you set wins"));
         body.Children.Add(Segmented("Driven by", "Which number is fixed; the other follows from the usable tank. (Changing a value below also sets this.)",
-            new[] { ("Laps / stint", "Laps"), ("L per lap", "PerLap") },
+            [("Laps / stint", "Laps"), ("L per lap", "PerLap")],
             () => ft.TargetMode, v => Apply(() => ft.TargetMode = v)));
         body.Children.Add(Slider("Target laps", "Laps you want out of a full tank (one stint). Sets the target L/lap from the tank.", 1, 80, 1,
             () => ft.TargetLaps, v => { ft.TargetLaps = v; ft.TargetMode = "Laps"; }, v => v < 1 ? "—" : $"{v:0}"));
         body.Children.Add(Slider("Target L/lap", "Litres per lap to aim for. Sets the target laps from the tank.", 0, 8, 0.01,
             () => ft.TargetPerLap, v => { ft.TargetPerLap = v; ft.TargetMode = "PerLap"; }, v => v < 0.01 ? "—" : $"{v:0.00}"));
     }
+
+    private void BuildFuelTableContent()
+    {
+        var ft = _edit.FuelTable;
+        PageBody.Children.Add(Item("Last-5 row", "Average burn over your last 5 laps.", () => ft.ShowLast5, v => ft.ShowLast5 = v));
+        PageBody.Children.Add(Item("Last-10 row", null, () => ft.ShowLast10, v => ft.ShowLast10 = v));
+        PageBody.Children.Add(Item("Stint row", "Average burn since your last pit stop.", () => ft.ShowStint, v => ft.ShowStint = v));
+        PageBody.Children.Add(Item("Target tracker", "The ahead/behind line while a stint is running: how much fuel you've banked or overspent, and the burn you now need to make the target stint.",
+            () => ft.ShowStatus, v => ft.ShowStatus = v));
+    }
+
+    // ---- Lap Lab ---------------------------------------------------------
+
+    private void BuildLapLab()
+    {
+        var l = _edit.LapLab;
+        var body = PageBody;
+
+        body.Children.Add(Slider("Size", "Scales the whole lap table.", 0.6, 2.0, 0.05,
+            () => l.Scale, v => l.Scale = v, v => $"{v * 100:0}%"));
+        body.Children.Add(Slider("Laps shown", null, 3, 15, 1,
+            () => l.MaxRows, v => l.MaxRows = (int)v, v => $"{v:0}"));
+        body.Children.Add(Slider("Gap decimals", null, 1, 3, 1,
+            () => l.Decimals, v => l.Decimals = (int)v, v => $"{v:0}"));
+        body.Children.Add(Segmented("Columns", "Official sectors, or turn zones detected from the reference lap's speed trace (a chicane or esses complex counts as one T). Switch freely — laps always record both.",
+            [("Sectors", "Sectors"), ("Turns", "Turns")],
+            () => l.View, v => Apply(() => l.View = v)));
+        body.Children.Add(Subhead("Heatmap (% off the reference split)"));
+        body.Children.Add(Slider("On pace under", "Within this % of the reference: quiet — improving it is telemetry-at-the-desk territory.", 0.2, 2.0, 0.1,
+            () => l.HeatGoodPct, v => l.HeatGoodPct = v, v => $"{v:0.0}%"));
+        body.Children.Add(Slider("Full heat at", "The focus band: cells ramp to full red between the two — time you can find on track.", 1.0, 4.0, 0.1,
+            () => l.HeatFullPct, v => l.HeatFullPct = v, v => $"{v:0.0}%"));
+        body.Children.Add(Slider("Ignore above", "Bigger than this is a mistake or traffic, not pace — shown dim instead of red.", 2, 10, 0.5,
+            () => l.HeatIgnorePct, v => l.HeatIgnorePct = v, v => $"{v:0.0}%"));
+        body.Children.Add(Toggle("Hide slow laps", "Whole laps slower than the cutoff collapse to one quiet line — traffic, spins, offs.",
+            () => l.HideSlowLaps, v => l.HideSlowLaps = v));
+        body.Children.Add(Slider("Slow-lap cutoff", null, 102, 112, 1,
+            () => l.SlowLapPct, v => l.SlowLapPct = (int)v, v => $"{v:0}%"));
+
+        body.Children.Add(Subhead("Reference lap"));
+        body.Children.Add(Segmented("Reference", "Fastest full lap · best sectors combined · your saved best from an earlier session · an imported telemetry lap.",
+            [("Best", "SessionBest"), ("Optimal", "SessionOptimal"), ("Prev", "PreviousBest"), ("File", "File")],
+            () => l.Reference, v => Apply(() => l.Reference = v)));
+        body.Children.Add(FileRow("Reference .ibt", "Telemetry file used when Reference is File — yours, a teammate's, or a Garage 61 / VRS download. Its conditions are checked against the live session.",
+            () => l.ReferenceFile, v => l.ReferenceFile = v));
+        body.Children.Add(Toggle("Save session best", "Keep your best clean lap per car+track as the next session's Prev reference.",
+            () => l.SaveSessionBest, v => l.SaveSessionBest = v));
+        body.Children.Add(Slider("Track-temp warning", "Amber chip when the live track temp differs from the reference by more than this.", 1, 15, 1,
+            () => l.WarnTrackTempDelta, v => l.WarnTrackTempDelta = v, v => $"{v:0}°C"));
+    }
+
+    // ---- About -----------------------------------------------------------
 
     private void BuildAbout()
     {
@@ -640,7 +826,8 @@ public partial class SettingsWindow : Window
           + "gap delta over a configurable number of laps. Built to never affect sim frame times: "
           + "it repaints only on change and never busy-polls.", Dim, 12.5, 14);
         P("MIT licensed · uses irsdkSharp (MIT).", Dim, 12.5, 14);
-        P("Tip: pick “Move overlays” under General, then drag each widget where you want it.", Dim, 12.5, 14);
+        P("Tip: switch on Move overlays (left rail) and drag each widget where you want it. Race, "
+          + "qualifying and practice each keep their own layout — pick one under Move overlays to arrange it.", Dim, 12.5, 14);
 
         PageBody.Children.Add(Divider());
         PageBody.Children.Add(new TextBlock { Text = "config.json", Foreground = Dim, FontSize = 11.5, Margin = new Thickness(0, 8, 0, 0) });
@@ -650,6 +837,157 @@ public partial class SettingsWindow : Window
             IsReadOnly = true, Style = (Style)FindResource("HexBox"),
             Margin = new Thickness(0, 3, 0, 0), FontSize = 11.5,
         });
+    }
+
+    // ---- per-session item rows -------------------------------------------
+
+    /// <summary>The R/Q/P cluster: a master switch (on = shown in at least one session type) plus a
+    /// race / quali / practice checkbox each. Master off clears the boxes (remembering them for this
+    /// page), master on restores them (or every allowed one). Session types the item can never show
+    /// in (<paramref name="allowed"/>) are greyed out and never written as on.</summary>
+    private (CheckBox master, FrameworkElement boxes, Action refresh) SessionControls(Func<Sessions> get, Action<Sessions> set, Sessions allowed)
+    {
+        var master = new CheckBox { Style = (Style)FindResource("Switch") };
+        var boxes = new StackPanel { Orientation = Orientation.Horizontal };
+        var checks = new List<(CheckBox cb, Sessions bit)>();
+        bool sync = false;
+        var remembered = Sessions.None;
+
+        void Refresh()
+        {
+            sync = true;
+            var v = get() & allowed;
+            master.IsChecked = v != Sessions.None;
+            foreach (var (cb, bit) in checks) cb.IsChecked = (v & bit) != 0;
+            sync = false;
+        }
+        void Write(Sessions v)
+        {
+            Apply(() => set(v & allowed));
+            Refresh();
+        }
+
+        foreach (var (label, bit, width) in new[] { ("race", Sessions.Race, 66.0), ("quali", Sessions.Qualify, 70.0), ("practice", Sessions.Practice, 84.0) })
+        {
+            var cb = new CheckBox
+            {
+                Style = (Style)FindResource("Check"), Content = label, Width = width,
+                IsEnabled = (allowed & bit) != 0,
+            };
+            if (!cb.IsEnabled)
+            {
+                cb.ToolTip = "Never shown in this session type.";
+                ToolTipService.SetShowOnDisabled(cb, true);
+            }
+            cb.Checked += (_, _) => { if (!sync) Write((get() & allowed) | bit); };
+            cb.Unchecked += (_, _) => { if (!sync) Write(get() & allowed & ~bit); };
+            checks.Add((cb, bit));
+            boxes.Children.Add(cb);
+        }
+        master.Checked += (_, _) => { if (!sync) Write(remembered != Sessions.None ? remembered : allowed); };
+        master.Unchecked += (_, _) =>
+        {
+            if (sync) return;
+            remembered = get() & allowed;
+            Write(Sessions.None);
+        };
+
+        Refresh();
+        return (master, boxes, Refresh);
+    }
+
+    /// <summary>A Content/Header row, iOverlay-style: master switch · label · optional "settings"
+    /// link · race / quali / practice. The hint shows as a tooltip; <paramref name="settings"/> fills
+    /// the item's own options panel (built on first expand, stays open across page rebuilds).</summary>
+    private FrameworkElement Item(string label, string? hint, Func<Sessions> get, Action<Sessions> set,
+                                  Sessions allowed = Sessions.All, Action<StackPanel>? settings = null)
+    {
+        var (master, boxes, _) = SessionControls(get, set, allowed);
+
+        var grid = new Grid { Margin = new Thickness(0, 7, 0, 7) };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        master.Margin = new Thickness(0, 0, 14, 0);
+        Grid.SetColumn(master, 0);
+        grid.Children.Add(master);
+
+        var text = new TextBlock
+        {
+            Text = label, Foreground = Text, FontSize = 13.5, VerticalAlignment = VerticalAlignment.Center,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+        };
+        if (!string.IsNullOrEmpty(hint))
+        {
+            text.ToolTip = hint;
+            text.Cursor = System.Windows.Input.Cursors.Help;
+        }
+        Grid.SetColumn(text, 1);
+        grid.Children.Add(text);
+
+        var divider = VDivider();
+        Grid.SetColumn(divider, 3);
+        grid.Children.Add(divider);
+        Grid.SetColumn(boxes, 4);
+        grid.Children.Add(boxes);
+
+        var row = new StackPanel();
+        row.Children.Add(grid);
+
+        if (settings is not null)
+        {
+            var link = new Button { Style = (Style)FindResource("SettingsLink"), Content = "settings" };
+            Grid.SetColumn(link, 2);
+            grid.Children.Add(link);
+
+            var panel = new StackPanel();
+            var sub = new Border
+            {
+                Background = SubPanel, CornerRadius = new CornerRadius(6), Padding = new Thickness(14, 2, 14, 2),
+                Margin = new Thickness(54, 0, 0, 10), Child = panel, Visibility = Visibility.Collapsed,
+            };
+            string key = _section + "/" + label;
+            bool built = false;
+            void Show(bool open)
+            {
+                if (open && !built) { settings(panel); built = true; }
+                sub.Visibility = open ? Visibility.Visible : Visibility.Collapsed;
+                link.Content = open ? "hide" : "settings";
+            }
+            link.Click += (_, _) =>
+            {
+                bool open = sub.Visibility != Visibility.Visible;
+                if (open) _openSettings.Add(key); else _openSettings.Remove(key);
+                Show(open);
+            };
+            if (_openSettings.Contains(key)) Show(true);
+            row.Children.Add(sub);
+        }
+
+        return new Border { BorderBrush = Line, BorderThickness = new Thickness(0, 0, 0, 1), Child = row };
+    }
+
+    /// <summary>An <see cref="Item"/> for a standings column. Columns are stored per session type
+    /// (<see cref="OverlayConfig.Race"/> / Qualify / Practice column sets), so the R/Q/P boxes map
+    /// straight onto those three flags.</summary>
+    private FrameworkElement Column(string label, string? hint, Func<SessionColumns, bool> get,
+                                    Action<SessionColumns, bool> set, Sessions allowed = Sessions.All,
+                                    Action<StackPanel>? settings = null)
+    {
+        var c = _edit;
+        return Item(label, hint,
+            () => (get(c.Race) ? Sessions.Race : 0) | (get(c.Qualify) ? Sessions.Qualify : 0)
+                  | (get(c.Practice) ? Sessions.Practice : 0),
+            v =>
+            {
+                set(c.Race, v.In(SessionKind.Race));
+                set(c.Qualify, v.In(SessionKind.Qualify));
+                set(c.Practice, v.In(SessionKind.Practice));
+            },
+            allowed, settings);
     }
 
     // ---- reusable row builders ------------------------------------------
@@ -680,44 +1018,6 @@ public partial class SettingsWindow : Window
         Grid.SetColumn((UIElement)control, 1);
         grid.Children.Add(control);
         return grid;
-    }
-
-    private void BuildLapLab()
-    {
-        var l = _edit.LapLab;
-        var body = PageBody;
-
-        body.Children.Add(Slider("Size", "Scales the whole lap table.", 0.6, 2.0, 0.05,
-            () => l.Scale, v => l.Scale = v, v => $"{v * 100:0}%"));
-        body.Children.Add(Slider("Laps shown", null, 3, 15, 1,
-            () => l.MaxRows, v => l.MaxRows = (int)v, v => $"{v:0}"));
-        body.Children.Add(Slider("Gap decimals", null, 1, 3, 1,
-            () => l.Decimals, v => l.Decimals = (int)v, v => $"{v:0}"));
-        body.Children.Add(Segmented("Columns", "Official sectors, or turn zones detected from the reference lap's speed trace (a chicane or esses complex counts as one T). Switch freely — laps always record both.",
-            new[] { ("Sectors", "Sectors"), ("Turns", "Turns") },
-            () => l.View, v => Apply(() => l.View = v)));
-        body.Children.Add(Subhead("Heatmap (% off the reference split)"));
-        body.Children.Add(Slider("On pace under", "Within this % of the reference: quiet — improving it is telemetry-at-the-desk territory.", 0.2, 2.0, 0.1,
-            () => l.HeatGoodPct, v => l.HeatGoodPct = v, v => $"{v:0.0}%"));
-        body.Children.Add(Slider("Full heat at", "The focus band: cells ramp to full red between the two — time you can find on track.", 1.0, 4.0, 0.1,
-            () => l.HeatFullPct, v => l.HeatFullPct = v, v => $"{v:0.0}%"));
-        body.Children.Add(Slider("Ignore above", "Bigger than this is a mistake or traffic, not pace — shown dim instead of red.", 2, 10, 0.5,
-            () => l.HeatIgnorePct, v => l.HeatIgnorePct = v, v => $"{v:0.0}%"));
-        body.Children.Add(Toggle("Hide slow laps", "Whole laps slower than the cutoff collapse to one quiet line — traffic, spins, offs.",
-            () => l.HideSlowLaps, v => l.HideSlowLaps = v));
-        body.Children.Add(Slider("Slow-lap cutoff", null, 102, 112, 1,
-            () => l.SlowLapPct, v => l.SlowLapPct = (int)v, v => $"{v:0}%"));
-
-        body.Children.Add(Subhead("Reference lap"));
-        body.Children.Add(Segmented("Reference", "Fastest full lap · best sectors combined · your saved best from an earlier session · an imported telemetry lap.",
-            new[] { ("Best", "SessionBest"), ("Optimal", "SessionOptimal"), ("Prev", "PreviousBest"), ("File", "File") },
-            () => l.Reference, v => Apply(() => l.Reference = v)));
-        body.Children.Add(FileRow("Reference .ibt", "Telemetry file used when Reference is File — yours, a teammate's, or a Garage 61 / VRS download. Its conditions are checked against the live session.",
-            () => l.ReferenceFile, v => l.ReferenceFile = v));
-        body.Children.Add(Toggle("Save session best", "Keep your best clean lap per car+track as the next session's Prev reference.",
-            () => l.SaveSessionBest, v => l.SaveSessionBest = v));
-        body.Children.Add(Slider("Track-temp warning", "Amber chip when the live track temp differs from the reference by more than this.", 1, 15, 1,
-            () => l.WarnTrackTempDelta, v => l.WarnTrackTempDelta = v, v => $"{v:0}°C"));
     }
 
     private FrameworkElement FileRow(string label, string? hint, Func<string> get, Action<string> set)
@@ -755,17 +1055,12 @@ public partial class SettingsWindow : Window
         return Row(label, hint, panel);
     }
 
-    private FrameworkElement Toggle(string label, string? hint, Func<bool> get, Action<bool> set) =>
-        Toggle(label, hint, get, set, out _);
-
-    private FrameworkElement Toggle(string label, string? hint, Func<bool> get, Action<bool> set,
-                                    out CheckBox cb, bool strong = false)
+    private FrameworkElement Toggle(string label, string? hint, Func<bool> get, Action<bool> set)
     {
         var box = new CheckBox { Style = (Style)FindResource("Switch"), IsChecked = get() };
         box.Checked += (_, _) => Apply(() => set(true));
         box.Unchecked += (_, _) => Apply(() => set(false));
-        cb = box;
-        return Row(label, hint, box, strong);
+        return Row(label, hint, box);
     }
 
     private FrameworkElement Slider(string label, string? hint, double min, double max, double step,
@@ -807,7 +1102,7 @@ public partial class SettingsWindow : Window
                 Style = (Style)FindResource("Segment"), Content = text, GroupName = group,
                 IsChecked = string.Equals(value, current, StringComparison.OrdinalIgnoreCase),
             };
-            rb.Checked += (_, _) => onPick(value);   // segment change may just re-render (columns); caller applies
+            rb.Checked += (_, _) => onPick(value);   // caller applies
             panel.Children.Add(rb);
         }
         return Row(label, hint, panel);
@@ -857,6 +1152,12 @@ public partial class SettingsWindow : Window
         Height = 1, Background = Line, Margin = new Thickness(0, 8, 0, 4),
     };
 
+    private static FrameworkElement VDivider() => new Border
+    {
+        Width = 1, Height = 20, Background = Line, Margin = new Thickness(14, 0, 14, 0),
+        VerticalAlignment = VerticalAlignment.Center,
+    };
+
     // ---- footer actions --------------------------------------------------
 
     private void OnResetSection(object sender, RoutedEventArgs e)
@@ -872,6 +1173,7 @@ public partial class SettingsWindow : Window
                 c.BackgroundColor = src.BackgroundColor; c.AccentColor = src.AccentColor; c.HighlightColor = src.HighlightColor;
                 break;
             case "Standings":
+                c.ShowStandings = src.ShowStandings;
                 c.Scale = src.Scale; c.NameColumnWidth = src.NameColumnWidth; c.HeaderFontSize = src.HeaderFontSize;
                 c.SmoothGaps = src.SmoothGaps; c.ShowRejoinState = src.ShowRejoinState; c.StatusStyle = src.StatusStyle;
                 c.DriversAtTop = src.DriversAtTop; c.DriversAhead = src.DriversAhead; c.DriversBehind = src.DriversBehind;
@@ -886,39 +1188,39 @@ public partial class SettingsWindow : Window
                 c.DeltaPrecision = src.DeltaPrecision; c.QualifyGapPrecision = src.QualifyGapPrecision;
                 c.Race = JsonClone(src.Race); c.Qualify = JsonClone(src.Qualify); c.Practice = JsonClone(src.Practice);
                 break;
-            // Widget sections: resetting In car keeps the on-screen position (defaults only reset
-            // behavior); resetting Spectating fully inherits In car, position included.
-            case "Relative": c.Relative = _editingSpectate ? JsonClone(src.Relative) : KeepPos(new RelativeConfig(), c.Relative.X, c.Relative.Y); break;
-            case "Traffic": c.Traffic = _editingSpectate ? JsonClone(src.Traffic) : KeepPos(new TrafficConfig(), c.Traffic.X, c.Traffic.Y); break;
-            case "Fuel": c.Fuel = _editingSpectate ? JsonClone(src.Fuel) : KeepPos(new FuelConfig(), c.Fuel.X, c.Fuel.Y); break;
-            case "Fuel Table": c.FuelTable = _editingSpectate ? JsonClone(src.FuelTable) : KeepPos(new FuelTableConfig(), c.FuelTable.X, c.FuelTable.Y); break;
-            case "Lap Lab": c.LapLab = _editingSpectate ? JsonClone(src.LapLab) : KeepPos(new LapLabConfig(), c.LapLab.X, c.LapLab.Y); break;
+            // Widget sections: resetting In car keeps the on-screen positions (defaults only reset
+            // behavior); resetting Spectating fully inherits In car, positions included.
+            case "Relative": c.Relative = _editingSpectate ? JsonClone(src.Relative) : KeepPos(new RelativeConfig(), c.Relative); break;
+            case "Traffic": c.Traffic = _editingSpectate ? JsonClone(src.Traffic) : KeepPos(new TrafficConfig(), c.Traffic); break;
+            case "Fuel": c.Fuel = _editingSpectate ? JsonClone(src.Fuel) : KeepPos(new FuelConfig(), c.Fuel); break;
+            case "Fuel Table": c.FuelTable = _editingSpectate ? JsonClone(src.FuelTable) : KeepPos(new FuelTableConfig(), c.FuelTable); break;
+            case "Lap Lab": c.LapLab = _editingSpectate ? JsonClone(src.LapLab) : KeepPos(new LapLabConfig(), c.LapLab); break;
             case "About": return;
         }
-        Apply(() => { });          // mark dirty + schedule save
-        OnNavChanged(Nav, null!);  // rebuild the section from the reset values
+        Apply(() => { });   // mark dirty + schedule save
+        RebuildPage();      // rebuild the section from the reset values
     }
 
-    private static RelativeConfig KeepPos(RelativeConfig r, double x, double y) { r.X = x; r.Y = y; return r; }
-    private static TrafficConfig KeepPos(TrafficConfig t, double x, double y) { t.X = x; t.Y = y; return t; }
-    private static FuelConfig KeepPos(FuelConfig f, double x, double y) { f.X = x; f.Y = y; return f; }
-    private static FuelTableConfig KeepPos(FuelTableConfig f, double x, double y) { f.X = x; f.Y = y; return f; }
-    private static LapLabConfig KeepPos(LapLabConfig l, double x, double y) { l.X = x; l.Y = y; return l; }
+    private static T KeepPos<T>(T fresh, T current) where T : WidgetConfig
+    {
+        fresh.Position = JsonClone(current.Position);
+        return fresh;
+    }
 
     /// <summary>Deep copy via a JSON round-trip (independent instance, safe to assign into _edit).</summary>
     private static T JsonClone<T>(T value) =>
         System.Text.Json.JsonSerializer.Deserialize<T>(System.Text.Json.JsonSerializer.Serialize(value))!;
 
-    /// <summary>Copy every widget's on-screen position from one profile to another (used by the
-    /// spectating "Copy layout from In car" button). Positions are ordinary settings.</summary>
+    /// <summary>Copy every widget's on-screen positions (all session types) from one profile to
+    /// another (the spectating "Copy layout from In car" button). Positions are ordinary settings.</summary>
     private static void CopyPositions(OverlayConfig from, OverlayConfig to)
     {
-        to.X = from.X; to.Y = from.Y;
-        to.Relative.X = from.Relative.X; to.Relative.Y = from.Relative.Y;
-        to.Traffic.X = from.Traffic.X; to.Traffic.Y = from.Traffic.Y;
-        to.Fuel.X = from.Fuel.X; to.Fuel.Y = from.Fuel.Y;
-        to.FuelTable.X = from.FuelTable.X; to.FuelTable.Y = from.FuelTable.Y;
-        to.LapLab.X = from.LapLab.X; to.LapLab.Y = from.LapLab.Y;
+        to.Position = JsonClone(from.Position);
+        to.Relative.Position = JsonClone(from.Relative.Position);
+        to.Traffic.Position = JsonClone(from.Traffic.Position);
+        to.Fuel.Position = JsonClone(from.Fuel.Position);
+        to.FuelTable.Position = JsonClone(from.FuelTable.Position);
+        to.LapLab.Position = JsonClone(from.LapLab.Position);
     }
 
     private void OnClose(object sender, RoutedEventArgs e) => Close();

@@ -56,7 +56,8 @@ public static class FuelTableBuilder
     {
         var fc = cfg.FuelTable;
         int p = t.PlayerCarIdx;
-        if (!fc.Enabled || !t.Has(p) || float.IsNaN(t.PlayerFuelLevel)) return FuelTableSnapshot.Empty;
+        var kind = StandingsSnapshot.KindOf(t.SessionType);
+        if (!fc.Enabled.In(kind) || !t.Has(p) || float.IsNaN(t.PlayerFuelLevel)) return FuelTableSnapshot.Empty;
 
         double fuelNow = t.PlayerFuelLevel;
         double tank = t.TankCapacity;
@@ -105,9 +106,9 @@ public static class FuelTableBuilder
 
         var rows = new List<FuelTableRow>(5);
         rows.Add(Row("Last", fuel.LastPerLap, fuelNow));
-        if (fc.ShowLast5) rows.Add(Row("Last 5", fuel.RecentAvg(5), fuelNow));
-        if (fc.ShowLast10) rows.Add(Row("Last 10", fuel.RecentAvg(10), fuelNow));
-        if (fc.ShowStint) rows.Add(Row("Stint", fuel.StintPerLap, fuelNow));
+        if (fc.ShowLast5.In(kind)) rows.Add(Row("Last 5", fuel.RecentAvg(5), fuelNow));
+        if (fc.ShowLast10.In(kind)) rows.Add(Row("Last 10", fuel.RecentAvg(10), fuelNow));
+        if (fc.ShowStint.In(kind)) rows.Add(Row("Stint", fuel.StintPerLap, fuelNow));
         rows.Add(new FuelTableRow("Target", targetPerLap,
             targetPerLap > 0.01 && fuelNow > 0.01 ? fuelNow / targetPerLap : -1, IsTarget: true));
 
@@ -117,7 +118,7 @@ public static class FuelTableBuilder
         // average burn now makes the target stint length on the fuel we have.
         bool hasStatus = false; string statusText = ""; int statusState = 0;
         int stintLaps = fuel.StintLaps;
-        if (fc.ShowStatus && targetPerLap > 0.01 && targetLapsGoal >= 1 && stintLaps >= 1)
+        if (fc.ShowStatus.In(kind) && targetPerLap > 0.01 && targetLapsGoal >= 1 && stintLaps >= 1)
         {
             int tgtLaps = targetLapsGoal;
             int lapsLeft = tgtLaps - stintLaps;

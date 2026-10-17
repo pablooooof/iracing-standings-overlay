@@ -119,7 +119,7 @@ public sealed class LapLabTracker
             Log.Write("lap lab: car left the world — lap abandoned");
         }
 
-        if (!cfg.LapLab.Enabled || !clock.HasBoundaries ||
+        if (!cfg.LapLab.Enabled.In(StandingsSnapshot.KindOf(t.SessionType)) || !clock.HasBoundaries ||
             StandingsSnapshot.KindOf(t.SessionType) == SessionKind.Race)
             return LapLabSnapshot.Empty;
 
