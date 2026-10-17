@@ -105,39 +105,46 @@ public partial class SettingsWindow : Window
         Nav.SelectedIndex = 0;
     }
 
-    // ---- page "Visible" switch + race/quali/practice ---------------------
+    // ---- page "Visible" switch: race / quali / practice / spectating ------
 
-    /// <summary>For a widget section, how to read/write which session types the box shows in, the
-    /// session types it can show in at all, and (spectating only) a fixed note in place of the
-    /// "as in car" status. Non-widget sections (General, About) return null.</summary>
-    private (Func<OverlayConfig, Sessions> get, Action<OverlayConfig, Sessions> set, Sessions allowed, string? note)? BoxFor(string section)
+    /// <summary>For a widget section, how to read/write which session types the box shows in (on
+    /// a profile), and the session types it can show in at all. Non-widget sections (General,
+    /// About) return null.</summary>
+    private static (Func<OverlayConfig, Sessions> get, Action<OverlayConfig, Sessions> set, Sessions allowed)? BoxFor(string section) => section switch
     {
-        // Traffic alerts are about the car you're driving, so spectating has its own opt-in
-        // (Traffic.WhileSpectating — also the detector's instant gate the moment you step out of the
-        // car, before the profile swaps) instead of following In car.
-        if (section == "Traffic" && _editingSpectate)
-            return (c => c.Traffic.WhileSpectating ? Sessions.All : Sessions.None,
-                    (c, v) => c.Traffic.WhileSpectating = v != Sessions.None, Sessions.All,
-                    "off by default — alerts are about the car you drive");
-        return section switch
-        {
-            "Standings"  => (c => c.ShowStandings,     (c, v) => c.ShowStandings = v,     Sessions.All, null),
-            "Relative"   => (c => c.Relative.Enabled,  (c, v) => c.Relative.Enabled = v,  Sessions.All, null),
-            "Traffic"    => (c => c.Traffic.Enabled,   (c, v) => c.Traffic.Enabled = v,   Sessions.All, null),
-            "Fuel"       => (c => c.Fuel.Enabled,      (c, v) => c.Fuel.Enabled = v,      Sessions.All, null),
-            "Fuel Table" => (c => c.FuelTable.Enabled, (c, v) => c.FuelTable.Enabled = v, Sessions.All, null),
-            // Lap Lab never shows in races (a practice tool by design).
-            "Lap Lab"    => (c => c.LapLab.Enabled,    (c, v) => c.LapLab.Enabled = v,    Sessions.Qualify | Sessions.Practice, null),
-            _ => null,
-        };
-    }
+        "Standings"  => (c => c.ShowStandings,     (c, v) => c.ShowStandings = v,     Sessions.All),
+        "Relative"   => (c => c.Relative.Enabled,  (c, v) => c.Relative.Enabled = v,  Sessions.All),
+        "Traffic"    => (c => c.Traffic.Enabled,   (c, v) => c.Traffic.Enabled = v,   Sessions.All),
+        "Fuel"       => (c => c.Fuel.Enabled,      (c, v) => c.Fuel.Enabled = v,      Sessions.All),
+        "Fuel Table" => (c => c.FuelTable.Enabled, (c, v) => c.FuelTable.Enabled = v, Sessions.All),
+        // Lap Lab never shows in races (a practice tool by design).
+        "Lap Lab"    => (c => c.LapLab.Enabled,    (c, v) => c.LapLab.Enabled = v,    Sessions.Qualify | Sessions.Practice),
+        _ => null,
+    };
+
+    /// <summary>How a box's visibility while spectating is read/written on the spectate profile.
+    /// Normally just its session flags (spectating on = every allowed session). Traffic is its own
+    /// opt-in: alerts are about the car you drive, and <c>Traffic.WhileSpectating</c> is also the
+    /// detector's instant gate the moment you step out of the car, before the profile swaps.</summary>
+    private static (Func<OverlayConfig, Sessions> get, Action<OverlayConfig, Sessions> set) SpectateAccess(
+        string section, Func<OverlayConfig, Sessions> get, Action<OverlayConfig, Sessions> set) => section == "Traffic"
+        ? (c => c.Traffic.WhileSpectating ? c.Traffic.Enabled : Sessions.None,
+           (c, v) =>
+           {
+               c.Traffic.WhileSpectating = v != Sessions.None;
+               if (v != Sessions.None) c.Traffic.Enabled = v;
+           })
+        : (get, set);
 
     // Re-reads the header Visible cluster in place (after a save or external edit) without
     // rebuilding it, so its remembered R/Q/P set survives a master off → on.
     private Action? _refreshBox;
 
     /// <summary>Build the header Visible cluster for the current section (or clear it), and grey the
-    /// page body when the box is off in every session type. Called on every page (re)build.</summary>
+    /// page body when the box is off everywhere. Editing In car it's race / quali / practice plus a
+    /// spectating box that writes straight to the spectate profile (so turning a box off while
+    /// spectating doesn't need the Spectating editor); editing Spectating it's the single switch.
+    /// Called on every page (re)build.</summary>
     private void ConfigureBoxToggle(string section)
     {
         VisibleHost.Children.Clear();
@@ -148,16 +155,24 @@ public partial class SettingsWindow : Window
             return;
         }
         var edit = _edit;
-        var (master, boxes, refresh) = Controls(b.get, (c, v) =>
-        {
-            b.set(c, v);
-            PageBody.IsEnabled = (v & b.allowed) != 0;
-        }, b.allowed, b.note);
+        var spec = SpectateAccess(section, b.get, b.set);
+        bool SpectatingOn() => (spec.get(_cfg.SpectateEffective) & b.allowed) != 0;
+        bool AnyOn() => _editingSpectate ? SpectatingOn() : (b.get(edit) & b.allowed) != 0 || SpectatingOn();
+
+        var (master, boxes, refresh) = _editingSpectate
+            ? SpectateControls(spec.get, spec.set, b.allowed,
+                               section == "Traffic" ? "off by default — alerts are about the car you drive" : null)
+            : SessionControls(() => b.get(edit), v => b.set(edit, v), b.allowed,
+                              (SpectatingOn, on => EditSpectate(c => spec.set(c, on ? b.allowed : Sessions.None))));
         _refreshBox = () =>
         {
             refresh();
-            PageBody.IsEnabled = (b.get(edit) & b.allowed) != 0;
+            PageBody.IsEnabled = AnyOn();
         };
+        // Any toggle in the cluster re-greys the page body to match.
+        master.Click += (_, _) => PageBody.IsEnabled = AnyOn();
+        boxes.AddHandler(System.Windows.Controls.Primitives.ButtonBase.ClickEvent,
+                         new RoutedEventHandler((_, _) => PageBody.IsEnabled = AnyOn()));
         VisibleHost.Children.Add(new TextBlock
         {
             Text = "Visible", Foreground = Text, FontSize = 13.5, VerticalAlignment = VerticalAlignment.Center,
@@ -167,7 +182,18 @@ public partial class SettingsWindow : Window
         VisibleHost.Children.Add(master);
         VisibleHost.Children.Add(VDivider());
         VisibleHost.Children.Add(boxes);
-        PageBody.IsEnabled = (b.get(edit) & b.allowed) != 0;
+        PageBody.IsEnabled = AnyOn();
+    }
+
+    /// <summary>Write a spectating value from the In car editor (the header's spectating box). It
+    /// lives in the spectate profile, so it's saved there directly — after landing any pending In
+    /// car edit, since saving the base rebuilds the spectate view.</summary>
+    private void EditSpectate(Action<OverlayConfig> mutate)
+    {
+        Flush();
+        mutate(_cfg.SpectateEffective);
+        _cfg.SaveProfileAndNotify(spectate: true);
+        UpdateInheritBanner();
     }
 
     // ---- state (in-car / spectating) editing target ---------------------
@@ -985,21 +1011,28 @@ public partial class SettingsWindow : Window
     /// <summary>The R/Q/P cluster: a master switch (on = shown in at least one session type) plus a
     /// race / quali / practice checkbox each. Master off clears the boxes (remembering them for this
     /// page), master on restores them (or every allowed one). Session types the item can never show
-    /// in (<paramref name="allowed"/>) are greyed out and never written as on.</summary>
-    private (CheckBox master, FrameworkElement right, Action refresh) SessionControls(Func<Sessions> get, Action<Sessions> set, Sessions allowed)
+    /// in (<paramref name="allowed"/>) are greyed out and never written as on. An optional
+    /// <paramref name="spectating"/> box (a page's Visible header) adds the fourth situation after a
+    /// divider; the master then covers all four.</summary>
+    private (CheckBox master, FrameworkElement right, Action refresh) SessionControls(Func<Sessions> get, Action<Sessions> set,
+        Sessions allowed, (Func<bool> get, Action<bool> set)? spectating = null)
     {
         var master = new CheckBox { Style = (Style)FindResource("Switch") };
         var boxes = new StackPanel { Orientation = Orientation.Horizontal };
         var checks = new List<(CheckBox cb, Sessions bit)>();
+        CheckBox? specBox = null;
         bool sync = false;
         var remembered = Sessions.None;
+        bool rememberedSpec = false;
 
         void Refresh()
         {
             sync = true;
             var v = get() & allowed;
-            master.IsChecked = v != Sessions.None;
+            bool s = spectating?.get() ?? false;
+            master.IsChecked = v != Sessions.None || s;
             foreach (var (cb, bit) in checks) cb.IsChecked = (v & bit) != 0;
+            if (specBox is not null) specBox.IsChecked = s;
             sync = false;
         }
         void Write(Sessions v)
@@ -1025,12 +1058,33 @@ public partial class SettingsWindow : Window
             checks.Add((cb, bit));
             boxes.Children.Add(cb);
         }
-        master.Checked += (_, _) => { if (!sync) Write(remembered != Sessions.None ? remembered : allowed); };
+        if (spectating is { } spec)
+        {
+            boxes.Children.Add(VDivider());
+            specBox = new CheckBox { Style = (Style)FindResource("Check"), Content = "spectating", Width = 96 };
+            specBox.ToolTip = "Out of the car — teammate stint, garage, watching. One setup whatever the session.";
+            specBox.Checked += (_, _) => { if (!sync) { spec.set(true); Refresh(); } };
+            specBox.Unchecked += (_, _) => { if (!sync) { spec.set(false); Refresh(); } };
+            boxes.Children.Add(specBox);
+        }
+
+        master.Checked += (_, _) =>
+        {
+            if (sync) return;
+            bool anyRemembered = remembered != Sessions.None || rememberedSpec;
+            Write(anyRemembered ? remembered : allowed);
+            if (spectating is { } spec && spec.get() != (anyRemembered ? rememberedSpec : true))
+                spec.set(anyRemembered ? rememberedSpec : true);
+            Refresh();
+        };
         master.Unchecked += (_, _) =>
         {
             if (sync) return;
             remembered = get() & allowed;
+            rememberedSpec = spectating?.get() ?? false;
             Write(Sessions.None);
+            if (spectating is { } spec && spec.get()) spec.set(false);
+            Refresh();
         };
 
         Refresh();

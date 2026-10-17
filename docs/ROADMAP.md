@@ -198,6 +198,9 @@ Ideas and requests captured during rapid iteration so nothing is lost. Roughly o
   Traffic's spectating Visible switch (still `WhileSpectating` underneath — the detector's instant
   gate). Rationale from the user's real `config.spectate.json`: every override was about the screen
   without a cockpit (widget spots, 8 ahead/8 behind, Lap Lab off), none about session type.
+  Follow-up: every page's Visible header (In car editor) got a 4th **spectating** box — race /
+  quali / practice / spectating — writing the spectate profile directly, so "traffic off while
+  spectating" is one click without switching editors. Content rows still use the Spectating editor.
 - [x] **Tire-change inference (2026-07-11, `InferTireChanges`)** — no SDK channel exists for
   opponents' tire sets, but under fuel-and-tires-separate rules service is sequential: a tire
   stop sits ~10s+ longer than the car's own fuel-fill baseline (cheapest observed sec/stint-lap).
