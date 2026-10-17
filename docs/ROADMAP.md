@@ -201,6 +201,18 @@ Ideas and requests captured during rapid iteration so nothing is lost. Roughly o
   Follow-up: every page's Visible header (In car editor) got a 4th **spectating** box — race /
   quali / practice / spectating — writing the spectate profile directly, so "traffic off while
   spectating" is one click without switching editors. Content rows still use the Spectating editor.
+- [x] **Redundancy pass (2026-10-17)** — with the spectating box in place, the Spectating editor
+  duplicated on/off. Now: (1) every Content/Header row also has race / quali / practice | spectating,
+  so all on/off lives in one editor (In car base; spectating box → spectate profile, pinned against
+  inheritance when R/Q/P change); (2) the rail's In car/Spectating profile switch is gone — only
+  values can differ while spectating, via a "Values for: In car | Spectating" row on General tabs
+  (Fuel, Lap Lab too); "Use in-car spots for spectating" moved under the layout picker; (3) shared
+  standings+relative settings (lap-time decimals, tire inference, rejoin badge, tyre-switch display +
+  duration) have one home on the app General page instead of item expanders in one widget;
+  (4) Traffic shows Slots ahead/behind only with Split by direction, Max rows only without.
+  Kept: Fuel Table's "Driven by" (switches which target number is fixed without moving it).
+  Bug fixed alongside: traffic switched off for a situation (e.g. spectating) still drew the split
+  layout's fixed YOU line — `TrafficSnapshot.Disabled` now hides the whole widget.
 - [x] **Tire-change inference (2026-07-11, `InferTireChanges`)** — no SDK channel exists for
   opponents' tire sets, but under fuel-and-tires-separate rules service is sequential: a tire
   stop sits ~10s+ longer than the car's own fuel-fill baseline (cheapest observed sec/stint-lap).

@@ -329,13 +329,8 @@
                                    Foreground="{StaticResource Dim}" FontSize="12" Margin="7,0,0,0"/>
                     </StackPanel>
 
-                    <!-- Which state the settings below apply to: in the car, or spectating
-                         (a sparse override layer over In car). Populated in code. -->
-                    <TextBlock Text="EDITING PROFILE" Style="{StaticResource RailHead}"/>
-                    <UniformGrid x:Name="StateSwitchHost" Columns="2" Margin="0,0,-6,0"/>
-
-                    <!-- Move overlays + which session type's layout is on screen. Widget
-                         positions are saved per session type. -->
+                    <!-- Move overlays + which situation's layout is on screen (race / quali /
+                         practice / spectating each keep their own widget positions). -->
                     <TextBlock Text="LAYOUT" Style="{StaticResource RailHead}"/>
                     <DockPanel>
                         <CheckBox x:Name="MoveToggle" DockPanel.Dock="Right" Style="{StaticResource Switch}"/>
@@ -345,6 +340,10 @@
                     <UniformGrid x:Name="LayoutHost" Columns="2" Margin="0,10,-6,-6"/>
                     <TextBlock x:Name="LayoutHint" Foreground="{StaticResource Dim}" FontSize="11.5"
                                TextWrapping="Wrap" Margin="0,7,0,0"/>
+                    <!-- Spectating layout picked while moving: drop it, back to the in-car spots. -->
+                    <Button x:Name="UseInCarSpots" Style="{StaticResource SettingsLink}" Visibility="Collapsed"
+                            Content="Use in-car spots for spectating" HorizontalAlignment="Left"
+                            Margin="-6,4,0,0"/>
 
                     <TextBlock Text="OVERLAYS" Style="{StaticResource RailHead}" Margin="0,18,0,4"/>
                 </StackPanel>
